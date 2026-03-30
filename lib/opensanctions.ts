@@ -404,3 +404,40 @@ export function formatScore(score: number): string {
 export function hasHighConfidenceMatch(matches: MatchResult[]): boolean {
   return matches.some((m) => m.score >= 0.8 && m.match);
 }
+
+/**
+ * Fetch a single entity by ID from OpenSanctions API
+ * Returns the full entity details including all properties
+ */
+export async function getEntityById(
+  id: string
+): Promise<SanctionsResult | null> {
+  const apiKey = process.env.OPENSANCTIONS_API_KEY;
+  if (!apiKey) throw new Error("OPENSANCTIONS_API_KEY not set");
+
+  // OpenSanctions entity lookup endpoint
+  const url = `https://api.opensanctions.org/entities/${encodeURIComponent(id)}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `ApiKey ${apiKey}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (res.status === 404) return null;
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`OpenSanctions API ${res.status}: ${text}`);
+    }
+
+    return res.json();
+  } catch (error) {
+    console.error("[OpenSanctions] Failed to fetch entity:", error);
+    throw error;
+  }
+}
+

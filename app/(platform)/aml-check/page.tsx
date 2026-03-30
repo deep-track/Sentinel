@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Shield, Search, ExternalLink, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { Shield, Search, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { searchAML } from "@/actions/aml";
 import { getRiskLevelStyles, formatConfidenceScore, formatDatasets } from "@/lib/opensanctions";
 import type { SanctionsSearchResult, RiskLevel } from "@/lib/opensanctions";
@@ -201,15 +202,13 @@ export default function AMLCheckPage() {
                         </dl>
                       </div>
 
-                      <a
-                        href={`https://opensanctions.org/entities/${match.id}/`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 flex items-center gap-1 text-sm"
+                      <Link
+                        href={`/aml/profile/${encodeURIComponent(match.id)}`}
+                        className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-200 transition-colors bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/40 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800"
                       >
-                        Details
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
+                        View Full Profile
+                        <span aria-hidden>→</span>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
