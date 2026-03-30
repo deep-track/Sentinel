@@ -282,9 +282,6 @@ export default async function AMLProfilePage({
             <p className="text-xs font-mono text-slate-500 dark:text-slate-400 break-all">
               {entity.id}
             </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-              Powered by OpenSanctions
-            </p>
           </div>
         </div>
       </div>
