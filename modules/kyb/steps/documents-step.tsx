@@ -177,7 +177,12 @@ export function DocumentsStep({
 				<Button type="button" variant="outline" onClick={onBack}>
 					Back
 				</Button>
-				<Button onClick={handleSubmit}>Continue</Button>
+				<Button
+					onClick={handleSubmit}
+					className="bg-violet-600 hover:bg-violet-700 text-white"
+				>
+					Continue
+				</Button>
 			</div>
 		</div>
 	);

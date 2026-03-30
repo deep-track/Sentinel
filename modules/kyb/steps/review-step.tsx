@@ -223,7 +223,7 @@ export function ReviewStep({ data, onBack, onSubmitSuccess }: ReviewStepProps) {
 					<Button
 						onClick={handleSubmit}
 						disabled={isSubmitting || !confirmation}
-						className="min-w-[160px]"
+						className="min-w-[160px] bg-violet-600 hover:bg-violet-700 text-white"
 					>
 						{isSubmitting ? (
 							<>

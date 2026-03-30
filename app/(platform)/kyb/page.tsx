@@ -7,7 +7,6 @@ import {
 	CheckCircle,
 	Clock3,
 	FileCheck,
-	Plus,
 	ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
@@ -83,9 +82,12 @@ export default async function KYBPage() {
 							Manage your business verification records
 						</p>
 					</div>
-					<Button asChild>
+					<Button
+						asChild
+						className="bg-violet-600 hover:bg-violet-700 text-white"
+					>
 						<Link href="/kyb/new">
-							<Plus className="h-4 w-4 mr-2" />
+							<FileCheck className="mr-2 h-4 w-4" />
 							New Verification
 						</Link>
 					</Button>
@@ -105,14 +107,8 @@ export default async function KYBPage() {
 						tone="green"
 					/>
 					<StatCard
-						label="Pending"
-						value={stats.pending}
-						icon={Clock3}
-						tone="orange"
-					/>
-					<StatCard
 						label="Processing"
-						value={stats.processing}
+						value={stats.pending + stats.processing}
 						icon={Building2}
 						tone="violet"
 					/>

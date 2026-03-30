@@ -156,7 +156,10 @@ export function BusinessInfoStep({
 				</div>
 
 				<div className="flex justify-end pt-4">
-					<Button type="submit" className="min-w-[120px]">
+					<Button
+						type="submit"
+						className="min-w-[120px] bg-violet-600 hover:bg-violet-700 text-white"
+					>
 						Continue
 					</Button>
 				</div>
