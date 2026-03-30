@@ -18,7 +18,6 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import type { KYCRecord, KYCStatus } from "@/lib/kyc-types";
-import { getDeclineBreakdown } from "@/lib/shufti-decline-codes";
 import { cn } from "@/lib/utils";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 import {
@@ -141,33 +140,9 @@ export function KYCTable({ records, isLoading }: KYCTableProps) {
 					Status
 				</span>
 			),
-			cell: ({ row }) => {
-				const record = row.original;
-				let humanReason: string | null = null;
-
-				if (record.status === "declined") {
-					const breakdown = getDeclineBreakdown(
-						record.declinedCodes as string[] | null,
-						(record as any).servicesDeclinedCodes,
-						record.declineReason,
-					);
-					humanReason = breakdown.humanReason;
-				}
-
-				return (
-					<div className="flex flex-col gap-1">
-						<KYCStatusBadge status={record.status as KYCStatus} size="sm" />
-						{humanReason && (
-							<p
-								className="text-xs text-red-600 dark:text-red-400 max-w-xs truncate"
-								title={humanReason}
-							>
-								{humanReason}
-							</p>
-						)}
-					</div>
-				);
-			},
+			cell: ({ row }) => (
+				<KYCStatusBadge status={row.original.status as KYCStatus} size="sm" />
+			),
 		},
 		{
 			accessorKey: "createdAt",
