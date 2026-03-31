@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { getKYCList, getKYCStats } from "@/actions/kyc";
 import { KYCTable } from "@/modules/kyc/kyc-table";
-import { InviteUserDialog } from "./_components/invite-user-dialog";
 import { Button } from "@/components/ui/button";
 import {
   CheckCircle,
@@ -70,11 +69,6 @@ export default async function KYCPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            <InviteUserDialog>
-              <Button variant="outline">
-                <UserPlus className="mr-2 h-4 w-4" /> Invite User
-              </Button>
-            </InviteUserDialog>
             <Button asChild className="bg-violet-600 hover:bg-violet-700 text-white">
               <Link href="/kyc/new">
                 <FileCheck className="mr-2 h-4 w-4" /> New Verification

@@ -61,6 +61,8 @@ export type KYCRecord = {
   extractedData?: KYCExtractedData;
   verificationResult?: Record<string, 0 | 1>;
   declinedCodes?: string[];
+  servicesDeclinedCodes?: Record<string, string[]> | null;
+  additionalData?: Record<string, unknown> | null;
   declineReason?: string;
   reviewNotes?: string;
   riskScore?: number;
@@ -80,7 +82,7 @@ export type KYCInvitation = {
   createdAt: string;
 };
 
-export type KYCSubmitPayload = KYCSubmissionData & { invitationToken?: string };
+export type KYCSubmitPayload = KYCSubmissionData;
 
 export type ShuftiWebhookPayload = {
   reference: string;

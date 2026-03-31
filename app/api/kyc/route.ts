@@ -134,7 +134,6 @@ export async function POST(req: NextRequest) {
         verificationResult: body.verificationResult,
         shuftiEventType: body.shuftiEventType,
         shuftiVerificationUrl: body.shuftiVerificationUrl,
-        invitationToken: body.invitationToken,
         submittedAt: new Date(),
       },
     });

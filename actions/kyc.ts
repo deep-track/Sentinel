@@ -9,7 +9,6 @@ import {
 } from "@/lib/shufti";
 import type {
   KYCActionResult,
-  KYCInvitation,
   KYCRecord,
   KYCSubmitPayload,
   KYCStatus,
@@ -80,7 +79,6 @@ export async function submitKYC(
         status: initialStatus,
         shuftiEventType: shuftiResponse.event,
         shuftiVerificationUrl: null,
-        invitationToken: payload.invitationToken,
       }),
     });
 
@@ -147,6 +145,8 @@ export async function getKYCList(params?: {
 
 export async function getKYCRecord(id: string): Promise<KYCActionResult<KYCRecord>> {
   try {
+    console.log("[getKYCRecord] Fetching:", id);
+    
     requireBackend();
     const res = await fetch(`${BACKEND}/api/kyc/${id}`, {
       headers: { "Content-Type": "application/json" },
@@ -155,7 +155,13 @@ export async function getKYCRecord(id: string): Promise<KYCActionResult<KYCRecor
 
     if (!res.ok) throw new Error(`Backend ${res.status}`);
     const responseBody = await res.json();
-    return { success: true, data: responseBody?.data };
+    const record = responseBody?.data;
+    
+    console.log("[getKYCRecord] status:", record?.status);
+    console.log("[getKYCRecord] declinedCodes:", record?.declinedCodes);
+    console.log("[getKYCRecord] has servicesDeclinedCodes:", !!record?.servicesDeclinedCodes);
+    
+    return { success: true, data: record };
   } catch (err) {
     console.error("[getKYCRecord]", err);
     return { success: false, error: "Failed to fetch KYC record" };
@@ -265,34 +271,6 @@ export async function reviewKYC(params: {
   } catch (err) {
     console.error("[reviewKYC]", err);
     return { success: false, error: "Failed to submit review decision" };
-  }
-}
-
-export async function inviteUserForKYC(params: {
-  email: string;
-  name?: string;
-}): Promise<KYCActionResult<KYCInvitation>> {
-  try {
-    requireBackend();
-    const auth = await getAuth();
-    if (!auth?.userId) return { success: false, error: "Not authenticated" };
-
-    const res = await fetch(`${BACKEND}/api/kyc/invitations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: params.email,
-        name: params.name,
-        invitedBy: auth.userId,
-      }),
-    });
-
-    if (!res.ok) throw new Error(`Backend ${res.status}`);
-    const responseBody = await res.json();
-    return { success: true, data: responseBody?.data };
-  } catch (err) {
-    console.error("[inviteUserForKYC]", err);
-    return { success: false, error: "Failed to send KYC invitation" };
   }
 }
 

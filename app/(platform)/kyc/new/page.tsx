@@ -8,7 +8,6 @@ interface NewKYCPageProps {
 
 export default async function NewKYCPage({ searchParams }: NewKYCPageProps) {
   const params = await searchParams;
-  const invitationToken = params.token;
   const prefillEmail = params.email;
 
   return (
@@ -26,15 +25,9 @@ export default async function NewKYCPage({ searchParams }: NewKYCPageProps) {
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm max-w-xl">
             Complete the steps below to verify your identity. Your data is secured and processed through our verification partner.
           </p>
-
-          {invitationToken && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-3 py-2 text-sm text-violet-700 dark:text-violet-300">
-              <span className="text-xs">🔗 You were invited to complete this verification</span>
-            </div>
-          )}
         </div>
 
-        <KYCWizard invitationToken={invitationToken} prefillEmail={prefillEmail} />
+        <KYCWizard prefillEmail={prefillEmail} />
       </div>
     </div>
   );

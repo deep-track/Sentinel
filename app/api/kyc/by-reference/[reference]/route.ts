@@ -9,11 +9,13 @@ export async function PATCH(
     const { reference } = await params;
     const body = await req.json();
 
-    console.log("[KYC by-reference PATCH]", reference, {
-      status: body.status,
-      codesCount: body.declinedCodes?.length,
-      hasExtractedData: !!body.extractedData,
-    });
+    console.log("[by-reference PATCH] ===== START =====");
+    console.log("[by-reference PATCH] reference:", reference);
+    console.log("[by-reference PATCH] body.status:", body.status);
+    console.log("[by-reference PATCH] body.declinedCodes:", body.declinedCodes);
+    console.log("[by-reference PATCH] has body.extractedData:", !!body.extractedData);
+    console.log("[by-reference PATCH] has body.additionalData:", !!body.additionalData);
+    console.log("[by-reference PATCH] has body.servicesDeclinedCodes:", !!body.servicesDeclinedCodes);
 
     // Verify the record exists first
     const existing = await prisma.kYCRecord.findUnique({
@@ -21,12 +23,15 @@ export async function PATCH(
     });
 
     if (!existing) {
-      console.error("[KYC by-reference] Record not found:", reference);
+      console.error("[by-reference PATCH] Record not found:", reference);
       return NextResponse.json(
         { error: "KYC record not found" },
         { status: 404 }
       );
     }
+
+    console.log("[by-reference PATCH] Found record id:", existing.id);
+    console.log("[by-reference PATCH] Current declinedCodes:", existing.declinedCodes);
 
     const record = await prisma.kYCRecord.update({
       where: { reference },
@@ -38,6 +43,8 @@ export async function PATCH(
         declinedCodes: Array.isArray(body.declinedCodes)
           ? body.declinedCodes
           : [],
+        // Save per-service codes
+        servicesDeclinedCodes: body.servicesDeclinedCodes ?? existing.servicesDeclinedCodes,
         // Save standard OCR data
         extractedData: body.extractedData ?? existing.extractedData,
         // Save enhanced OCR data
@@ -52,14 +59,10 @@ export async function PATCH(
       },
     });
 
-    console.log(
-      "[KYC by-reference] Updated record:",
-      record.id,
-      "status:",
-      record.status,
-      "codes:",
-      record.declinedCodes
-    );
+    console.log("[by-reference PATCH] Updated successfully");
+    console.log("[by-reference PATCH] saved declinedCodes:", record.declinedCodes);
+    console.log("[by-reference PATCH] new status:", record.status);
+    console.log("[by-reference PATCH] ===== END =====")
 
     return NextResponse.json({ status: 200, data: record });
   } catch (err) {

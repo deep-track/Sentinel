@@ -6,11 +6,12 @@ import type { KYCStatus, KYCSubmissionData } from "@/lib/kyc-types";
 import { getKYCRecord, submitKYC } from "@/actions/kyc";
 import {
   getRemediationSummary,
+  getDeclineBreakdown,
 } from "@/lib/shufti-decline-codes";
 import { DocumentCaptureStep } from "@/modules/kyc/steps/document-capture-step";
 import { SelfieCaptureStep } from "@/modules/kyc/steps/selfie-capture-step";
 import { SubmitStep } from "@/modules/kyc/steps/submit-step";
-import { CheckCircle, FileText, ClipboardCheck, Camera, AlertCircle, AlertTriangle } from "lucide-react";
+import { CheckCircle, FileText, ClipboardCheck, Camera, AlertCircle, AlertTriangle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 import Link from "next/link";
@@ -18,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 interface KYCWizardProps {
-  invitationToken?: string;
   prefillEmail?: string;
 }
 
@@ -28,19 +28,14 @@ const STEPS = [
   { id: 2, title: "Review & Submit", icon: ClipboardCheck, shortTitle: "Submit" },
 ];
 
-export function KYCWizard({ invitationToken }: KYCWizardProps) {
+export function KYCWizard({}: KYCWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [data, setData] = useState<Partial<KYCSubmissionData>>({});
   const [submittedKycId, setSubmittedKycId] = useState<string | null>(null);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [liveStatus, setLiveStatus] = useState<KYCStatus>("processing");
-  const [declineInfo, setDeclineInfo] = useState<{
-    codes: string[];
-    summary: string;
-    steps: string[];
-    primaryIssue: string;
-  } | null>(null);
+  const [declineBreakdown, setDeclineBreakdown] = useState<ReturnType<typeof getDeclineBreakdown> | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   function handleDocument(values: Pick<KYCSubmissionData, "documentType" | "documentFrontUrl" | "documentBackUrl" | "documentFrontBase64" | "documentBackBase64">) {
@@ -69,7 +64,6 @@ export function KYCWizard({ invitationToken }: KYCWizardProps) {
       documentBackBase64: data.documentBackBase64,
       selfieUrl: data.selfieUrl,
       selfieBase64: data.selfieBase64,
-      invitationToken,
     });
 
     if (!result.success) {
@@ -87,94 +81,159 @@ export function KYCWizard({ invitationToken }: KYCWizardProps) {
   useEffect(() => {
     if (!completed || !submittedKycId) return;
 
-    pollRef.current = setInterval(async () => {
-      const result = await getKYCRecord(submittedKycId);
-      if (!result.success || !result.data) return;
+    let stopped = false;
 
-      setLiveStatus(result.data.status);
-      
-      // If declined, extract and process decline information
-      if (result.data.status === "declined" && result.data.declinedCodes && result.data.declinedCodes.length > 0) {
-        const remediation = getRemediationSummary(result.data.declinedCodes);
-        setDeclineInfo({
-          codes: result.data.declinedCodes as string[],
-          summary: remediation.summary,
-          steps: remediation.steps,
-          primaryIssue: remediation.primaryIssue,
-        });
+    async function poll() {
+      if (stopped) return;
+
+      try {
+        const result = await getKYCRecord(submittedKycId!);
+
+        if (!result.success || !result.data) return;
+
+        const { status, declinedCodes, servicesDeclinedCodes, declineReason } =
+          result.data;
+
+        console.log("[Wizard Poll] status:", status);
+        console.log("[Wizard Poll] declinedCodes:", declinedCodes);
+
+        setLiveStatus(status);
+
+        if (status === "declined") {
+          // Build human-readable breakdown from codes
+          const breakdown = getDeclineBreakdown(
+            declinedCodes,
+            servicesDeclinedCodes as {
+              document?: string[];
+              face?: string[];
+              address?: string[];
+            } | null,
+            declineReason
+          );
+          console.log("[Wizard Poll] breakdown primary:", breakdown.primary);
+          setDeclineBreakdown(breakdown);
+          stopped = true;
+        }
+
+        if (status === "approved" || status === "expired") {
+          stopped = true;
+        }
+      } catch (err) {
+        console.error("[Wizard Poll] error:", err);
       }
-      
-      if (["approved", "declined", "expired"].includes(result.data.status)) {
-        if (pollRef.current) clearInterval(pollRef.current);
-      }
-    }, 3000);
+    }
+
+    // Poll immediately then every 3 seconds
+    poll();
+    const pollInterval = setInterval(poll, 3000);
 
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      stopped = true;
+      clearInterval(pollInterval);
     };
   }, [completed, submittedKycId]);
 
   if (completed) {
     // Declined verification screen
-    if (liveStatus === "declined" && declineInfo) {
+    if (liveStatus === "declined" && declineBreakdown) {
       return (
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20 p-8 text-center space-y-4">
-            <div className="mx-auto h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-              <AlertTriangle className="h-7 w-7 text-red-600 dark:text-red-400" />
-            </div>
-            <h2 className="text-xl font-bold text-red-900 dark:text-red-100">
-              Verification Declined
+        <div className="flex flex-col items-center space-y-6 max-w-md mx-auto">
+          {/* Red icon */}
+          <div className="h-24 w-24 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <XCircle className="h-12 w-12 text-red-600" />
+          </div>
+
+          {/* Title — uses specific code title or generic */}
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+              {declineBreakdown.primary?.title ??
+               "Verification Unsuccessful"}
             </h2>
-            <p className="text-sm text-red-800 dark:text-red-200">
-              Reference: <code className="font-mono bg-red-100 dark:bg-red-900/50 px-2 py-1 rounded">{submittedRef}</code>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {declineBreakdown.humanReason ??
+               "We could not verify your identity."}
             </p>
           </div>
 
-          <Card className="border-red-200 dark:border-red-900 bg-white dark:bg-slate-900 p-6 space-y-4">
-            <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              Issue Found: {declineInfo.primaryIssue}
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              {declineInfo.summary}
-            </p>
+          {/* Fix guidance box */}
+          {declineBreakdown.primary?.userAction && (
+            <div className="w-full rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-4">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-2">
+                <span>💡</span>
+                How to fix this:
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
+                {declineBreakdown.primary.userAction}
+              </p>
+            </div>
+          )}
 
-            {declineInfo.steps.length > 0 && (
-              <div className="space-y-3 pt-4">
-                <h4 className="font-medium text-slate-900 dark:text-white text-sm">
-                  How to Fix:
-                </h4>
-                <ol className="space-y-2">
-                  {declineInfo.steps.map((step, idx) => (
-                    <li key={idx} className="flex gap-3 text-sm text-slate-600 dark:text-slate-400">
-                      <span className="font-semibold text-violet-600 dark:text-violet-400 min-w-6">
-                        {idx + 1}.
-                      </span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ol>
+          {/* Per-service breakdown */}
+          {(() => {
+            const allIssues = [
+              ...(declineBreakdown.byService?.document ?? []),
+              ...(declineBreakdown.byService?.face ?? []),
+            ];
+            if (allIssues.length <= 1) return null;
+            return (
+              <div className="w-full space-y-2">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  All issues detected:
+                </p>
+                {allIssues.map((d) => (
+                  <div key={d.code} className="flex items-start gap-2 text-left">
+                    <span className="text-xs font-mono text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
+                      {d.code}
+                    </span>
+                    <div>
+                      <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                        {d.service === "face" ? "Selfie" : "Document"}: {d.title}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {d.userAction}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
-          </Card>
+            );
+          })()}
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
-            <Button
-              onClick={() => {
-                setCompleted(false);
-                setCurrentStep(0);
-                setData({});
-                setDeclineInfo(null);
-              }}
-              className="bg-violet-600 hover:bg-violet-700 text-white"
-            >
-              Try Again
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/kyc">Back to Dashboard</Link>
-            </Button>
-          </div>
+          {/* All codes raw (for reference) */}
+          {(declineBreakdown.allCodes?.length ?? 0) > 0 && (
+            <div className="w-full">
+              <p className="text-xs text-slate-400 mb-1">Decline codes:</p>
+              <div className="flex flex-wrap gap-1">
+                {declineBreakdown.allCodes.map((c) => (
+                  <span
+                    key={c}
+                    className="text-xs font-mono bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded"
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Try again */}
+          <button
+            onClick={() => {
+              setCompleted(false);
+              setCurrentStep(0);
+              setData({});
+              setLiveStatus("processing");
+              setDeclineBreakdown(null);
+            }}
+            className="w-full rounded-lg bg-black hover:bg-black/80 text-white text-sm font-medium py-3 transition-colors"
+          >
+            Try Again
+          </button>
+
+          {/* Reference */}
+          {submittedRef && (
+            <p className="text-xs text-slate-400 font-mono">{submittedRef}</p>
+          )}
         </div>
       );
     }

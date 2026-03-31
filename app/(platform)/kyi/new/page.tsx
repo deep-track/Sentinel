@@ -8,7 +8,6 @@ interface NewKYIPageProps {
 
 export default async function NewKYIPage({ searchParams }: NewKYIPageProps) {
   const params = await searchParams;
-  const invitationToken = params.token;
 
   return (
     <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6">
@@ -25,15 +24,9 @@ export default async function NewKYIPage({ searchParams }: NewKYIPageProps) {
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm max-w-xl">
             Complete investor due diligence including identity, accreditation, and source of funds verification.
           </p>
-
-          {invitationToken && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-3 py-2 text-sm text-violet-700 dark:text-violet-300">
-              <span className="text-xs">🔗 You were invited to complete this investor verification</span>
-            </div>
-          )}
         </div>
 
-        <KYIWizard invitationToken={invitationToken} />
+        <KYIWizard />
       </div>
     </div>
   );

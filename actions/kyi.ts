@@ -9,7 +9,6 @@ import {
 } from "@/lib/shufti";
 import type {
   KYIActionResult,
-  KYIInvitation,
   KYIRecord,
   KYISubmitPayload,
   KYIStatus,
@@ -90,7 +89,6 @@ export async function submitKYI(
         status: initialStatus,
         shuftiEventType: shuftiResponse.event,
         shuftiVerificationUrl: null,
-        invitationToken: payload.invitationToken,
       }),
     });
 
@@ -231,35 +229,6 @@ export async function reviewKYI(params: {
   } catch (err) {
     console.error("[reviewKYI]", err);
     return { success: false, error: "Failed to submit review decision" };
-  }
-}
-
-export async function inviteInvestorForKYI(params: {
-  email: string;
-  investorName?: string;
-}): Promise<KYIActionResult<KYIInvitation>> {
-  try {
-    requireBackend();
-    const auth = await getAuth();
-    if (!auth?.userId) return { success: false, error: "Not authenticated" };
-
-    const res = await fetch(`${BACKEND}/api/kyi/invitations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: params.email,
-        investorName: params.investorName,
-        invitedBy: auth.userId,
-      }),
-    });
-
-    if (!res.ok) throw new Error(`Backend ${res.status}`);
-
-    const responseBody = await res.json();
-    return { success: true, data: responseBody?.data };
-  } catch (err) {
-    console.error("[inviteInvestorForKYI]", err);
-    return { success: false, error: "Failed to send KYI invitation" };
   }
 }
 

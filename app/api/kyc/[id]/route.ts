@@ -45,7 +45,21 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ status: 200, data: record });
+    // Ensure all fields are returned, even if null
+    return NextResponse.json({
+      status: 200,
+      data: {
+        ...record,
+        // Explicitly include these so they're never undefined
+        declinedCodes: record.declinedCodes ?? [],
+        servicesDeclinedCodes: record.servicesDeclinedCodes ?? null,
+        extractedData: record.extractedData ?? null,
+        additionalData: record.additionalData ?? null,
+        verificationResult: record.verificationResult ?? null,
+        userName: record.userName || record.user?.fullName || null,
+        userEmail: record.userEmail || record.user?.email || null,
+      },
+    });
   } catch (err) {
     console.error("[GET /api/kyc/:id]", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -69,6 +83,8 @@ export async function PATCH(
         verificationResult: body.verificationResult,
         declineReason: body.declineReason,
         declinedCodes: body.declinedCodes ?? [],
+        servicesDeclinedCodes: body.servicesDeclinedCodes ?? undefined,
+        additionalData: body.additionalData ?? undefined,
         reviewNotes: body.reviewNotes,
         reviewedAt: body.status === "approved" || body.status === "declined"
           ? new Date()
@@ -77,7 +93,20 @@ export async function PATCH(
       include: { user: true },
     });
 
-    return NextResponse.json({ status: 200, data: record });
+    // Ensure all fields are returned consistently
+    return NextResponse.json({
+      status: 200,
+      data: {
+        ...record,
+        declinedCodes: record.declinedCodes ?? [],
+        servicesDeclinedCodes: record.servicesDeclinedCodes ?? null,
+        extractedData: record.extractedData ?? null,
+        additionalData: record.additionalData ?? null,
+        verificationResult: record.verificationResult ?? null,
+        userName: record.userName || record.user?.fullName || null,
+        userEmail: record.userEmail || record.user?.email || null,
+      },
+    });
   } catch (err) {
     console.error("[PATCH /api/kyc/:id]", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

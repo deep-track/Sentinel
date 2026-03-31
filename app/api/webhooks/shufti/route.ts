@@ -8,35 +8,29 @@ const APP_URL =
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
 	try {
-		const body = await req.text();
+		const rawBody = await req.text();
 
-		console.log("[Shufti Webhook] Raw body received");
+		console.log("=== SHUFTI WEBHOOK RECEIVED ===");
+		console.log("Raw body length:", rawBody.length);
 
 		let payload: ShuftiWebhookPayload;
 		try {
-			payload = JSON.parse(body);
-		} catch {
-			console.error("[Shufti Webhook] Invalid JSON");
+			payload = JSON.parse(rawBody);
+		} catch (e) {
+			console.error("[Shufti Webhook] Failed to parse webhook body:", e);
 			return NextResponse.json(
 				{ error: "Invalid JSON" },
 				{ status: 400 }
 			);
 		}
 
-		console.log(
-			"[Shufti Webhook] Event:",
-			payload.event,
-			"Reference:",
-			payload.reference
-		);
-		console.log(
-			"[Shufti Webhook] Declined codes:",
-			payload.declined_codes
-		);
-		console.log(
-			"[Shufti Webhook] Has verification_data:",
-			!!payload.verification_data
-		);
+		console.log("[Webhook] Event:", payload.event);
+		console.log("[Webhook] Reference:", payload.reference);
+		console.log("[Webhook] declined_reason:", payload.declined_reason);
+		console.log("[Webhook] declined_codes:", JSON.stringify(payload.declined_codes));
+		console.log("[Webhook] services_declined_codes:", JSON.stringify(payload.services_declined_codes));
+		console.log("[Webhook] has verification_data:", !!payload.verification_data);
+		console.log("[Webhook] has additional_data:", !!payload.additional_data);
 
 		if (!payload.reference || !payload.event) {
 			console.error("[Shufti Webhook] Missing reference or event");
@@ -70,7 +64,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 			? [payload.declined_codes]
 			: [];
 
-	console.log("[Shufti Webhook] Calling:", endpoint);
+	console.log("[Webhook] Calling:", endpoint);
 
 	const updateBody = {
 		status: newStatus,
@@ -87,16 +81,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 		verificationResult: payload.verification_result ?? null,
 	};
 
-	console.log(
-		"[Shufti Webhook] Update body:",
-		JSON.stringify({
-			status: newStatus,
-			codesCount: updateBody.declinedCodes.length,
-			hasServicesDeclined: !!updateBody.servicesDeclinedCodes,
-			hasExtractedData: !!updateBody.extractedData,
-			hasAdditionalData: !!updateBody.additionalData,
-		})
-	);		const response = await fetch(endpoint, {
+	console.log("[Webhook] Update body declinedCodes:", updateBody.declinedCodes);
+	console.log("[Webhook] Has servicesDeclinedCodes:", !!updateBody.servicesDeclinedCodes);		const response = await fetch(endpoint, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
@@ -104,11 +90,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 			body: JSON.stringify(updateBody),
 		});
 
+		const responseText = await response.text();
+		console.log("[Webhook] Endpoint response:", response.status, responseText);
+
 		if (!response.ok) {
-			const text = await response.text();
-			console.error("[Shufti Webhook] Failed to update record:", response.status, text);
+			console.error("[Webhook] Failed to update record:", response.status, responseText);
 		} else {
-			console.log("[Shufti Webhook] Successfully updated to status:", newStatus);
+			console.log("[Webhook] Successfully updated to status:", newStatus);
 		}
 
 		return NextResponse.json({ received: true }, { status: 200 });

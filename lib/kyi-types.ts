@@ -114,7 +114,7 @@ export type KYIInvitation = {
   createdAt: string;
 };
 
-export type KYISubmitPayload = KYISubmissionData & { invitationToken?: string };
+export type KYISubmitPayload = KYISubmissionData;
 
 export type KYIActionResult<T = void> =
   | { success: true; data: T }

@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 interface KYIWizardProps {
-  invitationToken?: string;
 }
 
 function toKycDocType(
@@ -41,7 +40,7 @@ function toKyiGovernmentIdType(
   return map[documentType];
 }
 
-export function KYIWizard({ invitationToken }: KYIWizardProps) {
+export function KYIWizard({}: KYIWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [identitySubStep, setIdentitySubStep] = useState(0);
   const [data, setData] = useState<Partial<KYISubmissionData>>({});
@@ -135,7 +134,6 @@ export function KYIWizard({ invitationToken }: KYIWizardProps) {
       accreditationLetterUrl: payload.accreditationLetterUrl,
       sourceOfFundsDocUrl: payload.sourceOfFundsDocUrl,
       corporateDocUrl: payload.corporateDocUrl,
-      invitationToken,
     });
 
     if (!result.success) {
