@@ -28,6 +28,7 @@ import {
 	Eye,
 	Search,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -38,7 +39,6 @@ interface KYBTableProps {
 
 const STATUS_OPTIONS: { value: KYBStatus | "all"; label: string }[] = [
 	{ value: "all", label: "All statuses" },
-	{ value: "pending", label: "Pending" },
 	{ value: "processing", label: "Processing" },
 	{ value: "approved", label: "Approved" },
 	{ value: "declined", label: "Declined" },
@@ -67,8 +67,8 @@ export function KYBTable({ records, isLoading }: KYBTableProps) {
 	return (
 		<div className="space-y-4">
 			<div className="flex flex-col sm:flex-row gap-4">
-				<div className="relative flex-1">
-					<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+				<div className="relative w-full sm:min-w-[300px] sm:w-auto">
+					<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
 					<Input
 						placeholder="Search by business name, reference..."
 						value={globalFilter}
@@ -123,25 +123,22 @@ export function KYBTable({ records, isLoading }: KYBTableProps) {
 						) : filteredData.length === 0 ? (
 							<TableRow>
 								<TableCell colSpan={7} className="text-center py-8">
-									<div className="flex flex-col items-center gap-2">
-										<Building2 className="h-8 w-8 text-gray-300" />
-										<p className="text-sm text-gray-500">
-											No KYB records found
-										</p>
-									</div>
+									<p className="text-sm text-slate-500">
+										No KYB records found
+									</p>
 								</TableCell>
 							</TableRow>
 						) : (
 							filteredData.map((record, index) => (
 								<TableRow key={record.id}>
-									<TableCell className="font-medium text-gray-400">
+									<TableCell className="font-medium text-slate-400">
 										{index + 1}
 									</TableCell>
 									<TableCell className="font-medium">
 										{record.businessName || "-"}
 									</TableCell>
 									<TableCell>
-										<code className="text-xs bg-gray-100 px-2 py-1 rounded">
+										<code className="text-xs bg-slate-100 px-2 py-1 rounded">
 											{record.reference}
 										</code>
 									</TableCell>
@@ -152,19 +149,18 @@ export function KYBTable({ records, isLoading }: KYBTableProps) {
 											size="sm"
 										/>
 									</TableCell>
-									<TableCell className="text-sm text-gray-500">
+									<TableCell className="text-sm text-slate-500">
 										{record.createdAt
 											? format(new Date(record.createdAt), "MMM d, yyyy")
 											: "-"}
 									</TableCell>
 									<TableCell>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => router.push(`/kyb/${record.id}`)}
+										<Link
+											href={`/kyb/${record.id}`}
+											className="text-violet-600 dark:text-violet-400 hover:text-violet-800"
 										>
 											<Eye className="h-4 w-4" />
-										</Button>
+										</Link>
 									</TableCell>
 								</TableRow>
 							))
@@ -175,7 +171,7 @@ export function KYBTable({ records, isLoading }: KYBTableProps) {
 
 			{filteredData.length > 0 && (
 				<div className="flex items-center justify-between">
-					<p className="text-sm text-gray-500">
+					<p className="text-sm text-slate-500">
 						Showing {filteredData.length} of {records.length} records
 					</p>
 					<div className="flex items-center gap-2">

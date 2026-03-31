@@ -81,16 +81,16 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 					<div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
 						<CheckCircle className="w-10 h-10 text-green-600" />
 					</div>
-					<h2 className="text-2xl font-bold text-gray-900 mb-4">
+					<h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
 						Submission Received
 					</h2>
-					<p className="text-gray-600 mb-6 max-w-md mx-auto">
+					<p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
 						Your KYB submission has been received. All listed UBOs and directors
 						will receive an email from Shufti Pro to complete their identity
 						verification. You will be notified once the review is complete.
 					</p>
 					{submittedReference && (
-						<p className="text-sm text-gray-500 mb-6">
+						<p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
 							Reference:{" "}
 							<span className="font-mono font-medium">
 								{submittedReference}
@@ -98,11 +98,14 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 						</p>
 					)}
 					<div className="flex justify-center">
-						<Button asChild>
+						<Button
+							asChild
+							className="bg-violet-600 hover:bg-violet-700 text-white"
+						>
 							<Link href="/kyb">Back to Dashboard</Link>
 						</Button>
 					</div>
-					<p className="text-sm text-gray-500 mt-4">
+					<p className="text-sm text-slate-500 dark:text-slate-400 mt-4">
 						Redirecting to dashboard in 5 seconds...
 					</p>
 				</div>
@@ -125,12 +128,12 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 								<div className="flex flex-col items-center">
 									<div
 										className={cn(
-											"w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all",
-											isCompleted && "bg-green-600 border-green-600 text-white",
-											isCurrent && "bg-primary border-primary text-white",
-											!isCompleted &&
-												!isCurrent &&
-												"bg-gray-50 border-gray-300 text-gray-400",
+											"w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-200",
+											isCompleted
+												? "bg-violet-600 border-violet-600 text-white"
+												: isCurrent
+													? "border-violet-600 text-violet-600 bg-white dark:bg-slate-900"
+													: "bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-400",
 										)}
 									>
 										{isCompleted ? (
@@ -142,8 +145,11 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 									<span
 										className={cn(
 											"text-xs mt-2 font-medium hidden sm:block",
-											isCurrent && "text-primary",
-											!isCurrent && "text-gray-500",
+											isCompleted
+												? "text-violet-500"
+												: isCurrent
+													? "text-violet-600 dark:text-violet-400"
+													: "text-slate-400 dark:text-slate-500",
 										)}
 									>
 										{step.title}
@@ -152,8 +158,10 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 								{index < STEPS.length - 1 && (
 									<div
 										className={cn(
-											"w-12 sm:w-20 h-0.5 mx-2",
-											currentStep > step.id ? "bg-green-600" : "bg-gray-300",
+											"w-12 sm:w-20 h-0.5 mx-2 transition-all duration-300",
+											currentStep > step.id
+												? "bg-violet-500"
+												: "bg-slate-200 dark:bg-slate-700",
 										)}
 									/>
 								)}
