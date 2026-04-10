@@ -110,45 +110,72 @@ model KYCInvitation {
 }
 
 model KYIRecord {
-  id                    String        @id @default(cuid())
-  reference             String        @unique
-  userId                String
-  organizationId        String?
-  status                String        @default("pending")
-  isPEP                 Boolean       @default(false)
-  accreditationStatus   String?
-  investorType          String?
-  investmentAmount      String?
-  investmentCurrency    String?
-  sourceOfFunds         String?
-  governmentIdType      String?
-  governmentIdUrl       String?
-  selfieUrl             String?
-  bankStatementUrl      String?
-  proofOfAddressUrl     String?
-  proofOfNetWorthUrl    String?
-  accreditationLetterUrl String?
-  sourceOfFundsDocUrl   String?
-  corporateDocUrl       String?
-  userName              String?
-  userEmail             String?
-  extractedData         Json?
-  additionalData        Json?
-  verificationResult    Json?
-  declinedCodes         String[]      @default([])
+  id            String   @id @default(cuid())
+  reference     String   @unique
+  userId        String
+  organizationId String?
+
+  // Status
+  status        String   @default("pending")
+  shuftiEventType String?
+  declineReason String?
+  declinedCodes String[] @default([])
   servicesDeclinedCodes Json?
-  riskScore             Int?
-  shuftiEventType       String?
-  shuftiVerificationUrl String?
-  declineReason         String?
-  reviewNotes           String?
-  invitationToken       String?
-  submittedAt           DateTime?
-  reviewedAt            DateTime?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-  user                  User          @relation(fields: [userId], references: [id])
-  organization          Organization? @relation(fields: [organizationId], references: [id])
+  reviewNotes   String?
+  reviewedBy    String?
+
+  // Step 1 — Investor Profile
+  // Personal
+  firstName     String?
+  lastName      String?
+  email         String?
+  phone         String?
+  nationality   String?
+  countryOfResidence String?
+  dateOfBirth   String?
+
+  // Classification
+  investorType  String?   // individual | joint | corporate | fund | trust | institutional
+  accreditationStatus String? // accredited | qualified | institutional | retail
+  sourceOfFunds String?   // employment | business | investments | inheritance | property | savings | other
+  netWorthRange String?   // under_100k | 100k_500k | 500k_1m | 1m_5m | above_5m
+  investmentAmount String?
+  investmentCurrency String?
+
+  // PEP Declaration
+  isPEP         Boolean  @default(false)
+  pepDetails    String?  // if PEP, describe the role
+
+  // Step 2 — Identity Verification (via Shufti)
+  governmentIdType String?  // passport | national_id | driving_license
+  governmentIdUrl String?
+  governmentIdBackUrl String?
+  selfieUrl     String?
+
+  // Step 3 — Financial Documents
+  bankStatementUrl   String?   // required
+  proofOfAddressUrl  String?   // required
+  proofOfNetWorthUrl String?   // optional
+  accreditationLetterUrl String? // optional
+  sourceOfFundsDocUrl String?  // optional
+  corporateDocUrl    String?   // optional — for corporate investors
+
+  // Shufti extracted data
+  extractedData Json?
+  additionalData Json?
+  verificationResult Json?
+
+  // Metadata
+  invitationToken String?
+  userEmail String?
+  userName  String?
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
 }
 
 model KYIInvitation {

@@ -112,12 +112,6 @@ export default async function KYIDetailPage({ params }: KYIDetailPageProps) {
               <p className="text-sm"><strong>Event:</strong> {record.shuftiEventType ?? "—"}</p>
               <p className="text-sm"><strong>Submitted:</strong> {record.submittedAt ? format(new Date(record.submittedAt), "MMM d, yyyy HH:mm") : "—"}</p>
               {record.reviewedAt && <p className="text-sm"><strong>Reviewed:</strong> {format(new Date(record.reviewedAt), "MMM d, yyyy HH:mm")}</p>}
-              {record.riskScore !== undefined && record.riskScore !== null && <p className="text-sm"><strong>Risk Score:</strong> {record.riskScore}</p>}
-              {record.shuftiVerificationUrl && (
-                <a href={record.shuftiVerificationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-violet-600 hover:underline">
-                  View Verification Details <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
             </div>
           </div>
         </div>

@@ -1,18 +1,8 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import {
-  buildShuftiRequest,
-  createShuftiVerification,
-  getShuftiVerificationStatus,
-  mapShuftiEventToStatus,
-} from "@/lib/shufti";
-import type {
-  KYIActionResult,
-  KYIRecord,
-  KYISubmitPayload,
-  KYIStatus,
-} from "@/lib/kyi-types";
+import { buildShuftiRequest, createShuftiVerification } from "@/lib/shufti";
+import type { KYIActionResult, KYIRecord, KYISubmissionData, KYIStatus } from "@/lib/kyi-types";
 import { getAuth, getCurrentUser } from "@/lib/auth";
 
 const BACKEND = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -23,8 +13,12 @@ function requireBackend() {
   }
 }
 
+/**
+ * PART 5: Submit KYI data with Shufti integration
+ * Sends all 3 steps (profile, identity, financial docs) to backend
+ */
 export async function submitKYI(
-  payload: KYISubmitPayload,
+  payload: KYISubmissionData,
 ): Promise<KYIActionResult<{ kyiId: string; reference: string }>> {
   try {
     const auth = await getAuth();
@@ -35,60 +29,80 @@ export async function submitKYI(
 
     const reference = `KYI-${randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
 
+    // Build Shufti request from identity step data
     const shuftiRequest = buildShuftiRequest({
       reference,
-      email: currentUser.email,
-      country: "US",
+      email: payload.email,
+      country: payload.countryOfResidence,
       documentType:
         payload.governmentIdType === "national_id"
           ? "id_card"
           : payload.governmentIdType === "driving_license"
-            ? "driving_license"
-            : "passport",
+          ? "driving_license"
+          : "passport",
       documentFrontBase64: payload.governmentIdBase64,
+      documentBackBase64: payload.governmentIdBackBase64,
       selfieBase64: payload.selfieBase64,
     });
 
-    const appUrl =
-      process.env.APP_BASE_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "https://deeptrack-platform.onrender.com";
-
+    // Call Shufti Pro API
     const shuftiResponse = await createShuftiVerification(shuftiRequest);
 
     const initialStatus =
       shuftiResponse.event === "verification.accepted"
         ? "approved"
         : shuftiResponse.event === "verification.declined"
-          ? "declined"
-          : "processing";
+        ? "declined"
+        : "processing";
 
-    const res = await fetch(`${appUrl}/api/kyi`, {
+    // POST to backend API
+    const res = await fetch(`${BACKEND}/api/kyi`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        // Metadata
         reference,
         userId: auth.userId,
         userEmail: currentUser.email,
         userName: currentUser.fullName,
+
+        // Step 1: Investor Profile
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        email: payload.email,
+        phone: payload.phone,
+        nationality: payload.nationality,
+        countryOfResidence: payload.countryOfResidence,
+        dateOfBirth: payload.dateOfBirth,
         investorType: payload.investorType,
         accreditationStatus: payload.accreditationStatus,
+        sourceOfFunds: payload.sourceOfFunds,
+        netWorthRange: payload.netWorthRange,
         investmentAmount: payload.investmentAmount,
         investmentCurrency: payload.investmentCurrency,
-        sourceOfFunds: payload.sourceOfFunds,
         isPEP: payload.isPEP,
+        pepDetails: payload.pepDetails,
+
+        // Step 2: Identity Verification
         governmentIdType: payload.governmentIdType,
         governmentIdUrl: payload.governmentIdUrl,
+        governmentIdBackUrl: payload.governmentIdBackUrl,
         selfieUrl: payload.selfieUrl,
+
+        // Step 3: Financial Documents
         bankStatementUrl: payload.bankStatementUrl,
         proofOfAddressUrl: payload.proofOfAddressUrl,
         proofOfNetWorthUrl: payload.proofOfNetWorthUrl,
         accreditationLetterUrl: payload.accreditationLetterUrl,
         sourceOfFundsDocUrl: payload.sourceOfFundsDocUrl,
         corporateDocUrl: payload.corporateDocUrl,
+
+        // Shufti integration
         status: initialStatus,
         shuftiEventType: shuftiResponse.event,
-        shuftiVerificationUrl: null,
+
+        // Timestamp
+        submittedAt: new Date().toISOString(),
       }),
     });
 
@@ -116,6 +130,30 @@ export async function submitKYI(
   }
 }
 
+/**
+ * Fetch KYI record by ID with polling for status updates
+ */
+export async function getKYIRecord(id: string): Promise<KYIActionResult<KYIRecord>> {
+  try {
+    requireBackend();
+    const res = await fetch(`${BACKEND}/api/kyi/${id}`, {
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+
+    if (!res.ok) throw new Error(`Backend ${res.status}`);
+
+    const responseBody = await res.json();
+    return { success: true, data: responseBody?.data };
+  } catch (err) {
+    console.error("[getKYIRecord]", err);
+    return { success: false, error: "Failed to fetch KYI record" };
+  }
+}
+
+/**
+ * Fetch KYI records with optional filtering
+ */
 export async function getKYIList(params?: {
   status?: KYIStatus;
   investorType?: string;
@@ -158,40 +196,51 @@ export async function getKYIList(params?: {
   }
 }
 
-export async function getKYIRecord(id: string): Promise<KYIActionResult<KYIRecord>> {
+/**
+ * Fetch KYI stats for dashboard
+ */
+export async function getKYIStats(): Promise<
+  KYIActionResult<{
+    total: number;
+    approved: number;
+    declined: number;
+    pending: number;
+    processing: number;
+    requires_review: number;
+    pepCount: number;
+  }>
+> {
   try {
     requireBackend();
-    const res = await fetch(`${BACKEND}/api/kyi/${id}`, {
-      headers: { "Content-Type": "application/json" },
+
+    const res = await fetch(`${BACKEND}/api/kyi/stats`, {
       cache: "no-store",
     });
 
-    if (!res.ok) throw new Error(`Backend ${res.status}`);
-
-    const responseBody = await res.json();
-    return { success: true, data: responseBody?.data };
+    if (!res.ok) throw new Error(`Stats failed: ${res.status}`);
+    const data = await res.json();
+    return { success: true, data: data.data };
   } catch (err) {
-    console.error("[getKYIRecord]", err);
-    return { success: false, error: "Failed to fetch KYI record" };
+    console.error("[getKYIStats]", err);
+    return { success: false, error: "Failed to fetch KYI stats" };
   }
 }
 
+/**
+ * Refresh KYI status from Shufti Pro
+ */
 export async function refreshKYIFromShufti(
   id: string,
   reference: string,
 ): Promise<KYIActionResult<KYIRecord>> {
   try {
     requireBackend();
-    const shuftiStatus = await getShuftiVerificationStatus(reference);
-    const newStatus = mapShuftiEventToStatus(shuftiStatus.event);
 
-    const res = await fetch(`${BACKEND}/api/kyi/${id}`, {
-      method: "PATCH",
+    const res = await fetch(`${BACKEND}/api/kyi/${id}/refresh`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: newStatus,
-        shuftiEventType: shuftiStatus.event,
-      }),
+      body: JSON.stringify({ reference }),
+      cache: "no-store",
     });
 
     if (!res.ok) throw new Error(`Backend ${res.status}`);
@@ -204,6 +253,9 @@ export async function refreshKYIFromShufti(
   }
 }
 
+/**
+ * Review KYI submission (approve/decline)
+ */
 export async function reviewKYI(params: {
   id: string;
   decision: "approved" | "declined";
@@ -219,6 +271,7 @@ export async function reviewKYI(params: {
         status: params.decision,
         reviewNotes: params.notes,
         declineReason: params.declineReason,
+        reviewedAt: new Date().toISOString(),
       }),
     });
 
@@ -229,35 +282,5 @@ export async function reviewKYI(params: {
   } catch (err) {
     console.error("[reviewKYI]", err);
     return { success: false, error: "Failed to submit review decision" };
-  }
-}
-
-export async function getKYIStats(): Promise<
-  KYIActionResult<{
-    total: number;
-    approved: number;
-    declined: number;
-    pending: number;
-    processing: number;
-    requires_review: number;
-    pepCount: number;
-  }>
-> {
-  try {
-    const appUrl =
-      process.env.APP_BASE_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "https://deeptrack-platform.onrender.com";
-
-    const res = await fetch(`${appUrl}/api/kyi/stats`, {
-      cache: "no-store",
-    });
-
-    if (!res.ok) throw new Error(`Stats failed: ${res.status}`);
-    const data = await res.json();
-    return { success: true, data: data.data };
-  } catch (err) {
-    console.error("[getKYIStats]", err);
-    return { success: false, error: "Failed to fetch KYI stats" };
   }
 }
