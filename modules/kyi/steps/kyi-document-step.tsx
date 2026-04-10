@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Upload, X } from "lucide-react";
+import { Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -138,16 +138,8 @@ export function KYIDocumentStep({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
-        <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
-          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-        <AlertDescription className="text-blue-800 dark:text-blue-200">
-          We use Shufti Pro's AI-powered verification to ensure your documents are genuine
-          and match your identity.
-        </AlertDescription>
-      </Alert>
-
-      {/* Document Type Selection */}
-      <div className="space-y-4">
+        {/* Document Type Selection */}
+        <div className="space-y-4">
         <div>
           <h3 className="text-lg font-semibold mb-4">Document Type</h3>
         </div>
