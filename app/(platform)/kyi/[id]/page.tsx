@@ -115,7 +115,7 @@ export default async function KYIDetailPage({ params }: KYIDetailPageProps) {
               {record.riskScore !== undefined && record.riskScore !== null && <p className="text-sm"><strong>Risk Score:</strong> {record.riskScore}</p>}
               {record.shuftiVerificationUrl && (
                 <a href={record.shuftiVerificationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-violet-600 hover:underline">
-                  View on Shufti Pro <ExternalLink className="h-3 w-3" />
+                  View Verification Details <ExternalLink className="h-3 w-3" />
                 </a>
               )}
             </div>

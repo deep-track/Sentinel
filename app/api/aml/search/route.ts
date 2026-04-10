@@ -4,7 +4,7 @@ import { searchSanctions, getAMLRiskLevel } from "@/lib/opensanctions";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { query, schema } = body;
+    const { query, schema, country } = body;
 
     if (!query || String(query).trim().length < 2) {
       return NextResponse.json(
@@ -14,11 +14,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Log for debugging
-    console.log("[AML] Searching for:", query, "schema:", schema);
+    console.log("[AML] Searching for:", query, "schema:", schema, "country:", country);
 
     const results = await searchSanctions({
       query: String(query).trim(),
       schema: schema ?? "Person",
+      country: country ?? undefined,
       limit: 10,
     });
 

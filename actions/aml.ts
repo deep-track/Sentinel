@@ -17,6 +17,7 @@ export type AMLActionResult<T = void> =
 export async function runAMLCheck(params: {
   query: string;
   schema?: "Person" | "Company" | "Organization";
+  country?: string;
 }): Promise<AMLActionResult<AMLSearchResult>> {
   try {
     const appUrl =
@@ -32,6 +33,7 @@ export async function runAMLCheck(params: {
       body: JSON.stringify({
         query: params.query,
         schema: params.schema ?? "Person",
+        country: params.country,
       }),
     });
 
@@ -77,6 +79,7 @@ export async function searchAML(
       body: JSON.stringify({
         query: fullName,
         schema: "Person",
+        country: country,
       }),
     });
 

@@ -8,6 +8,43 @@
 const OPENSANCTIONS_BASE = "https://api.opensanctions.org";
 
 // ─────────────────────────────────────────────────────────
+// TOPIC LABELS MAPPING
+// ─────────────────────────────────────────────────────────
+
+export const TOPIC_LABELS: Record<string, {
+  label: string;
+  color: "red" | "orange" | "amber" | "violet" | "blue";
+}> = {
+  "role.pep":        { label: "Politically Exposed Person", color: "red" },
+  "poi":             { label: "Person of Interest",          color: "orange" },
+  "role.rca":        { label: "Relative / Close Associate",  color: "amber" },
+  "role.pol":        { label: "Politician",                  color: "violet" },
+  "role.gov":        { label: "Government Official",         color: "violet" },
+  "role.judge":      { label: "Judge / Judicial Officer",    color: "blue" },
+  "role.diplo":      { label: "Diplomat",                    color: "blue" },
+  "role.mil":        { label: "Military Officer",            color: "blue" },
+  "role.oligarch":   { label: "Oligarch",                    color: "red" },
+  "sanction":        { label: "Under Active Sanctions",      color: "red" },
+  "sanction.linked": { label: "Linked to Sanctioned Entity", color: "orange" },
+  "debarment":       { label: "Debarred",                    color: "orange" },
+  "wanted":          { label: "Wanted",                      color: "red" },
+  "crime":           { label: "Criminal Record",             color: "red" },
+  "crime.fin":       { label: "Financial Crime",             color: "red" },
+  "crime.fraud":     { label: "Fraud",                       color: "red" },
+  "crime.terror":    { label: "Terrorism Related",           color: "red" },
+  "crime.cyber":     { label: "Cybercrime",                  color: "orange" },
+  "crime.traffick":  { label: "Trafficking",                 color: "red" },
+};
+
+export const COLOR_CLASSES = {
+  red:    "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
+  orange: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800",
+  amber:  "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+  violet: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 border-violet-200 dark:border-violet-800",
+  blue:   "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+};
+
+// ─────────────────────────────────────────────────────────
 // TYPE DEFINITIONS
 // ─────────────────────────────────────────────────────────
 
@@ -239,6 +276,7 @@ export function getRiskLevelStyles(level: RiskLevel): {
 export async function searchSanctions(params: {
   query: string;
   schema?: string;
+  country?: string;
   limit?: number;
 }): Promise<SanctionsSearchResponse> {
   const apiKey = process.env.OPENSANCTIONS_API_KEY;
@@ -253,6 +291,11 @@ export async function searchSanctions(params: {
   url.searchParams.set("q", params.query);
   url.searchParams.set("schema", params.schema ?? "Person");
   url.searchParams.set("limit", String(params.limit ?? 10));
+
+  // OpenSanctions uses "countries" param (plural) for filtering
+  if (params.country && params.country !== "all") {
+    url.searchParams.set("countries", params.country.toLowerCase());
+  }
 
   console.log("[OpenSanctions] Searching:", url.toString());
 

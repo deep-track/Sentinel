@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getEntityById } from "@/lib/opensanctions";
 import { getAMLRiskLevel } from "@/lib/opensanctions";
+import { TOPIC_LABELS, COLOR_CLASSES } from "@/lib/opensanctions";
 import Link from "next/link";
 import {
   Shield,
@@ -116,14 +117,6 @@ export default async function AMLProfilePage({
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${risk.text} ${risk.border} ${risk.bg}`}>
                 {risk.label}
               </span>
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                score >= 90 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                : score >= 70 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                : score >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-              }`}>
-                {score}% match
-              </span>
             </div>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded font-mono">
@@ -136,15 +129,22 @@ export default async function AMLProfilePage({
 
             {/* Topics / risk categories */}
             {p.topics && p.topics.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {p.topics.map((t) => (
-                  <span
-                    key={t}
-                    className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full font-medium"
-                  >
-                    {t}
-                  </span>
-                ))}
+              <div className="flex flex-wrap gap-2 mt-3">
+                {p.topics.map((t) => {
+                  const info = TOPIC_LABELS[t];
+                  const colorClass = info
+                    ? COLOR_CLASSES[info.color]
+                    : COLOR_CLASSES.amber;
+                  const displayLabel = info?.label ?? t;
+                  return (
+                    <span
+                      key={t}
+                      className={`text-xs font-medium px-3 py-1.5 rounded-lg border inline-flex items-center ${colorClass}`}
+                    >
+                      {displayLabel}
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -210,46 +210,6 @@ export default async function AMLProfilePage({
 
         {/* Right — Sources */}
         <div className="space-y-4">
-
-          {/* Risk summary */}
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">
-              Risk Summary
-            </h2>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Risk Level</p>
-                <span className={`inline-flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg border ${risk.text} ${risk.border} ${risk.bg}`}>
-                  {risk.label}
-                </span>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Match Score</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        score >= 90 ? "bg-red-500"
-                        : score >= 70 ? "bg-orange-500"
-                        : score >= 50 ? "bg-amber-500"
-                        : "bg-blue-500"
-                      }`}
-                      style={{ width: `${score}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums">
-                    {score}%
-                  </span>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Entity Type</p>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {entity.schema}
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* Data sources */}
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5">

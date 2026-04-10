@@ -5,7 +5,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Shield, Search, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { searchAML } from "@/actions/aml";
-import { getRiskLevelStyles, formatConfidenceScore, formatDatasets } from "@/lib/opensanctions";
+import { getRiskLevelStyles, formatDatasets } from "@/lib/opensanctions";
+import { TOPIC_LABELS, COLOR_CLASSES } from "@/lib/opensanctions";
 import type { SanctionsSearchResult, RiskLevel } from "@/lib/opensanctions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
 
 export default function AMLCheckPage() {
   const [fullName, setFullName] = useState("");
-  const [country, setCountry] = useState("");
+  const [country, setCountry] = useState("all");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SanctionsSearchResult | null>(null);
 
@@ -38,7 +39,7 @@ export default function AMLCheckPage() {
     setResult(null);
 
     try {
-      const response = await searchAML(fullName.trim(), country.trim() || undefined);
+      const response = await searchAML(fullName.trim(), country !== "all" ? country : undefined);
       if (!response.success || !response.data) {
         toast.error(response.error ?? "AML search failed. Please try again.");
         return;
@@ -63,7 +64,7 @@ export default function AMLCheckPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">AML Screening & Sanctions Check</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Search OpenSanctions database for individuals and entities
+            Screen individuals and companies against 1,700+ global sanctions and watchlists to identify financial crime risk.
           </p>
         </div>
       </div>
@@ -75,8 +76,8 @@ export default function AMLCheckPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSearch} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="sm:col-span-2 space-y-1.5">
                 <Label htmlFor="fullName">Full Name <span className="text-red-500">*</span></Label>
                 <Input
                   id="fullName"
@@ -87,34 +88,52 @@ export default function AMLCheckPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="country">Country <span className="text-slate-400">(optional)</span></Label>
-                <Input
+                <Label htmlFor="country">Country Filter</Label>
+                <select
                   id="country"
-                  placeholder="e.g. US, GB, DE"
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
                   disabled={loading}
-                />
+                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                >
+                  <option value="all">All Countries</option>
+                  <option value="ke">Kenya</option>
+                  <option value="ng">Nigeria</option>
+                  <option value="za">South Africa</option>
+                  <option value="gh">Ghana</option>
+                  <option value="tz">Tanzania</option>
+                  <option value="ug">Uganda</option>
+                  <option value="et">Ethiopia</option>
+                  <option value="eg">Egypt</option>
+                  <option value="us">United States</option>
+                  <option value="gb">United Kingdom</option>
+                  <option value="de">Germany</option>
+                  <option value="fr">France</option>
+                  <option value="ru">Russia</option>
+                  <option value="cn">China</option>
+                  <option value="ae">United Arab Emirates</option>
+                  <option value="sa">Saudi Arabia</option>
+                </select>
               </div>
-            </div>
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                disabled={loading || !fullName.trim()}
-                className="bg-violet-600 hover:bg-violet-700 text-white"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Searching…
-                  </>
-                ) : (
-                  <>
-                    <Search className="mr-2 h-4 w-4" />
-                    Search
-                  </>
-                )}
-              </Button>
+              <div className="flex items-end">
+                <Button
+                  type="submit"
+                  disabled={loading || !fullName.trim()}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Searching…
+                    </>
+                  ) : (
+                    <>
+                      <Search className="mr-2 h-4 w-4" />
+                      Search
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </form>
         </CardContent>
@@ -174,13 +193,13 @@ export default function AMLCheckPage() {
                 <Card key={match.id} className="border-slate-200 dark:border-slate-700">
                   <CardContent className="pt-5 pb-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-2 flex-1 min-w-0">
+                      <div className="space-y-3 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-slate-900 dark:text-white">
                             {match.caption}
                           </span>
                           <Badge variant="outline" className="text-xs">
-                            {formatConfidenceScore(match.score)} confidence
+                            {match.schema}
                           </Badge>
                         </div>
 
@@ -200,6 +219,27 @@ export default function AMLCheckPage() {
                             </div>
                           )}
                         </dl>
+
+                        {/* Topic tags */}
+                        {match.topics && match.topics.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {match.topics.map((topic) => {
+                              const info = TOPIC_LABELS[topic];
+                              const colorClass = info
+                                ? COLOR_CLASSES[info.color]
+                                : COLOR_CLASSES.amber;
+                              const displayLabel = info?.label ?? topic;
+                              return (
+                                <span
+                                  key={topic}
+                                  className={`inline-flex items-center text-xs font-medium px-3 py-1.5 rounded-lg border ${colorClass}`}
+                                >
+                                  {displayLabel}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       <Link

@@ -86,8 +86,7 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 					</h2>
 					<p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
 						Your KYB submission has been received. All listed UBOs and directors
-						will receive an email from Shufti Pro to complete their identity
-						verification. You will be notified once the review is complete.
+						will receive an email to complete their identity verification. You will be notified once the review is complete.
 					</p>
 					{submittedReference && (
 						<p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
