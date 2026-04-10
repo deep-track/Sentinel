@@ -61,9 +61,10 @@ export function InvestorProfileStep({
   }
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
-      {/* Personal Information Section */}
-      <div className="space-y-4">
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
+        {/* Personal Information Section */}
+        <div className="space-y-4">
         <div>
           <h3 className="text-lg font-semibold mb-4">Personal Information</h3>
         </div>
@@ -407,6 +408,7 @@ export function InvestorProfileStep({
       <Button type="submit" disabled={isLoading} className="w-full">
         {isLoading ? "Processing..." : "Continue to Identity Verification"}
       </Button>
-    </form>
+      </form>
+    </Form>
   );
 }

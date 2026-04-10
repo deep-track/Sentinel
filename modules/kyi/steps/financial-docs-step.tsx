@@ -178,9 +178,10 @@ export function FinancialDocsStep({
   );
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
-      <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
-        <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
+        <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
+          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         <AlertDescription className="text-blue-800 dark:text-blue-200">
           Upload financial documents to complete your KYI verification. All documents are securely
           encrypted and processed according to compliance standards.
@@ -233,6 +234,7 @@ export function FinancialDocsStep({
       <Button type="submit" disabled={isLoading} className="w-full" size="lg">
         {isLoading ? "Submitting..." : "Complete Verification"}
       </Button>
-    </form>
+      </form>
+    </Form>
   );
 }
