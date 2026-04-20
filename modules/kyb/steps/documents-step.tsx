@@ -7,6 +7,7 @@ import {
 	type UploadedDocument,
 	documentTypeLabels,
 	documentTypes,
+	mandatoryKYBDocuments,
 } from "@/lib/kyb-types";
 import { cn } from "@/lib/utils";
 import {
@@ -70,12 +71,12 @@ export function DocumentsStep({
 	};
 
 	const handleSubmit = () => {
-		const missingDocs = documentTypes.filter(
+		const missingDocs = mandatoryKYBDocuments.filter(
 			(type) => !documents.find((d) => d.type === type),
 		);
 
 		if (missingDocs.length > 0) {
-			setError("Please upload all required documents before proceeding.");
+			setError("Incorporation certificate and utility bill are required.");
 			return;
 		}
 
@@ -90,7 +91,7 @@ export function DocumentsStep({
 					Business Documents
 				</h2>
 				<p className="text-gray-500 text-sm mt-1">
-					Upload the required business documents for verification
+					Upload incorporation certificate and utility bill (required). Business license and financial documents are optional.
 				</p>
 			</div>
 
@@ -100,11 +101,14 @@ export function DocumentsStep({
 					const isImage = uploadedDoc?.mimeType?.startsWith("image/");
 					const isPDF = uploadedDoc?.mimeType === "application/pdf";
 
+					const isMandatory = mandatoryKYBDocuments.includes(docType as typeof mandatoryKYBDocuments[number]);
+
 					return (
 						<div key={docType} className="border rounded-lg p-4">
 							<Label className="text-sm font-medium">
 								{documentTypeLabels[docType]}{" "}
-								<span className="text-red-500">*</span>
+								{isMandatory && <span className="text-red-500">*</span>}
+								{!isMandatory && <span className="text-gray-400 text-xs ml-1">(Optional)</span>}
 							</Label>
 							<p className="text-xs text-gray-500 mb-3">
 								Accepted formats: JPG, JPEG, PNG, PDF — Maximum 16MB

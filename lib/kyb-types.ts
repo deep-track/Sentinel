@@ -1,20 +1,26 @@
 import { z } from "zod";
 
-export const documentTypes = [
-	"business_registration",
+export const mandatoryKYBDocuments = [
 	"incorporation_certificate",
-	"business_license",
 	"utility_bill",
+] as const;
+
+export const optionalKYBDocuments = [
+	"business_license",
 	"financial_document",
+] as const;
+
+export const documentTypes = [
+	...mandatoryKYBDocuments,
+	...optionalKYBDocuments,
 ] as const;
 
 export type DocumentType = (typeof documentTypes)[number];
 
 export const documentTypeLabels: Record<DocumentType, string> = {
-	business_registration: "Registration Certificate",
 	incorporation_certificate: "Incorporation Certificate",
-	business_license: "Business License",
 	utility_bill: "Utility Bill",
+	business_license: "Business License",
 	financial_document: "Financial Document",
 };
 
@@ -66,7 +72,7 @@ export const kybFormSchema = z.object({
 	businessInfo: businessInfoSchema,
 	documents: z
 		.array(documentUploadSchema)
-		.min(5, "All 5 documents are required"),
+		.min(2, "Incorporation certificate and utility bill are required"),
 	ubos: z.array(uboSchema).min(1, "At least one person is required"),
 	confirmation: z.boolean().refine((val) => val === true, {
 		message: "You must confirm the information is accurate",
