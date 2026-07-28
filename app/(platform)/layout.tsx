@@ -5,11 +5,25 @@ import { getCurrentUser } from "@/lib/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+const isAuth0Configured = Boolean(
+	process.env.AUTH0_SECRET &&
+	process.env.AUTH0_DOMAIN &&
+	process.env.AUTH0_CLIENT_ID &&
+	process.env.AUTH0_CLIENT_SECRET &&
+	process.env.APP_BASE_URL,
+);
+
+const DEV_USER = {
+	id: "dev-user",
+	email: "dev@deeptrack.io",
+	fullName: "Dev User",
+	role: "admin" as const,
+};
 
 export default async function Layout({
 	children,
 }: { children: React.ReactNode }) {
-	const user = await getCurrentUser();
+	const user = isAuth0Configured ? await getCurrentUser() : DEV_USER;
 	if (!user) redirect("/auth/login");
 	return (
 		<SidebarProvider>
@@ -25,7 +39,7 @@ export default async function Layout({
 								{user.fullName}
 							</span>
 							<Button asChild size="sm" variant="outline">
-								<a href="/auth/logout">Logout</a>
+								<Link href="/auth/logout">Logout</Link>
 							</Button>
 						</div>
 					</div>

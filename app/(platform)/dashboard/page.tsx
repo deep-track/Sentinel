@@ -3,6 +3,10 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { getKYCStats, getKYCList } from "@/actions/kyc";
 import { getKYIStats } from "@/actions/kyi";
+import { getAPIKeys } from "@/actions/api-keys";
+import { CreditUsageCard } from "./_components/credit-usage-card";
+import { StatsGrid } from "./_components/stats-grid";
+import { RecentVerificationsTable } from "./_components/recent-verifications-table";
 import {
   CheckCircle,
   XCircle,
@@ -13,12 +17,19 @@ import {
 } from "lucide-react";
 
 export default async function DashboardPage() {
-  // Fetch real data in parallel
-  const [kycStatsResult, kyiStatsResult, kycListResult] = await Promise.all([
-    getKYCStats(),
-    getKYIStats(),
-    getKYCList({ limit: 10 }),
-  ]);
+  const [kycStatsResult, kyiStatsResult, kycListResult, statsRes, verificationsRes, apiKeys] =
+    await Promise.all([
+      getKYCStats(),
+      getKYIStats(),
+      getKYCList({ limit: 10 }),
+      fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/client/verifications/stats?timeRange=30d`, {
+        cache: "no-store",
+      }).then((r) => r.json()),
+      fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/client/verifications?limit=10`, {
+        cache: "no-store",
+      }).then((r) => r.json()),
+      getAPIKeys(),
+    ]);
 
   const kycStats = kycStatsResult.success ? kycStatsResult.data : null;
   const kyiStats = kyiStatsResult.success ? kyiStatsResult.data : null;
@@ -45,7 +56,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8 p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
           Dashboard
@@ -55,7 +65,17 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats Grid */}
+      <CreditUsageCard />
+
+      <StatsGrid
+        total={statsRes.total ?? 0}
+        avgCompletionTimeMs={statsRes.avgCompletionTimeMs ?? null}
+        pendingReview={statsRes.pendingReview ?? 0}
+        activeApiKeys={apiKeys.length}
+      />
+
+      <RecentVerificationsTable data={verificationsRes.verifications ?? []} />
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 space-y-3">
           <div className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
@@ -142,20 +162,18 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* KYC vs KYI breakdown */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* KYC Summary */}
         <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
               KYC Overview
             </h2>
-            <a
-              href="/kyc"
-              className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
-            >
-              View all →
-            </a>
+           <Link
+  href="/kyc"
+  className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
+>
+  View all →
+</Link>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[
@@ -181,18 +199,17 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* KYI Summary */}
         <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
               KYI Overview
             </h2>
-            <a
+            <Link
               href="/kyi"
               className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
             >
               View all →
-            </a>
+            </Link>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[
@@ -219,18 +236,17 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent KYC Activity */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
             Recent KYC Activity
           </h2>
-          <a
+          <Link
             href="/kyc"
             className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
           >
             View all →
-          </a>
+          </Link>
         </div>
 
         {recentKYC.length === 0 ? (
@@ -238,17 +254,17 @@ export default async function DashboardPage() {
             <p className="text-slate-400 dark:text-slate-500 text-sm">
               No verifications yet
             </p>
-            <a
+            <Link
               href="/kyc/new"
               className="mt-3 inline-block text-xs text-violet-600 dark:text-violet-400 hover:underline"
             >
               Start your first verification →
-            </a>
+            </Link>
           </div>
         ) : (
           <div className="space-y-3">
             {recentKYC.map((record) => (
-              <a
+              <Link
                 key={record.id}
                 href={`/kyc/${record.id}`}
                 className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-2 -mx-2 transition-colors"
@@ -286,7 +302,7 @@ export default async function DashboardPage() {
                     {record.status}
                   </span>
                 </div>
-              </a>
+              </Link>
             ))}
           </div>
         )}
