@@ -1,4 +1,4 @@
-import { LivenessCapture } from "./liveness-capture";
+import { LivenessRequestPanel } from "./liveness-request-panel";
 
 export default function LivenessPage() {
   return (
@@ -8,11 +8,12 @@ export default function LivenessPage() {
           Liveness
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Record a short liveness session to verify a real, present person
+          Send a liveness check to an end user&apos;s phone and review the
+          result here
         </p>
       </div>
 
-      <LivenessCapture />
+      <LivenessRequestPanel />
     </div>
   );
 }

@@ -38,9 +38,11 @@ export default async function Layout({
 							<span className="text-sm text-muted-foreground hidden md:inline">
 								{user.fullName}
 							</span>
-							<Button asChild size="sm" variant="outline">
-								<Link href="/auth/logout">Logout</Link>
-							</Button>
+							{isAuth0Configured && (
+								<Button asChild size="sm" variant="outline">
+									<Link href="/auth/logout">Logout</Link>
+								</Button>
+							)}
 						</div>
 					</div>
 				</div>

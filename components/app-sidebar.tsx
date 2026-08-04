@@ -16,7 +16,6 @@ import {
 import { TypographyP, TypographySmall } from "@/components/ui/typography";
 import {
 	Building2,
-	CreditCard,
 	Fingerprint,
 	Home,
 	Key,
@@ -34,6 +33,9 @@ import { useRouter } from "next/navigation";
 import React from "react";
 import { Toaster } from "react-hot-toast";
 
+const ADMIN_ROUTES = ["/members"];
+const HEAD_ROLES = ["admin", "head"];
+
 const getMainItems = () => [
 	{ title: "Overview", url: "/dashboard", icon: Home },
 	{ title: "Identity (KYC)", url: "/kyc", icon: ShieldCheck },
@@ -49,7 +51,6 @@ const developerItems = [
 ];
 
 const accountItems = [
-	{ title: "Billing & Credits", url: "/billing", icon: CreditCard },
 	{ title: "Settings", url: "/settings", icon: Settings },
 ];
 
@@ -102,9 +103,6 @@ export function AppSidebar({ role }: Props) {
 	const pathname = usePathname();
 	const router = useRouter();
 
-	const adminRoutes = ["/members"];
-	const headRoles = ["admin", "head"];
-
 	const mainItems = getMainItems();
 	if (role === "admin" || role === "head") {
 		mainItems.splice(1, 0, { title: "Members", url: "/members", icon: User2 });
@@ -112,8 +110,8 @@ export function AppSidebar({ role }: Props) {
 
 	React.useEffect(() => {
 		if (
-			!headRoles.includes(role) &&
-			adminRoutes.some((route) => pathname.startsWith(route))
+			!HEAD_ROLES.includes(role) &&
+			ADMIN_ROUTES.some((route) => pathname.startsWith(route))
 		) {
 			router.push("/dashboard");
 		}
