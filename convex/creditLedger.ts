@@ -1,9 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 
-// Never patch a balance field. Every movement is a new row; balance is
-// always the sum of this table for a client, computed on read.
-
 export const _insertLedgerEntry = internalMutation({
   args: {
     clientId: v.id("clients"),
@@ -36,9 +33,7 @@ export const _getBalance = internalQuery({
   },
 });
 
-// Public read for GET /v1/credits — wired in http.ts. Left as a plain
-// query too in case you want to call it from an authenticated Convex
-// Auth session (e.g. an internal dashboard) rather than only via HTTP.
+
 export const getBalanceForClient = query({
   args: { clientId: v.id("clients") },
   handler: async (ctx, args) => {

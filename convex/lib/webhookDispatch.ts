@@ -1,15 +1,15 @@
 export const WEBHOOK_RETRY_SCHEDULE_MS = [
-  60 * 1000,           // 1 min
-  5 * 60 * 1000,        // 5 min
-  30 * 60 * 1000,        // 30 min
-  2 * 60 * 60 * 1000,     // 2 hr
-  6 * 60 * 60 * 1000,     // 6 hr
-  24 * 60 * 60 * 1000,    // 24 hr
+  60 * 1000,         
+  5 * 60 * 1000,      
+  30 * 60 * 1000,       
+  2 * 60 * 60 * 1000,  
+  6 * 60 * 60 * 1000,  
+  24 * 60 * 60 * 1000,    
 ];
 
-export const MAX_WEBHOOK_ATTEMPTS = WEBHOOK_RETRY_SCHEDULE_MS.length + 1; // +1 for the initial attempt
+export const MAX_WEBHOOK_ATTEMPTS = WEBHOOK_RETRY_SCHEDULE_MS.length + 1; 
 
-// payload shape
+// payload
 export type WebhookPayload = {
   event: "sentinel.scan.complete";
   scan_id: string;
@@ -45,9 +45,6 @@ export function buildWebhookPayload(params: {
   };
 }
 
-// HMAC-SHA256 over the raw JSON body, using the client's webhook
-// secret. Client is expected to recompute this and compare against
-// X-Sentinel-Signature before trusting the payload (Section 8.4).
 export async function signWebhookPayload(
   rawBody: string,
   secret: string,
@@ -85,7 +82,7 @@ export async function deliverWebhook(
     });
     clearTimeout(timeout);
 
-    // the retry schedule
+    // retry schedule
     return { success: res.ok, statusCode: res.status };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) };

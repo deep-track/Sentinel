@@ -12,7 +12,7 @@ export default defineSchema({
     created_at: v.number(),
   }).index("by_user", ["userId"]),
 
-  // ── Sentinel Phase 1 ──────────────────────────────────────
+  // Sentinel Phase 1
   clients: defineTable({
     name: v.string(),
     plan: v.union(
@@ -26,18 +26,18 @@ export default defineSchema({
       v.literal("suspended"),
       v.literal("trial_expired"),
     ),
-    creditLimit: v.number(), // guardrail on allocation, not a live balance
-    rpmCap: v.number(),      // Section 10.3: 60 Starter / 200 Growth / 1000 Enterprise
-    creditThresholdPct: v.number(), // Section 1.1 — default 80, alert fires above this
+    creditLimit: v.number(), 
+    rpmCap: v.number(),     
+    creditThresholdPct: v.number(), 
     webhookUrl: v.optional(v.string()),
-    webhookSecret: v.optional(v.string()), // used to HMAC-sign outbound payloads — never returned in reads
+    webhookSecret: v.optional(v.string()), 
     createdAt: v.number(),
   }),
 
   apiKeys: defineTable({
     clientId: v.id("clients"),
-    prefix: v.string(),      // shown in dashboard, e.g. "snt_live_9f2a"
-    hashedKey: v.string(),   // sha256 hex of the full raw key — raw key never stored
+    prefix: v.string(),      
+    hashedKey: v.string(), 
     environment: v.union(v.literal("live"), v.literal("test")),
     revoked: v.boolean(),
     createdAt: v.number(),
@@ -59,9 +59,8 @@ export default defineSchema({
       v.literal("processing"),
       v.literal("completed"),
       v.literal("failed"),
-      // Section 1.5 of the Platform Spec — one of the four review
-      // actions is "Request Resubmission", distinct from a hard
-      // failure: the applicant needs to redo a step, not start over.
+
+      // Request Resubmission
       v.literal("resubmission_requested"),
     ),
     verdict: v.optional(
@@ -69,13 +68,12 @@ export default defineSchema({
     ),
     confidence: v.optional(v.number()), // 0-1
     creditsUsed: v.number(),
-    // Refs to already-uploaded blobs (Convex storage id / S3 key), NOT
-    // raw image bytes — keeps PII out of this row and any DB export.
+    // raw image bytes
     input: v.any(),
-    result: v.optional(v.any()), // raw provider result payload, for audit
-    reference: v.string(),       // client-facing id, e.g. "gt_..."
+    result: v.optional(v.any()), 
+    reference: v.string(),       
     failureReason: v.optional(v.string()),
-    disputeReason: v.optional(v.string()), // Section 11.1 — client-initiated dispute
+    disputeReason: v.optional(v.string()), 
     disputedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -86,8 +84,6 @@ export default defineSchema({
     .index("by_client_and_status", ["clientId", "status"])
     .index("by_client_and_type", ["clientId", "type"]),
 
-  // Immutable — never patch a balance. Every movement is a new row;
-  // balance is always derived by summing this table for a client.
   creditLedger: defineTable({
     clientId: v.id("clients"),
     verificationId: v.optional(v.id("verifications")),
@@ -97,13 +93,13 @@ export default defineSchema({
       v.literal("refund"),
       v.literal("adjustment"),
     ),
-    amount: v.number(), // positive = added, negative = consumed
+    amount: v.number(), 
     reason: v.string(),
     createdAt: v.number(),
   }).index("by_client", ["clientId"]),
 
-  // Phase 3 — table exists now so relations are valid; write path (AML
-  // screening + watchlist ingestion crons) isn't built yet.
+
+  // screening + watchlist ingestion 
   flaggedEntities: defineTable({
     entityName: v.string(),
     source: v.union(
@@ -122,12 +118,10 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"]),
 
-  // Phase 4
+  
   reviewQueue: defineTable({
     verificationId: v.id("verifications"),
     clientId: v.id("clients"),
-    // Section 11.2 (engineering doc) — queue sort order is client
-    // disputes first, then auto-escalated, then internal flags.
     triggerType: v.union(
       v.literal("client_dispute"),
       v.literal("auto_escalation"),
@@ -141,10 +135,7 @@ export default defineSchema({
       v.literal("resolved"),
     ),
     assignedTo: v.optional(v.string()),
-    // Platform Spec Section 1.5 — the four actions a Compliance
-    // Analyst can take. Reject and Escalate require notes (spec:
-    // "reason must be logged for audit trail") — enforced in
-    // reviewQueue.ts, not at the schema level.
+    // reviewQueue
     resolutionAction: v.optional(
       v.union(
         v.literal("approve"),
@@ -155,10 +146,6 @@ export default defineSchema({
     ),
     resolutionNotes: v.optional(v.string()),
     resolvedBy: v.optional(v.string()),
-    // Escalated cases go to a separate Escalation Queue visible only
-    // to Client Admin (Section 1.5) — modeled here as a flag rather
-    // than a new table for now, since it's still fundamentally the
-    // same record awaiting a second sign-off.
     escalated: v.optional(v.boolean()),
     createdAt: v.number(),
     resolvedAt: v.optional(v.number()),
@@ -166,7 +153,7 @@ export default defineSchema({
     .index("by_client_and_status", ["clientId", "status"])
     .index("by_verification", ["verificationId"]),
 
-  // Phase 4
+
   feedbackLabels: defineTable({
     verificationId: v.id("verifications"),
     label: v.union(
@@ -175,24 +162,18 @@ export default defineSchema({
       v.literal("confirmed_correct"),
     ),
     labeledBy: v.string(),
-    // Section 10.4 — reviewers must never confirm below 80% certainty;
-    // enforced in reviewQueue.ts mutation, stored here for the audit trail.
     certaintyPct: v.number(),
     notes: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_verification", ["verificationId"]),
 
-  // Section 10.4 — INSERT-only at the app layer. True enforcement (no
-  // UPDATE/DELETE at all) is a DB-role grant Denzel owns at the Postgres/
-  // Convex-infra level; this table + auditLog.ts's lack of any patch/delete
-  // export is the application-layer half of that guarantee.
   auditLog: defineTable({
     actorId: v.string(),      // Convex Auth userId, or api_key_id for client-driven events
     actorType: v.union(v.literal("internal_admin"), v.literal("reviewer"), v.literal("client_api_key"), v.literal("system")),
-    action: v.string(),       // e.g. "verification.created", "client.suspended", "review.confirmed"
-    targetType: v.string(),   // e.g. "verification", "client", "apiKey"
+    action: v.string(),       
+    targetType: v.string(),  
     targetId: v.string(),
-    clientId: v.optional(v.id("clients")), // scopes the event to a tenant when applicable
+    clientId: v.optional(v.id("clients")), 
     ipAddress: v.optional(v.string()),
     metadata: v.optional(v.any()),
     timestamp: v.number(),
@@ -200,10 +181,7 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_target", ["targetType", "targetId"]),
 
-  // Section 12.1 — webhook delivery log with signed HMAC-SHA256 payloads
-  // and a manual test-send action. Retry policy fields are structured so
-  // whatever backoff schedule Brian confirms (Section 8.4 open item)
-  // drops in as config, not a rewrite.
+  // webhook delivery
   webhookDeliveries: defineTable({
     clientId: v.id("clients"),
     verificationId: v.id("verifications"),

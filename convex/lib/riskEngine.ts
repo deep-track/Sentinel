@@ -44,7 +44,7 @@ export async function orchestrateIdpVerification(
 ): Promise<IdpOrchestrationResult> {
   const stepResults: IdpOrchestrationResult["stepResults"] = {};
 
-  // Step 1: liveness + doc scan, in parallel.
+  // liveness + doc scan
   const [livenessOutcome, docScanOutcome] = await Promise.allSettled([
     checkLiveness(input.liveness),
     scanDocument(input.document),
@@ -86,15 +86,14 @@ export async function orchestrateIdpVerification(
     };
   }
 
-  //  IPRS — only called after both scans clean-pass.
+  //  IPRS
   let iprsStatus: string;
   try {
     const iprsResult = await queryIprs(input.identity);
     stepResults.iprs = { status: iprsResult.status };
     iprsStatus = iprsResult.status;
   } catch (err) {
-    //  IPRS unavailable -> queue for manual verification,
-    // never auto-reject. Same handling as an explicit TIMEOUT status.
+    //  IPRS unavailable -> queue for manual verification
     stepResults.iprs = { error: String(err) };
     return {
       verdict: "review",
@@ -140,7 +139,7 @@ export async function orchestrateIdpVerification(
       break;
   }
 
-  //  AML — only called after IPRS returns MATCH.
+  //  AML.
   let amlStatus: string;
   let amlMatches: AmlMatch[];
   try {

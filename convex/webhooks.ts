@@ -9,10 +9,6 @@ import {
   MAX_WEBHOOK_ATTEMPTS,
 } from "./lib/webhookDispatch";
 
-// Called (fire-and-forget, via scheduler) right after a verification
-// reaches a completed state (pass/review/reject) — see idp.ts. Does
-// nothing if the client hasn't registered a webhook URL, per Section
-// 8.4's "if a webhook is registered".
 export const dispatchWebhook = internalAction({
   args: { verificationId: v.id("verifications") },
   handler: async (ctx, args) => {
@@ -42,10 +38,6 @@ export const dispatchWebhook = internalAction({
   },
 });
 
-// One delivery attempt. Reschedules itself via the confirmed retry
-// schedule (1min/5min/30min/2hr/6hr/24hr) on failure; marks the
-// delivery "failed" for the client portal's manual-resend UI once
-// the schedule is exhausted.
 export const attemptDelivery = internalAction({
   args: { deliveryId: v.id("webhookDeliveries") },
   handler: async (ctx, args) => {
@@ -100,13 +92,6 @@ export const attemptDelivery = internalAction({
   },
 });
 
-// Section 12.1 — client portal's manual "test-send"/resend action.
-// Gated behind an authenticated dashboard session for now (same
-// pattern as apiKeys.createClient) — this is a placeholder auth
-// boundary. It needs to become a true client-scoped check (this user
-// belongs to this client's org) once ClientMember-style roles exist;
-// right now any signed-in internal_admin/reviewer could resend any
-// client's webhook, which is too broad for a client-facing action.
 export const resendWebhook = mutation({
   args: { deliveryId: v.id("webhookDeliveries") },
   handler: async (ctx, args) => {
@@ -131,7 +116,6 @@ export const resendWebhook = mutation({
   },
 });
 
-// ── internal plumbing ──────────────────────────────────────────
 
 export const _getClientForWebhook = internalQuery({
   args: { clientId: v.id("clients") },

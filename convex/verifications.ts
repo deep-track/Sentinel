@@ -68,7 +68,7 @@ export const _fail = internalMutation({
   },
 });
 
-// verification status AND creates the corresponding reviewQueue row.
+// verification status
 export const _completeWithReview = internalMutation({
   args: {
     id: v.id("verifications"),
@@ -102,7 +102,7 @@ export const _completeWithReview = internalMutation({
   },
 });
 
-// Tenant-isolation:A client must never be able to fetch another client's verification..
+// Tenant-isolation
 export const _getByReferenceForClient = internalQuery({
   args: { reference: v.string(), clientId: v.id("clients") },
   handler: async (ctx, args) => {

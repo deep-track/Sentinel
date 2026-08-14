@@ -3,7 +3,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { orchestrateIdpVerification } from "./lib/riskEngine";
 
-const IDP_CREDIT_COST = 1; // adjust per pricing model — not specified in the doc yet
+const IDP_CREDIT_COST = 1; 
 
 export const processIdpVerification = internalAction({
   args: {
@@ -52,27 +52,17 @@ export const processIdpVerification = internalAction({
         triggerReason: result.reviewTrigger?.triggerReason ?? result.reason,
         priority: "normal",
       });
-      // No credit deduction — verification isn't complete yet, a human
-      // still has to resolve it. Deduct on final Confirm/Keep-verdict
-      // in reviewQueue.ts instead, not here.
-
-      // Webhook still fires — Section 3.2 step 5 fires the webhook once
-      // the verifications row is updated, and a "review" verdict is a
-      // stable, completed status (status: "completed", verdict:
-      // "review") even though it's not billed yet. The client gets
-      // notified their submission needs manual review rather than
-      // being left to poll indefinitely.
       await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, {
         verificationId: args.verificationId,
       });
       return;
     }
 
-    // pass or reject both count as a completed, billable verification.
+    // pass or reject both count as completed
     await ctx.runMutation(internal.verifications._complete, {
       id: args.verificationId,
       verdict: result.verdict,
-      confidence: result.verdict === "pass" ? 1 : 0, // TODO: derive a real confidence score once model outputs are richer than pass/review/reject
+      confidence: result.verdict === "pass" ? 1 : 0, 
       result: result.stepResults,
     });
 

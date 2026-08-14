@@ -5,10 +5,6 @@ import { buildRawApiKey, sha256Hex, safeCompareHex } from "./lib/crypto";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 
-// Bootstraps a new tenant. Gated behind a signed-in Convex Auth user
-// (dashboard-only, same as notes.create) — this is NOT part of the
-// public /v1 API. Anyone hitting this without a session is rejected.
-// Tighten further with an admin-role check once you have roles.
 export const createClient = mutation({
   args: {
     name: v.string(),
@@ -38,7 +34,7 @@ export const createClient = mutation({
   },
 });
 
-// ── Public: generate a new key for a client ────────────────────
+// generate a new key for a client
 export const generateApiKey = action({
   args: {
     clientId: v.id("clients"),
@@ -55,7 +51,7 @@ export const generateApiKey = action({
       environment: args.environment,
     });
 
-    // rawKey is returned ONCE only the hash is stored. Make sure your caller surfaces this to
+    // rawKey is returned ONCE only the hash is stored
     return { rawKey, prefix };
   },
 });
@@ -96,7 +92,7 @@ export const _touchLastUsed = internalMutation({
   },
 });
 
-// ── Auth result shape used by http.ts ──────────────────────────
+// Auth result shape used by http.ts
 export type ApiKeyAuthResult =
   | { ok: true; clientId: Id<"clients">; apiKeyId: Id<"apiKeys"> }
   | { ok: false; status: number; error: string };
@@ -129,7 +125,6 @@ export async function authenticateApiKey(
     return { ok: false, status: 401, error: "Invalid API key" };
   }
 
-  // Fire-and-forget last-used tracking — don't block the request on it.
   ctx.runMutation(internal.apiKeys._touchLastUsed, { apiKeyId: keyRow._id });
 
   return { ok: true, clientId: keyRow.clientId, apiKeyId: keyRow._id };
