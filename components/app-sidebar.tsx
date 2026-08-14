@@ -16,6 +16,7 @@ import {
 import { TypographyP, TypographySmall } from "@/components/ui/typography";
 import {
 	Building2,
+	CreditCard,
 	Fingerprint,
 	Home,
 	Key,
@@ -51,6 +52,7 @@ const developerItems = [
 ];
 
 const accountItems = [
+	{ title: "Billing & Credits", url: "/billing", icon: CreditCard },
 	{ title: "Settings", url: "/settings", icon: Settings },
 ];
 
