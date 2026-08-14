@@ -48,3 +48,5 @@ next-env.d.ts
 .history/
 
 /lib/generated/prisma
+
+.env.local
