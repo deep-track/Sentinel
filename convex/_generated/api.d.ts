@@ -9,6 +9,7 @@
  */
 
 import type * as apiKeys from "../apiKeys.js";
+import type * as auditLog from "../auditLog.js";
 import type * as auth from "../auth.js";
 import type * as creditLedger from "../creditLedger.js";
 import type * as http from "../http.js";
@@ -19,8 +20,10 @@ import type * as lib_awsClients_internalFetch from "../lib/awsClients/internalFe
 import type * as lib_awsClients_iprsClient from "../lib/awsClients/iprsClient.js";
 import type * as lib_awsClients_livenessClient from "../lib/awsClients/livenessClient.js";
 import type * as lib_crypto from "../lib/crypto.js";
+import type * as lib_rbac from "../lib/rbac.js";
 import type * as lib_riskEngine from "../lib/riskEngine.js";
 import type * as lib_webhookDispatch from "../lib/webhookDispatch.js";
+import type * as reviewQueue from "../reviewQueue.js";
 import type * as verifications from "../verifications.js";
 import type * as webhooks from "../webhooks.js";
 
@@ -32,6 +35,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   apiKeys: typeof apiKeys;
+  auditLog: typeof auditLog;
   auth: typeof auth;
   creditLedger: typeof creditLedger;
   http: typeof http;
@@ -42,8 +46,10 @@ declare const fullApi: ApiFromModules<{
   "lib/awsClients/iprsClient": typeof lib_awsClients_iprsClient;
   "lib/awsClients/livenessClient": typeof lib_awsClients_livenessClient;
   "lib/crypto": typeof lib_crypto;
+  "lib/rbac": typeof lib_rbac;
   "lib/riskEngine": typeof lib_riskEngine;
   "lib/webhookDispatch": typeof lib_webhookDispatch;
+  reviewQueue: typeof reviewQueue;
   verifications: typeof verifications;
   webhooks: typeof webhooks;
 }>;

@@ -2,7 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { action, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildRawApiKey, sha256Hex, safeCompareHex } from "./lib/crypto";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { requireInternalUser } from "./lib/rbac";
 import type { Id } from "./_generated/dataModel";
 
 export const createClient = mutation({
@@ -18,17 +18,14 @@ export const createClient = mutation({
     rpmCap: v.number(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new ConvexError({ code: "unauthenticated", message: "Sign in required." });
-    }
+    await requireInternalUser(ctx);
     return await ctx.db.insert("clients", {
       name: args.name,
       plan: args.plan,
       status: "active",
       creditLimit: args.creditLimit,
       rpmCap: args.rpmCap,
-      creditThresholdPct: 80,
+      creditThresholdPct: 80, //override per-client later via a settings mutation
       createdAt: Date.now(),
     });
   },
@@ -124,8 +121,9 @@ export async function authenticateApiKey(
   if (!safeCompareHex(presentedHash, keyRow.hashedKey)) {
     return { ok: false, status: 401, error: "Invalid API key" };
   }
-
+ 
+  // Fire-and-forget last-used tracking don't block the request on it.
   ctx.runMutation(internal.apiKeys._touchLastUsed, { apiKeyId: keyRow._id });
-
+ 
   return { ok: true, clientId: keyRow.clientId, apiKeyId: keyRow._id };
 }

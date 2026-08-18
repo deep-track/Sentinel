@@ -26,7 +26,7 @@ export default function SignInPage() {
 
         {/* Sign in button */}
         <form
-          action="/api/auth/login"
+          action="/auth/login"
           method="GET"
           className="space-y-6"
         >

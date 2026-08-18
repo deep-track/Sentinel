@@ -2,11 +2,14 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { authenticateApiKey } from "./apiKeys";
-import { auth } from "./auth";
 
 const http = httpRouter();
 
-auth.addHttpRoutes(http);
+// No auth.addHttpRoutes() call here — that was Convex Auth's GitHub
+// OAuth callback wiring. Auth0 handles its own callback routes
+// entirely on the Next.js side (app/api/auth/[auth0]/route.ts);
+// Convex just verifies the resulting JWT via auth.config.ts. Nothing
+// needs registering here for that.
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -59,6 +62,17 @@ http.route({
       return json({ error: `Missing required fields: ${missing.join(", ")}` }, 400);
     }
 
+    // NOTE: per Section 10.2, raw identity documents/biometric frames
+    // are not retained permanently — only extracted fields, verdicts,
+    // and signed URLs to ephemeral object storage. As written, this
+    // endpoint accepts base64 directly and the orchestration action
+    // passes it straight through to AWS without persisting it to
+    // `verifications.input` (see below) — but confirm with Denzel/
+    // Shadrack whether the S3 upload should happen here in Convex
+    // before calling AWS, or whether the AWS services themselves
+    // handle the ephemeral storage + TTL. This affects whether this
+    // endpoint should accept raw base64 at all versus a pre-uploaded
+    // signed-URL reference.
 
     const balance = await ctx.runQuery(internal.creditLedger._getBalance, {
       clientId: auth.clientId,
@@ -72,6 +86,8 @@ http.route({
       clientId: auth.clientId,
       type: "idp",
       creditsUsed: IDP_CREDIT_COST,
+      // Store only non-sensitive metadata here, not the raw base64 —
+      // see the Section 10.2 note above.
       input: {
         idNumber: body.idNumber,
         firstName: body.firstName,
@@ -101,6 +117,12 @@ http.route({
 });
 
 http.route({
+  // Convex's httpRouter matches exact `path` or `pathPrefix`, not
+  // `{param}` templates — so this catches GET /v1/verify/<anything>
+  // and we pull the id back out of the URL inside the handler below.
+  // Register this AFTER any more-specific /v1/verify/... routes you
+  // add later (e.g. /v1/verify with query filters in Phase 2), since
+  // prefix routes are broad.
   pathPrefix: "/v1/verify/",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
@@ -118,7 +140,8 @@ http.route({
       return json({ error: "Missing verification id" }, 400);
     }
 
-    // Auth.clientId;a client can only ever fetch its own
+    // Scoped to auth.clientId — a client can only ever fetch its own
+    // verifications, even if it guesses another client's reference.
     const record = await ctx.runQuery(internal.verifications._getByReferenceForClient, {
       reference,
       clientId: auth.clientId,

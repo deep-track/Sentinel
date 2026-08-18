@@ -1,7 +1,7 @@
 import { v, ConvexError } from "convex/values";
 import { internalAction, internalMutation, internalQuery, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { requireClientRole } from "./lib/rbac";
 import {
   buildWebhookPayload,
   deliverWebhook,
@@ -9,6 +9,10 @@ import {
   MAX_WEBHOOK_ATTEMPTS,
 } from "./lib/webhookDispatch";
 
+// Called (fire-and-forget, via scheduler) right after a verification
+// reaches a completed state (pass/review/reject) — see idp.ts. Does
+// nothing if the client hasn't registered a webhook URL, per Section
+// 8.4's "if a webhook is registered".
 export const dispatchWebhook = internalAction({
   args: { verificationId: v.id("verifications") },
   handler: async (ctx, args) => {
@@ -38,6 +42,10 @@ export const dispatchWebhook = internalAction({
   },
 });
 
+// One delivery attempt. Reschedules itself via the confirmed retry
+// schedule (1min/5min/30min/2hr/6hr/24hr) on failure; marks the
+// delivery "failed" for the client portal's manual-resend UI once
+// the schedule is exhausted.
 export const attemptDelivery = internalAction({
   args: { deliveryId: v.id("webhookDeliveries") },
   handler: async (ctx, args) => {
@@ -92,17 +100,17 @@ export const attemptDelivery = internalAction({
   },
 });
 
+// Section 12.1 — client portal's manual "test-send"/resend action.
+// Now properly client-scoped: only an active Client Admin or
+// Compliance Analyst on THIS delivery's client can resend it.
 export const resendWebhook = mutation({
   args: { deliveryId: v.id("webhookDeliveries") },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new ConvexError({ code: "unauthenticated", message: "Sign in required." });
-    }
     const delivery = await ctx.db.get(args.deliveryId);
     if (!delivery) {
       throw new ConvexError({ code: "not_found", message: "Delivery not found." });
     }
+    await requireClientRole(ctx, delivery.clientId, ["client_admin", "compliance_analyst"]);
     await ctx.db.patch(args.deliveryId, {
       status: "pending",
       attemptCount: 0,
@@ -116,6 +124,7 @@ export const resendWebhook = mutation({
   },
 });
 
+// ── internal plumbing ──────────────────────────────────────────
 
 export const _getClientForWebhook = internalQuery({
   args: { clientId: v.id("clients") },

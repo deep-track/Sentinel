@@ -1,18 +1,24 @@
 import { defineSchema, defineTable } from "convex/server";
-import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  ...authTables,
+  clientMembers: defineTable({
+    clientId: v.id("clients"),
+    userId: v.string(), 
+    role: v.union(
+      v.literal("client_admin"),
+      v.literal("compliance_analyst"),
+      v.literal("developer"),
+      v.literal("viewer"),
+    ),
+    isActive: v.boolean(),
+    invitedBy: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_user", ["userId"])
+    .index("by_client_and_user", ["clientId", "userId"]),
 
-  notes: defineTable({
-    userId: v.id("users"),
-    title: v.string(),
-    body: v.string(),
-    created_at: v.number(),
-  }).index("by_user", ["userId"]),
-
-  // Sentinel Phase 1
   clients: defineTable({
     name: v.string(),
     plan: v.union(
@@ -27,17 +33,17 @@ export default defineSchema({
       v.literal("trial_expired"),
     ),
     creditLimit: v.number(), 
-    rpmCap: v.number(),     
-    creditThresholdPct: v.number(), 
+    rpmCap: v.number(),      // requests per min cap
+    creditThresholdPct: v.number(), // alert fires when credits are low
     webhookUrl: v.optional(v.string()),
-    webhookSecret: v.optional(v.string()), 
+    webhookSecret: v.optional(v.string()), //verify a webhook 
     createdAt: v.number(),
   }),
 
   apiKeys: defineTable({
     clientId: v.id("clients"),
     prefix: v.string(),      
-    hashedKey: v.string(), 
+    hashedKey: v.string(),  
     environment: v.union(v.literal("live"), v.literal("test")),
     revoked: v.boolean(),
     createdAt: v.number(),
@@ -59,21 +65,17 @@ export default defineSchema({
       v.literal("processing"),
       v.literal("completed"),
       v.literal("failed"),
-
-      // Request Resubmission
-      v.literal("resubmission_requested"),
     ),
     verdict: v.optional(
       v.union(v.literal("pass"), v.literal("review"), v.literal("reject")),
     ),
     confidence: v.optional(v.number()), // 0-1
     creditsUsed: v.number(),
-    // raw image bytes
     input: v.any(),
-    result: v.optional(v.any()), 
-    reference: v.string(),       
+    result: v.optional(v.any()), // raw provider result payload
+    reference: v.string(),       // client-facing id, e.g. "gt_..."
     failureReason: v.optional(v.string()),
-    disputeReason: v.optional(v.string()), 
+    disputeReason: v.optional(v.string()), // client-initiated dispute
     disputedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -93,13 +95,11 @@ export default defineSchema({
       v.literal("refund"),
       v.literal("adjustment"),
     ),
-    amount: v.number(), 
+    amount: v.number(), // positive = added, negative = consumed
     reason: v.string(),
     createdAt: v.number(),
   }).index("by_client", ["clientId"]),
 
-
-  // screening + watchlist ingestion 
   flaggedEntities: defineTable({
     entityName: v.string(),
     source: v.union(
@@ -118,7 +118,6 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"]),
 
-  
   reviewQueue: defineTable({
     verificationId: v.id("verifications"),
     clientId: v.id("clients"),
@@ -135,13 +134,11 @@ export default defineSchema({
       v.literal("resolved"),
     ),
     assignedTo: v.optional(v.string()),
-    // reviewQueue
     resolutionAction: v.optional(
       v.union(
-        v.literal("approve"),
-        v.literal("reject"),
+        v.literal("confirm"),
+        v.literal("keep_verdict"),
         v.literal("escalate"),
-        v.literal("request_resubmission"),
       ),
     ),
     resolutionNotes: v.optional(v.string()),
@@ -153,7 +150,6 @@ export default defineSchema({
     .index("by_client_and_status", ["clientId", "status"])
     .index("by_verification", ["verificationId"]),
 
-
   feedbackLabels: defineTable({
     verificationId: v.id("verifications"),
     label: v.union(
@@ -162,6 +158,7 @@ export default defineSchema({
       v.literal("confirmed_correct"),
     ),
     labeledBy: v.string(),
+    // reviewers must never confirm below 80% certainty
     certaintyPct: v.number(),
     notes: v.optional(v.string()),
     createdAt: v.number(),
@@ -170,10 +167,10 @@ export default defineSchema({
   auditLog: defineTable({
     actorId: v.string(),      // Convex Auth userId, or api_key_id for client-driven events
     actorType: v.union(v.literal("internal_admin"), v.literal("reviewer"), v.literal("client_api_key"), v.literal("system")),
-    action: v.string(),       
-    targetType: v.string(),  
+    action: v.string(),       // e.g. "verification.created", "client.suspended", "review.confirmed"
+    targetType: v.string(),   // e.g. "verification", "client", "apiKey"
     targetId: v.string(),
-    clientId: v.optional(v.id("clients")), 
+    clientId: v.optional(v.id("clients")), // scopes the event to a tenant when applicable
     ipAddress: v.optional(v.string()),
     metadata: v.optional(v.any()),
     timestamp: v.number(),
@@ -181,7 +178,6 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_target", ["targetType", "targetId"]),
 
-  // webhook delivery
   webhookDeliveries: defineTable({
     clientId: v.id("clients"),
     verificationId: v.id("verifications"),
