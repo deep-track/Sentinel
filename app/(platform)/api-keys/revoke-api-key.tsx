@@ -6,7 +6,6 @@ import { useState } from "react";
 import { HiMiniArchiveBoxArrowDown } from "react-icons/hi2";
 import { toast } from "sonner";
 
-import { revokeApiKey } from "@/actions/api-keys";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -26,6 +25,22 @@ type Props = {
 	companyId: string;
 };
 
+// NOTE: revokeApiKey previously came from actions/api-keys.ts, which was
+// removed as part of the Convex backend migration. There is no public
+// Convex mutation yet that revokes an API key. This throws an honest
+// error instead of pretending to succeed.
+/* eslint-disable @typescript-eslint/no-unused-vars */
+async function revokeApiKey(
+	keyId: string,
+	userId: string,
+	companyId: string
+): Promise<void> {
+	/* eslint-enable @typescript-eslint/no-unused-vars */
+	throw new Error(
+		"API key revocation isn't wired to the backend yet."
+	);
+}
+
 export default function RevokeApiKey({ keyId, userId, companyId }: Props) {
 	const router = useRouter();
 	const [loading, setLoading] = useState(false);
@@ -38,10 +53,12 @@ export default function RevokeApiKey({ keyId, userId, companyId }: Props) {
 			toast.success("API key revoked successfully");
 			router.refresh();
 		} catch (error) {
-			toast.error("Failed to revoke API key");
+			toast.error(
+				error instanceof Error ? error.message : "Failed to revoke API key"
+			);
 		} finally {
 			setLoading(false);
-			setOpen(false); // Close the dialog after the operation is complete
+			setOpen(false);
 		}
 	};
 
@@ -83,4 +100,3 @@ export default function RevokeApiKey({ keyId, userId, companyId }: Props) {
 		</AlertDialog>
 	);
 }
-

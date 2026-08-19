@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { type APIKey, createApiKey } from "@/actions/api-keys";
+import type { APIKey } from "@/lib/types/api-keys";
 import SubmitButton from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,23 @@ type Props = {
 	companyId: string;
 };
 
+// NOTE: createApiKey previously came from actions/api-keys.ts, which was
+// removed as part of the Convex backend migration. There is no public
+// Convex mutation yet that creates an API key for a client (only
+// generateApiKey exists, scoped differently). This throws an honest
+// error instead of pretending to succeed.
+/* eslint-disable @typescript-eslint/no-unused-vars */
+async function createApiKey(
+	userId: string,
+	name: string,
+	companyId: string
+): Promise<APIKey> {
+	/* eslint-enable @typescript-eslint/no-unused-vars */
+	throw new Error(
+		"API key creation isn't wired to the backend yet - no key was created."
+	);
+}
+
 function CreateApiKeyForm({ userId, companyId }: Props) {
 	const [open, setOpen] = useState(false);
 	const [showKey, setShowKey] = useState(false);
@@ -52,13 +69,15 @@ function CreateApiKeyForm({ userId, companyId }: Props) {
 	async function onSubmit(values: z.infer<typeof formSchema>) {
 		try {
 			const newKey = await createApiKey(userId, values.name, companyId);
-			setApiKey(newKey as any);
+			setApiKey(newKey);
 
 			toast.success("Key successfully created");
 			router.refresh();
 		} catch (error) {
 			console.error("Form submission error", error);
-			toast.error("Failed to submit the form. Please try again.");
+			toast.error(
+				error instanceof Error ? error.message : "Failed to create key"
+			);
 		} finally {
 			form.reset();
 		}
@@ -173,4 +192,3 @@ function CreateApiKeyForm({ userId, companyId }: Props) {
 }
 
 export default CreateApiKeyForm;
-
