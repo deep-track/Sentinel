@@ -2,20 +2,15 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { getCurrentUser } from "@/lib/auth";
+import { getAuth0 } from "@/lib/auth0";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-const isAuth0Configured = Boolean(
-	process.env.AUTH0_SECRET &&
-	process.env.AUTH0_DOMAIN &&
-	process.env.AUTH0_CLIENT_ID &&
-	process.env.AUTH0_CLIENT_SECRET &&
-	(process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL),
-);
 
 export default async function Layout({
 	children,
 }: { children: React.ReactNode }) {
+	const { isAuth0Configured } = getAuth0();
 	if (!isAuth0Configured) {
 		redirect("/coming-soon?reason=auth-not-configured");
 	}
