@@ -1,5 +1,4 @@
 import { addNewUser, findUser } from "@/actions/auth-actions";
-import { getOrganizationByUser } from "@/actions/organization";
 import { getCurrentUser } from "@/lib/auth";
 import CreateOrganization from "@/modules/organization/create-organization";
 import { redirect } from "next/navigation";
@@ -25,9 +24,12 @@ export default async function NewOrg() {
 		}
 	}
 
-	const { org } = await getOrganizationByUser(user.id);
-
-	if (org) redirect("/dashboard");
+	// NOTE: this used to check getOrganizationByUser (actions/organization.ts)
+	// and redirect to /dashboard if the user already had one. That action was
+	// removed as part of the Convex migration and there is no Convex
+	// equivalent yet, so we can no longer tell whether the user already
+	// belongs to a client org. Always falling through to the (currently
+	// unavailable) create-org form rather than guessing.
 
 	return (
 		<div className="min-h-screen w-full flex items-center justify-center">
