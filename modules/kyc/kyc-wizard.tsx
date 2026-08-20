@@ -1,21 +1,94 @@
 "use client";
 
-import { getKYCRecord, submitKYC } from "@/actions/kyc";
+
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import type { KYCStatus, KYCSubmissionData } from "@/lib/kyc-types";
-import {
-  getRemediationSummary,
-  getDeclineBreakdown,
-} from "@/lib/shufti-decline-codes";
 import { cn } from "@/lib/utils";
+
+// NOTE: getKYCRecord and submitKYC previously came from actions/kyc.ts,
+// removed as part of the Convex backend migration. No public Convex
+// mutation/query exists yet to replace them. Typed as discriminated
+// unions so TypeScript narrows result.data correctly after a success
+// check, matching how the rest of this file already uses them.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function submitKYC(payload: unknown): Promise<
+  | { success: true; data: { kycId: string; reference: string } }
+  | { success: false; error: string }
+> {
+  return { success: false, error: "KYC submission isn't wired to the backend yet." };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function getKYCRecord(id: string): Promise<
+  | {
+      success: true;
+      data: {
+        status: KYCStatus;
+        declinedCodes?: string[];
+        servicesDeclinedCodes?: Record<string, string[]>;
+        declineReason?: string;
+      };
+    }
+  | { success: false; data?: undefined }
+> {
+  return { success: false };
+}
+
+// NOTE: @/lib/shufti-decline-codes is missing from the repo entirely
+// (pre-existing, not something removed by the Convex migration) -
+// flag this to the backend team. Stubbed locally so this file compiles;
+// real decline-reason text should replace this once the module is
+// restored.
+type DeclineIssue = {
+  code: string;
+  service: "document" | "face" | "address";
+  title: string;
+  userAction: string;
+};
+
+type DeclineBreakdown = {
+  primary?: { title?: string; userAction?: string };
+  humanReason?: string;
+  byService?: {
+    document?: DeclineIssue[];
+    face?: DeclineIssue[];
+    address?: DeclineIssue[];
+  };
+  allCodes: string[];
+};
+
+function getDeclineBreakdown(
+  declinedCodes: string[] | undefined,
+  servicesDeclinedCodes: { document?: string[]; face?: string[]; address?: string[] } | null,
+  declineReason: string | undefined
+): DeclineBreakdown {
+  const toIssues = (
+    codes: string[] | undefined,
+    service: DeclineIssue["service"]
+  ): DeclineIssue[] =>
+    (codes ?? []).map((code) => ({
+      code,
+      service,
+      title: "Verification issue",
+      userAction: declineReason ?? "Please try again.",
+    }));
+
+  return {
+    primary: { title: "Verification declined", userAction: declineReason },
+    humanReason: declineReason ?? "See details below.",
+    byService: {
+      document: toIssues(servicesDeclinedCodes?.document, "document"),
+      face: toIssues(servicesDeclinedCodes?.face, "face"),
+      address: toIssues(servicesDeclinedCodes?.address, "address"),
+    },
+    allCodes: declinedCodes ?? [],
+  };
+}
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 import { DocumentCaptureStep } from "@/modules/kyc/steps/document-capture-step";
 import { SelfieCaptureStep } from "@/modules/kyc/steps/selfie-capture-step";
 import { SubmitStep } from "@/modules/kyc/steps/submit-step";
 import {
-	AlertCircle,
-	AlertTriangle,
 	Camera,
 	CheckCircle,
 	ClipboardCheck,
@@ -23,7 +96,7 @@ import {
 	XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 interface KYCWizardProps {
@@ -49,7 +122,6 @@ export function KYCWizard({}: KYCWizardProps) {
 	const [completed, setCompleted] = useState(false);
 	const [liveStatus, setLiveStatus] = useState<KYCStatus>("processing");
 	const [declineBreakdown, setDeclineBreakdown] = useState<ReturnType<typeof getDeclineBreakdown> | null>(null);
-	const pollRef = useRef<NodeJS.Timeout | null>(null);
 
 	function handleDocument(
 		values: Pick<
@@ -111,56 +183,56 @@ export function KYCWizard({}: KYCWizardProps) {
 	useEffect(() => {
 		if (!completed || !submittedKycId) return;
 
-	let stopped = false;
+        let stopped = false;
 
-	async function poll() {
-		if (stopped) return;
+        async function poll() {
+        	if (stopped) return;
 
-		try {
-			const result = await getKYCRecord(submittedKycId!);
+        	try {
+        		const result = await getKYCRecord(submittedKycId!);
 
-			if (!result.success || !result.data) return;
+        		if (!result.success || !result.data) return;
 
-			const { status, declinedCodes, servicesDeclinedCodes, declineReason } =
-				result.data;
+        		const { status, declinedCodes, servicesDeclinedCodes, declineReason } =
+        			result.data;
 
-			console.log("[Wizard Poll] status:", status);
-			console.log("[Wizard Poll] declinedCodes:", declinedCodes);
+        		console.log("[Wizard Poll] status:", status);
+        		console.log("[Wizard Poll] declinedCodes:", declinedCodes);
 
-			setLiveStatus(status);
+        		setLiveStatus(status);
 
-			if (status === "declined") {
-				// Build human-readable breakdown from codes
-				const breakdown = getDeclineBreakdown(
-					declinedCodes,
-					servicesDeclinedCodes as {
-						document?: string[];
-						face?: string[];
-						address?: string[];
-					} | null,
-					declineReason
-				);
-				console.log("[Wizard Poll] breakdown primary:", breakdown.primary);
-				setDeclineBreakdown(breakdown);
-				stopped = true;
-			}
+        		if (status === "declined") {
+        			// Build human-readable breakdown from codes
+        			const breakdown = getDeclineBreakdown(
+        				declinedCodes,
+        				servicesDeclinedCodes as {
+        					document?: string[];
+        					face?: string[];
+        					address?: string[];
+        				} | null,
+        				declineReason
+        			);
+        			console.log("[Wizard Poll] breakdown primary:", breakdown.primary);
+        			setDeclineBreakdown(breakdown);
+        			stopped = true;
+        		}
 
-			if (status === "approved" || status === "expired") {
-				stopped = true;
-			}
-		} catch (err) {
-			console.error("[Wizard Poll] error:", err);
-		}
-	}
+        		if (status === "approved" || status === "expired") {
+        			stopped = true;
+        		}
+        	} catch (err) {
+        		console.error("[Wizard Poll] error:", err);
+        	}
+        }
 
-	// Poll immediately then every 3 seconds
-	poll();
-	const pollInterval = setInterval(poll, 3000);
+        // Poll immediately then every 3 seconds
+        poll();
+        const pollInterval = setInterval(poll, 3000);
 
-	return () => {
-		stopped = true;
-		clearInterval(pollInterval);
-	};
+        return () => {
+        	stopped = true;
+        	clearInterval(pollInterval);
+        };
 }, [completed, submittedKycId]);
 
 if (completed) {
@@ -173,15 +245,15 @@ if (completed) {
 					<XCircle className="h-12 w-12 text-red-600" />
 				</div>
 
-				{/* Title — uses specific code title or generic */}
+				{/* Title */}
 				<div className="text-center space-y-2">
 					<h2 className="text-2xl font-bold text-slate-900 dark:text-white">
 						{declineBreakdown.primary?.title ??
-							"Verification Unsuccessful"}
+						 "Verification Unsuccessful"}
 					</h2>
 					<p className="text-sm text-slate-500 dark:text-slate-400">
 						{declineBreakdown.humanReason ??
-							"We could not verify your identity."}
+						 "We could not verify your identity."}
 					</p>
 				</div>
 
@@ -189,11 +261,11 @@ if (completed) {
 				{declineBreakdown.primary?.userAction && (
 					<div className="w-full rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-4">
 						<p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-2">
-							<span>💡</span>
-							How to fix this:
+						 <span>tip</span>
+						 How to fix this:
 						</p>
 						<p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
-							{declineBreakdown.primary.userAction}
+						 {declineBreakdown.primary.userAction}
 						</p>
 					</div>
 				)}
@@ -207,24 +279,24 @@ if (completed) {
 					if (allIssues.length <= 1) return null;
 					return (
 						<div className="w-full space-y-2">
-							<p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-								All issues detected:
-							</p>
-							{allIssues.map((d) => (
-								<div key={d.code} className="flex items-start gap-2 text-left">
-									<span className="text-xs font-mono text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
-										{d.code}
-									</span>
-									<div>
-										<p className="text-xs font-medium text-slate-700 dark:text-slate-300">
-											{d.service === "face" ? "Selfie" : "Document"}: {d.title}
-										</p>
-										<p className="text-xs text-slate-500 dark:text-slate-400">
-											{d.userAction}
-										</p>
-									</div>
-								</div>
-							))}
+						 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+						 All issues detected:
+						 </p>
+						 {allIssues.map((d) => (
+						 <div key={d.code} className="flex items-start gap-2 text-left">
+						 <span className="text-xs font-mono text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
+						 {d.code}
+						 </span>
+						 <div>
+						 <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+						 {d.service === "face" ? "Selfie" : "Document"}: {d.title}
+						 </p>
+						 <p className="text-xs text-slate-500 dark:text-slate-400">
+						 {d.userAction}
+						 </p>
+						 </div>
+						 </div>
+						 ))}
 						</div>
 					);
 				})()}
@@ -234,14 +306,14 @@ if (completed) {
 					<div className="w-full">
 						<p className="text-xs text-slate-400 mb-1">Decline codes:</p>
 						<div className="flex flex-wrap gap-1">
-							{declineBreakdown.allCodes.map((c) => (
-								<span
-									key={c}
-									className="text-xs font-mono bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded"
-								>
-									{c}
-								</span>
-							))}
+						 {(declineBreakdown.allCodes ?? []).map((c) => (
+						 <span
+						 key={c}
+						 className="text-xs font-mono bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded"
+						 >
+						 {c}
+						 </span>
+						 ))}
 						</div>
 					</div>
 				)}
@@ -307,52 +379,52 @@ if (completed) {
 				<div className="flex items-center">
 					{STEPS.map((step, idx) => (
 						<div
-							key={step.id}
-							className="flex items-center flex-1 last:flex-none"
+						 key={step.id}
+						 className="flex items-center flex-1 last:flex-none"
 						>
-							<div className="flex flex-col items-center">
-								<div
-									className={cn(
-										"h-9 w-9 rounded-full flex items-center justify-center border-2 transition-all duration-200",
-										idx < currentStep
-											? "bg-violet-600 border-violet-600 text-white"
-											: idx === currentStep
-												? "border-violet-600 text-violet-600 bg-white dark:bg-slate-900"
-												: "border-slate-300 dark:border-slate-600 text-slate-400 bg-white dark:bg-slate-900",
-									)}
-								>
-									{idx < currentStep ? (
-										<CheckCircle className="h-5 w-5" />
-									) : (
-										<step.icon className="h-4 w-4" />
-									)}
-								</div>
-								<span
-									className={cn(
-										"mt-1.5 text-xs font-medium hidden sm:block",
-										idx === currentStep
-											? "text-violet-600 dark:text-violet-400"
-											: idx < currentStep
-												? "text-violet-500"
-												: "text-slate-400 dark:text-slate-500",
-									)}
-								>
-									{step.shortTitle}
-								</span>
-							</div>
+						 <div className="flex flex-col items-center">
+						 <div
+						 className={cn(
+						 "h-9 w-9 rounded-full flex items-center justify-center border-2 transition-all duration-200",
+						 idx < currentStep
+						 ? "bg-violet-600 border-violet-600 text-white"
+						 : idx === currentStep
+						 ? "border-violet-600 text-violet-600 bg-white dark:bg-slate-900"
+						 : "border-slate-300 dark:border-slate-600 text-slate-400 bg-white dark:bg-slate-900",
+						 )}
+						 >
+						 {idx < currentStep ? (
+						 <CheckCircle className="h-5 w-5" />
+						 ) : (
+						 <step.icon className="h-4 w-4" />
+						 )}
+						 </div>
+						 <span
+						 className={cn(
+						 "mt-1.5 text-xs font-medium hidden sm:block",
+						 idx === currentStep
+						 ? "text-violet-600 dark:text-violet-400"
+						 : idx < currentStep
+						 ? "text-violet-500"
+						 : "text-slate-400 dark:text-slate-500",
+						 )}
+						 >
+						 {step.shortTitle}
+						 </span>
+						 </div>
 
-							{idx < STEPS.length - 1 && (
-								<div className="flex-1 mx-2 sm:mx-3 mb-4">
-									<div
-										className={cn(
-											"h-0.5 w-full transition-all duration-300",
-											idx < currentStep
-												? "bg-violet-500"
-												: "bg-slate-200 dark:bg-slate-700",
-										)}
-									/>
-								</div>
-							)}
+						 {idx < STEPS.length - 1 && (
+						 <div className="flex-1 mx-2 sm:mx-3 mb-4">
+						 <div
+						 className={cn(
+						 "h-0.5 w-full transition-all duration-300",
+						 idx < currentStep
+						 ? "bg-violet-500"
+						 : "bg-slate-200 dark:bg-slate-700",
+						 )}
+						 />
+						 </div>
+						 )}
 						</div>
 					))}
 				</div>

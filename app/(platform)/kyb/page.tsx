@@ -1,15 +1,19 @@
 export const dynamic = "force-dynamic";
-import { getKYBList, getKYBStats } from "@/actions/kyb";
 import { Button } from "@/components/ui/button";
 import { KYBTable } from "@/modules/kyb/kyb-table";
 import {
 	Building2,
 	CheckCircle,
-	Clock3,
 	FileCheck,
 	ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
+
+// NOTE: getKYBList and getKYBStats previously came from actions/kyb.ts,
+// which was removed as part of the Convex backend migration. There is no
+// public Convex query yet for listing or getting stats on KYB records
+// (confirmed: convex/kyb.ts is currently empty). This page shows an
+// honest empty state until those queries exist.
 
 function StatCard({
 	label,
@@ -51,24 +55,15 @@ function StatCard({
 }
 
 export default async function KYBPage() {
-	const [listResult, statsResult] = await Promise.all([
-		getKYBList({ page: 1, limit: 100 }),
-		getKYBStats(),
-	]);
-
-	const records =
-		listResult.success && listResult.data ? listResult.data.records : [];
-	const defaultStats = {
-		total: records.length,
-		approved: records.filter((item) => item.status === "approved").length,
-		declined: records.filter((item) => item.status === "declined").length,
-		pending: records.filter((item) => item.status === "pending").length,
-		processing: records.filter((item) => item.status === "processing").length,
-		requires_review: records.filter((item) => item.status === "requires_review")
-			.length,
+	const records: import("@/lib/types/kyb").KYBRecord[] = [];
+	const stats = {
+		total: 0,
+		approved: 0,
+		declined: 0,
+		pending: 0,
+		processing: 0,
+		requires_review: 0,
 	};
-	const stats =
-		statsResult.success && statsResult.data ? statsResult.data : defaultStats;
 
 	return (
 		<div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6">
@@ -91,6 +86,11 @@ export default async function KYBPage() {
 							New Verification
 						</Link>
 					</Button>
+				</div>
+
+				<div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-4 text-sm text-amber-800 dark:text-amber-300">
+					KYB records and stats are temporarily unavailable while the backend
+					migrates to Convex.
 				</div>
 
 				<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">

@@ -1,18 +1,23 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { getKYIList, getKYIStats } from "@/actions/kyi";
 import { KYITable } from "@/modules/kyi/kyi-table";
 import { Button } from "@/components/ui/button";
+import type { KYIRecord } from "@/lib/kyi-types";
 import {
   CheckCircle,
   Clock3,
   FileCheck,
   ShieldAlert,
   TrendingUp,
-  UserPlus,
   XCircle,
 } from "lucide-react";
+
+// NOTE: getKYIList and getKYIStats previously came from actions/kyi.ts,
+// which was removed as part of the Convex backend migration. There is
+// no public Convex query yet for listing or getting stats on KYI
+// records. This page shows an honest empty state until those queries
+// exist.
 
 function StatCard({
   label,
@@ -48,20 +53,16 @@ function StatCard({
 }
 
 export default async function KYIPage() {
-  const [listResult, statsResult] = await Promise.all([getKYIList({ page: 1, limit: 100 }), getKYIStats()]);
-
-  const records = listResult.success ? listResult.data.records : [];
-  const stats = statsResult.success
-    ? statsResult.data
-    : {
-        total: records.length,
-        approved: records.filter((item) => item.status === "approved").length,
-        declined: records.filter((item) => item.status === "declined").length,
-        pending: records.filter((item) => item.status === "pending").length,
-        processing: records.filter((item) => item.status === "processing").length,
-        requires_review: records.filter((item) => item.status === "requires_review").length,
-        pepCount: records.filter((item) => item.isPEP).length,
-      };
+  const records: KYIRecord[] = [];
+  const stats = {
+    total: 0,
+    approved: 0,
+    declined: 0,
+    pending: 0,
+    processing: 0,
+    requires_review: 0,
+    pepCount: 0,
+  };
 
   return (
     <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6">
@@ -81,6 +82,10 @@ export default async function KYIPage() {
               </Link>
             </Button>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-4 text-sm text-amber-800 dark:text-amber-300">
+          KYI records and stats are temporarily unavailable while the backend migrates to Convex.
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">

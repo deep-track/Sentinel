@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { reviewKYI } from "@/actions/kyi";
 import type { KYIRecord } from "@/lib/kyi-types";
 import { KYIStatusBadge } from "@/modules/kyi/kyi-status-badge";
 import { toast } from "sonner";
@@ -28,6 +27,22 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// NOTE: reviewKYI previously came from actions/kyi.ts, which was
+// removed as part of the Convex backend migration. There is no public
+// Convex mutation yet for submitting a KYI review decision. This
+// returns an honest failure instead of pretending to succeed; the
+// existing toast.error() call below already surfaces it.
+/* eslint-disable @typescript-eslint/no-unused-vars */
+async function reviewKYI(payload: {
+  id: string;
+  decision: string;
+  notes?: string;
+  declineReason?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  return { success: false, error: "KYI review submission isn't wired to the backend yet." };
+}
 
 const schema = z
   .object({

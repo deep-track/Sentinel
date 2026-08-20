@@ -1,6 +1,6 @@
 "use client";
 
-import type { KYBRecord } from "@/actions/kyb";
+import type { KYBRecord } from "@/lib/types/kyb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,14 +22,12 @@ import { type KYBStatus, KYBStatusBadge } from "@/modules/kyb/kyb-status-badge";
 import { format } from "date-fns";
 import {
 	ArrowUpDown,
-	Building2,
 	ChevronLeft,
 	ChevronRight,
 	Eye,
 	Search,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 interface KYBTableProps {
@@ -47,7 +45,6 @@ const STATUS_OPTIONS: { value: KYBStatus | "all"; label: string }[] = [
 ];
 
 export function KYBTable({ records, isLoading }: KYBTableProps) {
-	const router = useRouter();
 	const [globalFilter, setGlobalFilter] = useState("");
 	const [statusFilter, setStatusFilter] = useState<string>("all");
 

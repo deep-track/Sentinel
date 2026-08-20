@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle, ChevronRight } from "lucide-react";
 import type { KYIStatus, KYISubmissionData, InvestorProfileData, KYIIdentityData, FinancialDocsData } from "@/lib/kyi-types";
-import { submitKYI, getKYIRecord } from "@/actions/kyi";
 import { InvestorProfileStep } from "@/modules/kyi/steps/investor-profile-step";
 import { KYIDocumentStep } from "@/modules/kyi/steps/kyi-document-step";
 import { FinancialDocsStep } from "@/modules/kyi/steps/financial-docs-step";
@@ -13,9 +12,27 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
 
-interface KYIWizardProps {}
+// NOTE: submitKYI and getKYIRecord previously came from actions/kyi.ts,
+// removed as part of the Convex backend migration. No public Convex
+// mutation/query exists yet to replace them. Typed as discriminated
+// unions so TypeScript narrows result.data correctly after a success
+// check, matching how this file already uses them.
+/* eslint-disable @typescript-eslint/no-unused-vars */
+async function submitKYI(payload: unknown): Promise<
+  | { success: true; data: { kyiId: string; reference: string } }
+  | { success: false; error: string }
+> {
+  return { success: false, error: "KYI submission isn't wired to the backend yet." };
+}
 
-export function KYIWizard({}: KYIWizardProps) {
+async function getKYIRecord(id: string): Promise<
+  | { success: true; data: { status: KYIStatus } }
+  | { success: false; data?: undefined }
+> {
+  return { success: false };
+}
+
+export function KYIWizard() {
   // Step state: 0 = profile, 1 = identity, 2 = financial, 3 = completed
   const [currentStep, setCurrentStep] = useState(0);
   

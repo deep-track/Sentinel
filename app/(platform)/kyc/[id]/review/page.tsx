@@ -1,8 +1,11 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getKYCRecord } from "@/actions/kyc";
-import { KYCReviewClient } from "@/app/(platform)/kyc/[id]/review/_components/kyc-review-client";
 import { ChevronLeft } from "lucide-react";
+
+// NOTE: getKYCRecord previously came from actions/kyc.ts, which was
+// removed as part of the Convex backend migration. There is no public
+// Convex query yet for fetching a single KYC record by ID, so this page
+// cannot load real data to review. Showing an honest unavailable state
+// instead of faking a record.
 
 interface KYCReviewPageProps {
   params: Promise<{ id: string }>;
@@ -10,51 +13,22 @@ interface KYCReviewPageProps {
 
 export default async function KYCReviewPage({ params }: KYCReviewPageProps) {
   const { id } = await params;
-  const result = await getKYCRecord(id);
-
-  if (!result.success || !result.data) notFound();
-
-  const record = result.data;
-
-  const reviewableStatuses = ["processing", "requires_review", "submitted"];
-  if (!reviewableStatuses.includes(record.status)) {
-    return (
-      <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4">
-        <div className="max-w-2xl mx-auto">
-          <Link
-            href={`/kyc/${id}`}
-            className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 mb-8"
-          >
-            <ChevronLeft className="h-4 w-4" /> Back to Record
-          </Link>
-          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 p-8 text-center">
-            <p className="text-amber-700 dark:text-amber-400 font-medium">
-              This KYC record cannot be reviewed in its current state (<strong>{record.status}</strong>).
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6">
+    <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4">
       <div className="max-w-2xl mx-auto">
         <Link
           href={`/kyc/${id}`}
-          className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 mb-8 transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 mb-8"
         >
           <ChevronLeft className="h-4 w-4" /> Back to Record
         </Link>
-
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Review Verification</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Make a final decision on this KYC submission.
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 p-8 text-center">
+          <p className="text-amber-700 dark:text-amber-400 font-medium">
+            Record review is temporarily unavailable while the backend
+            migrates to Convex.
           </p>
         </div>
-
-        <KYCReviewClient record={record} />
       </div>
     </div>
   );

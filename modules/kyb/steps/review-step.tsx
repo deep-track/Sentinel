@@ -1,6 +1,5 @@
 "use client";
 
-import { submitKYB } from "@/actions/kyb";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -16,6 +15,15 @@ import {
 	Users,
 } from "lucide-react";
 import { useState } from "react";
+
+// NOTE: submitKYB previously came from actions/kyb.ts, which was removed
+// as part of the Convex backend migration. There is no public Convex
+// mutation yet that submits a KYB record (convex/kyb.ts is currently
+// empty). This throws an honest error instead of pretending to succeed;
+// the existing try/catch below already surfaces it via setError().
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function submitKYB(payload: unknown): Promise<{ success: boolean; data?: { reference: string }; error?: string }> {  throw new Error("KYB submission isn't wired to the backend yet - nothing was submitted.");
+}
 
 interface ReviewStepProps {
 	data: KYBStepData;
