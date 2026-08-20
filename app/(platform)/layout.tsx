@@ -10,20 +10,17 @@ const isAuth0Configured = Boolean(
 	process.env.AUTH0_DOMAIN &&
 	process.env.AUTH0_CLIENT_ID &&
 	process.env.AUTH0_CLIENT_SECRET &&
-	process.env.APP_BASE_URL,
+	(process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL),
 );
-
-const DEV_USER = {
-	id: "dev-user",
-	email: "dev@deeptrack.io",
-	fullName: "Dev User",
-	role: "admin" as const,
-};
 
 export default async function Layout({
 	children,
 }: { children: React.ReactNode }) {
-	const user = isAuth0Configured ? await getCurrentUser() : DEV_USER;
+	if (!isAuth0Configured) {
+		redirect("/coming-soon?reason=auth-not-configured");
+	}
+
+	const user = await getCurrentUser();
 	if (!user) redirect("/auth/login");
 	return (
 		<SidebarProvider>
@@ -38,11 +35,9 @@ export default async function Layout({
 							<span className="text-sm text-muted-foreground hidden md:inline">
 								{user.fullName}
 							</span>
-							{isAuth0Configured && (
 								<Button asChild size="sm" variant="outline">
 									<Link href="/auth/logout">Logout</Link>
 								</Button>
-							)}
 						</div>
 					</div>
 				</div>

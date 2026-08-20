@@ -10,9 +10,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
+      - key: APP_BASE_URL
         sync: false
-      - key: DATABASE_URL_UNPOOLED
+      - key: NEXT_PUBLIC_APP_URL
         sync: false
       - key: AUTH0_SECRET
         sync: false
@@ -22,13 +22,35 @@ services:
         sync: false
       - key: AUTH0_CLIENT_SECRET
         sync: false
-      - key: APP_BASE_URL
+      - key: AUTH0_ROLE_CLAIM
         sync: false
-      - key: NEXT_PUBLIC_APP_URL
+      - key: AUTH0_COMPANY_ID_CLAIM
+        sync: false
+      - key: AUTH0_MANAGEMENT_CLIENT_ID
+        sync: false
+      - key: AUTH0_MANAGEMENT_CLIENT_SECRET
+        sync: false
+      - key: AUTH0_ORGANIZATION_ID
+        sync: false
+      - key: AUTH0_INVITATION_CLIENT_ID
+        sync: false
+      - key: AUTH0_INVITATION_CONNECTION_ID
+        sync: false
+      - key: NEXT_PUBLIC_CONVEX_URL
+        sync: false
+      - key: CONVEX_DEPLOYMENT
+        sync: false
+      - key: CONVEX_SITE_URL
+        sync: false
+      - key: DEEPTRACK_BACKEND_URL
+        sync: false
+      - key: OPENSANCTIONS_API_KEY
         sync: false
       - key: SHUFTI_CLIENT_ID
         sync: false
       - key: SHUFTI_SECRET_KEY
         sync: false
       - key: UPLOADTHING_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
         sync: false

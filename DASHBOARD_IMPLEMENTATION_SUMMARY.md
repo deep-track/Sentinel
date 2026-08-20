@@ -64,7 +64,7 @@ Completed implementation of a comprehensive verification dashboard for the Deep 
 - **next**: 15.1.11 - Framework
 - **react**: ^19.0.0 - UI library
 - **tailwindcss**: ^3.4.1 - Styling
-- **@prisma/client**: ^6.16.2 - Database ORM
+- **convex** - Backend database and server functions
 
 ## Data Models
 - **Verification**: Main verification record with status, type, timestamps
