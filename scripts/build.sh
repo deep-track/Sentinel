@@ -2,13 +2,10 @@
 set -e
 
 echo "==> Installing dependencies..."
-npm install
+npm ci
 
-echo "==> Generating Prisma Client..."
-npx prisma generate
-
-echo "==> Pushing database schema..."
-npx prisma db push
+echo "==> Type-checking application and Convex functions..."
+npm run typecheck
 
 echo "==> Building Next.js application..."
 npm run build

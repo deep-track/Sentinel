@@ -27,7 +27,7 @@ export async function GET(
         },
       });
       return NextResponse.json(
-        { error: "Auth0 is not configured", endpoint },
+        { error: "Authentication service is not configured" },
         { status: 503 }
       );
     }
@@ -48,7 +48,7 @@ export async function GET(
   } catch (error) {
     console.error("[Auth0 Route Error]", error);
     return NextResponse.json(
-      { error: "Authentication error", details: String(error) },
+      { error: "Authentication request failed" },
       { status: 500 }
     );
   }
