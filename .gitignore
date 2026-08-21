@@ -23,6 +23,7 @@ nothing
 
 # misc
 .DS_Store
+/artifacts/
 *.pem
 
 # debug
