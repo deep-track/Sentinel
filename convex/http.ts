@@ -117,6 +117,54 @@ http.route({
 });
 
 http.route({
+  path: "/v1/verify/aml",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const auth = await authenticateApiKey(
+      { runQuery: ctx.runQuery, runMutation: ctx.runMutation },
+      request.headers.get("Authorization"),
+    );
+    if (!auth.ok) return json({ error: auth.error }, auth.status);
+
+    let body: {
+      subjectName?: string;
+      entityType?: "individual" | "entity";
+      country?: string;
+    };
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Invalid JSON body" }, 400);
+    }
+    const subjectName = body.subjectName?.trim();
+    if (!subjectName) return json({ error: "subjectName is required" }, 400);
+    if (body.entityType !== "individual" && body.entityType !== "entity") {
+      return json({ error: "entityType must be individual or entity" }, 400);
+    }
+
+    const balance = await ctx.runQuery(internal.creditLedger._getBalance, {
+      clientId: auth.clientId,
+    });
+    if (balance < 1) return json({ error: "Insufficient credits" }, 402);
+
+    const { id, reference } = await ctx.runMutation(internal.verifications._create, {
+      clientId: auth.clientId,
+      type: "aml",
+      creditsUsed: 1,
+      input: { subjectName, entityType: body.entityType, country: body.country },
+    });
+    await ctx.scheduler.runAfter(0, internal.aml.runScreening, {
+      verificationId: id,
+      clientId: auth.clientId,
+      subjectName,
+      entityType: body.entityType,
+      country: body.country,
+    });
+    return json({ id: reference, type: "aml", status: "queued" }, 202);
+  }),
+});
+
+http.route({
   // Convex's httpRouter matches exact `path` or `pathPrefix`, not
   // `{param}` templates — so this catches GET /v1/verify/<anything>
   // and we pull the id back out of the URL inside the handler below.

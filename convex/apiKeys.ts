@@ -31,6 +31,17 @@ export const createClient = mutation({
   },
 });
 
+export const revoke = mutation({
+  args: { keyId: v.id("apiKeys") },
+  handler: async (ctx, args) => {
+    await requireInternalUser(ctx);
+    const key = await ctx.db.get(args.keyId);
+    if (!key) throw new ConvexError({ code: "not_found", message: "API key not found." });
+    await ctx.db.patch(args.keyId, { revoked: true });
+    return { revoked: true };
+  },
+});
+
 // generate a new key for a client
 export const generateApiKey = action({
   args: {
