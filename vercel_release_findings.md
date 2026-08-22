@@ -43,3 +43,10 @@ Required production deployment variable: `AUTH0_ORGANIZATION_ID=org_KsbBhzesUXlz
 Latest controlled backend checks: Convex production deployment succeeded; TypeScript and Next.js build passed; OFAC and UN refreshes completed with 19,249 and 1,011 records respectively; and a controlled weekly compliance report completed with a 64-character SHA-256 export hash.
 
 Current acceptance gap: production Vercel environment update and fresh-token/monitoring verification remain pending because the Vercel project settings session requires a separate authenticated access path. The Auth0 production tenant contains the deployed and attached Sentinel Role Claims Action, the `administrator`, `compliance_analyst`, and `reviewer` roles, and `administrator` is directly assigned to `bryan@deeptrack.io`.
+
+
+## Latest Verification Update
+
+`AUTH0_ORGANIZATION_ID=org_KsbBhzesUXlz9lFo` was added to the Vercel Production environment and deployment `C7At6NULkJyND6EA9ni38kL7o2Yi` built from commit `3b9ee4f` reached Ready status.
+
+A clean login using the `Username-Password-Authentication` connection no longer shows the organization-name prompt. The login route now passes the organization ID server-side. However, the current authenticated monitoring request still renders the fail-closed unavailable-data state. Auth0 returned the organization-membership error for the previously cached Google identity; the approved database identity must be used for the final test. If the database identity still cannot load monitoring after a fresh login, inspect the server-side Auth0 access token used by `ConvexHttpClient` and verify it is a JWT accepted by the Convex Auth0 provider, without logging token contents.
