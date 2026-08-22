@@ -33,3 +33,13 @@
 - Assign only the minimum required internal role to each approved internal user, then force a fresh login so new tokens contain the role claim.
 - Verify `/internal-ops/monitoring` for an approved role and confirm that an authenticated user without an approved role is denied.
 - Confirm live dashboard metrics, AML audit events, watchlist freshness, review queue data, and weekly compliance report status.
+
+## 2026-08-22 B2B Login Correction
+
+Fresh-login testing showed Auth0 rejected the approved user because the Business Users application requires an organization parameter on the authorization request. The Sentinel login route now supplies `AUTH0_ORGANIZATION_ID` server-side for the login endpoint, so clients do not type an organization name while Auth0 still enforces organization membership. The application role mapper also maps the production `administrator` claim to the existing internal `admin` contract.
+
+Required production deployment variable: `AUTH0_ORGANIZATION_ID=org_KsbBhzesUXlz9lFo` in the Vercel Production environment. After adding it, redeploy and repeat the fresh login and `/internal-ops/monitoring` acceptance tests. No secret values belong in this document.
+
+Latest controlled backend checks: Convex production deployment succeeded; TypeScript and Next.js build passed; OFAC and UN refreshes completed with 19,249 and 1,011 records respectively; and a controlled weekly compliance report completed with a 64-character SHA-256 export hash.
+
+Current acceptance gap: production Vercel environment update and fresh-token/monitoring verification remain pending because the Vercel project settings session requires a separate authenticated access path. The Auth0 production tenant contains the deployed and attached Sentinel Role Claims Action, the `administrator`, `compliance_analyst`, and `reviewer` roles, and `administrator` is directly assigned to `bryan@deeptrack.io`.

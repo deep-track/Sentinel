@@ -52,16 +52,22 @@ function getRole(user: Record<string, unknown>): AppRole {
 		if (roleFromCustomClaim === "admin" || roleFromCustomClaim === "head") {
 			return roleFromCustomClaim;
 		}
+		// Auth0 production uses the explicit Sentinel role name. Preserve the
+		// existing application contract while recognizing the production claim.
+		if (roleFromCustomClaim === "administrator") return "admin";
 		return "user";
 	}
 
 	if (Array.isArray(roleFromCustomClaim)) {
 		if (roleFromCustomClaim.includes("head")) return "head";
-		if (roleFromCustomClaim.includes("admin")) return "admin";
+		if (roleFromCustomClaim.includes("admin") || roleFromCustomClaim.includes("administrator")) {
+			return "admin";
+		}
 	}
 
 	const fallbackRole = getClaimValue(user, "role");
 	if (fallbackRole === "admin" || fallbackRole === "head") return fallbackRole;
+	if (fallbackRole === "administrator") return "admin";
 
 	return "user";
 }
