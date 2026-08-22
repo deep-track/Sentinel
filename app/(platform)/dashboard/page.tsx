@@ -1,19 +1,9 @@
 export const dynamic = "force-dynamic";
 
-import Link from "next/link";
 import { CreditUsageCard } from "./_components/credit-usage-card";
 import { StatsGrid } from "./_components/stats-grid";
 import { RecentVerificationsTable } from "./_components/recent-verifications-table";
-import { AlertCircle } from "lucide-react";
-
-// NOTE: getKYCStats, getKYCList, getKYIStats, and getAPIKeys previously
-// came from actions/kyc.ts, actions/kyi.ts, and actions/api-keys.ts.
-// Those files were removed as part of the Convex backend migration, and
-// there are currently no public Convex queries that replace them
-// (confirmed: convex/kyb.ts is empty, and no listKYC/listKYI/statsKYC/
-// statsKYI/listApiKeys query exists yet in convex/*.ts). This page shows
-// honest empty states below until Stacy adds the equivalent Convex
-// queries. Do not fabricate data here.
+import { VerificationBreakdown } from "./_components/verification-breakdown";
 
 export default async function DashboardPage() {
   const [statsRes, verificationsRes] = await Promise.all([
@@ -42,31 +32,12 @@ export default async function DashboardPage() {
         total={statsRes?.total ?? 0}
         avgCompletionTimeMs={statsRes?.avgCompletionTimeMs ?? null}
         pendingReview={statsRes?.pendingReview ?? 0}
-        activeApiKeys={0}
+        activeApiKeys={statsRes?.activeApiKeys ?? 0}
       />
 
-      <RecentVerificationsTable data={verificationsRes?.verifications ?? []} />
-
-      <div className="rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-6 flex gap-3">
-        <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-            KYC / KYI breakdown and recent activity are temporarily unavailable
-          </p>
-          <p className="mt-1 text-sm text-amber-800 dark:text-amber-300/80">
-            These previously came from actions that were removed during the
-            Convex migration. They&apos;ll return once the equivalent Convex
-            queries exist. See{" "}
-            <Link href="/kyc" className="underline">
-              KYC
-            </Link>{" "}
-            and{" "}
-            <Link href="/kyi" className="underline">
-              KYI
-            </Link>{" "}
-            directly in the meantime.
-          </p>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <VerificationBreakdown data={statsRes?.breakdown ?? []} />
+        <RecentVerificationsTable data={verificationsRes?.verifications ?? []} />
       </div>
     </div>
   );

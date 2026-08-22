@@ -8,6 +8,7 @@ const internalOpsItems = [
   { title: "Credit Ledger", url: "/internal-ops/ledger" },
   { title: "API Key Management", url: "/internal-ops/api-keys" },
   { title: "Review Queue", url: "/internal-ops/review-queue" },
+  { title: "AML Screening Monitor", url: "/internal-ops/monitoring" },
   { title: "Model Metrics & Drift", url: "/internal-ops/model-metrics" },
   { title: "Audit Log", url: "/internal-ops/audit-log" },
   { title: "System Alerts", url: "/internal-ops/alerts" },

@@ -23,6 +23,7 @@ nothing
 
 # misc
 .DS_Store
+/artifacts/
 *.pem
 
 # debug
@@ -31,8 +32,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (real secrets remain ignored; the template is safe to commit)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -47,6 +49,5 @@ next-env.d.ts
 # history
 .history/
 
-/lib/generated/prisma
 
 .env.local
