@@ -1,12 +1,3 @@
-// Base URLs for internal-only AWS services (Section 3.3, 9). These are
-// never reachable from outside the VPC per the infra design — Convex is
-// the only caller. Store the base URL + any shared auth as env vars,
-// never hardcode.
-//
-// These calls must only ever happen inside a Convex action (never a
-// query or mutation) since they're non-deterministic network calls to
-// services outside Convex's control.
-
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {

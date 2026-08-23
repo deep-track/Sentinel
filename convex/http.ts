@@ -6,11 +6,6 @@ import { checkApiRateLimit } from "./lib/rateLimits";
 
 const http = httpRouter();
 
-// No auth.addHttpRoutes() call here — that was Convex Auth's GitHub
-// OAuth callback wiring. Auth0 handles its own callback routes
-// entirely on the Next.js side (app/api/auth/[auth0]/route.ts);
-// Convex just verifies the resulting JWT via auth.config.ts. Nothing
-// needs registering here for that.
 
 function json(body: unknown, status = 200, extraHeaders?: Record<string, string>) {
   return new Response(JSON.stringify(body), {
@@ -19,10 +14,7 @@ function json(body: unknown, status = 200, extraHeaders?: Record<string, string>
   });
 }
 
-// Shared by every /v1 route: authenticate the key, then enforce the
-// per-api_key_id rate limit (Section 10.3) before any real work runs.
-// Returns either a successful auth result or a Response to return
-// immediately (401/403/429).
+
 async function authenticateAndRateLimit(
   ctx: { runQuery: any; runMutation: any },
   request: Request,
@@ -90,10 +82,7 @@ http.route({
       return json({ error: `Missing required fields: ${missing.join(", ")}` }, 400);
     }
 
-    // NOTE: per Section 10.2, raw identity documents/biometric frames
-    // are not retained permanently — only extracted fields, verdicts,
-    // and signed URLs to ephemeral object storage. Still open — see
-    // prior notes on whether upload happens here or AWS-side.
+ 
 
     const balance = await ctx.runQuery(internal.creditLedger._getBalance, {
       clientId: auth.clientId,
@@ -132,11 +121,7 @@ http.route({
   }),
 });
 
-// GET /v1/verify — list with filters. Section 8.1: "List verifications,
-// paginated and filterable." Registered as an EXACT path — Convex
-// matches exact paths independently of the pathPrefix route below, and
-// "/v1/verify" (no trailing slash) is never matched by a pathPrefix of
-// "/v1/verify/", so there's no collision either way.
+
 http.route({
   path: "/v1/verify",
   method: "GET",
@@ -184,63 +169,6 @@ http.route({
 });
 
 http.route({
-<<<<<<< HEAD
-=======
-  path: "/v1/verify/aml",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const auth = await authenticateApiKey(
-      { runQuery: ctx.runQuery, runMutation: ctx.runMutation },
-      request.headers.get("Authorization"),
-    );
-    if (!auth.ok) return json({ error: auth.error }, auth.status);
-
-    let body: {
-      subjectName?: string;
-      entityType?: "individual" | "entity";
-      country?: string;
-    };
-    try {
-      body = await request.json();
-    } catch {
-      return json({ error: "Invalid JSON body" }, 400);
-    }
-    const subjectName = body.subjectName?.trim();
-    if (!subjectName) return json({ error: "subjectName is required" }, 400);
-    if (body.entityType !== "individual" && body.entityType !== "entity") {
-      return json({ error: "entityType must be individual or entity" }, 400);
-    }
-
-    const balance = await ctx.runQuery(internal.creditLedger._getBalance, {
-      clientId: auth.clientId,
-    });
-    if (balance < 1) return json({ error: "Insufficient credits" }, 402);
-
-    const { id, reference } = await ctx.runMutation(internal.verifications._create, {
-      clientId: auth.clientId,
-      type: "aml",
-      creditsUsed: 1,
-      input: { subjectName, entityType: body.entityType, country: body.country },
-    });
-    await ctx.scheduler.runAfter(0, internal.aml.runScreening, {
-      verificationId: id,
-      clientId: auth.clientId,
-      subjectName,
-      entityType: body.entityType,
-      country: body.country,
-    });
-    return json({ id: reference, type: "aml", status: "queued" }, 202);
-  }),
-});
-
-http.route({
-  // Convex's httpRouter matches exact `path` or `pathPrefix`, not
-  // `{param}` templates — so this catches GET /v1/verify/<anything>
-  // and we pull the id back out of the URL inside the handler below.
-  // Register this AFTER any more-specific /v1/verify/... routes you
-  // add later (e.g. /v1/verify with query filters in Phase 2), since
-  // prefix routes are broad.
->>>>>>> 3a82c113fda2e4885ef101835487900c114e340b
   pathPrefix: "/v1/verify/",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
@@ -293,10 +221,7 @@ http.route({
   }),
 });
 
-// GET /v1/credits/ledger — Section 8.1: "Credit transaction history."
-// Registered as its own exact path — doesn't collide with
-// "/v1/credits" (exact) since Convex distinguishes exact paths from
-// each other by their full string, not by prefix.
+
 http.route({
   path: "/v1/credits/ledger",
   method: "GET",

@@ -13,8 +13,7 @@ export type DocScanResult = {
   documentType: string;
 };
 
-// Pass threshold per Section 5.2 / 8.3 note: fake_score <= 0.25 AND
-// flags array is empty.
+
 export function passesDocScanThreshold(result: DocScanResult): boolean {
   return result.fakeScore <= 0.25 && result.flags.length === 0;
 }

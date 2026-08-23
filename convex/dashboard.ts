@@ -27,13 +27,7 @@ const dashboardResult = v.object({
   ),
 });
 
-/**
- * Returns the authenticated user's tenant-scoped dashboard view.
- *
- * Membership is derived from the Auth0/Convex identity in the request. No
- * client or user identifier is accepted from the browser, which prevents a
- * dashboard caller from selecting another tenant by changing query params.
- */
+
 export const overview = query({
   args: { timeRangeMs: v.optional(v.number()), recentLimit: v.optional(v.number()) },
   returns: dashboardResult,

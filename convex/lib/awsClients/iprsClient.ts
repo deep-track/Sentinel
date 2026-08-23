@@ -20,17 +20,7 @@ export type IprsResult = {
   status: IprsResponseStatus;
 };
 
-// Section 6.1's response-handling table. This is the single source of
-// truth for what each IPRS status means downstream — riskEngine.ts
-// calls this rather than re-encoding the table itself, so the two
-// can't drift out of sync.
-//
-//   MATCH          -> pass, proceed to AML screening
-//   PARTIAL_MATCH  -> hold for manual review (name variation)
-//   NO_MATCH       -> flag high fraud risk, escalate to compliance
-//   INVALID        -> reject immediately, return error to client
-//   REVOKED        -> hard reject, flag for compliance team
-//   TIMEOUT        -> queue for manual verification, notify client of delay
+
 export type IprsAction =
   | "proceed_to_aml"
   | "hold_for_review"
@@ -56,14 +46,7 @@ export function resolveIprsAction(status: IprsResponseStatus): IprsAction {
   }
 }
 
-// Section 6: "If IPRS is unavailable, submission is queued for manual
-// verification — never auto-rejected." So a thrown error (network
-// failure, not a TIMEOUT status from IPRS itself) must be caught by the
-// caller and treated the same as a TIMEOUT status, not as a hard
-// failure. riskEngine.ts is responsible for that catch — this client
-// just does the retry/timeout mechanics per Section 6's own spec
-// (10s timeout, 3 retries, exponential backoff) and re-throws if all
-// retries are exhausted.
+//If IPRS is unavailable, submission is queued for manual verification 
 export async function queryIprs(query: IprsQuery): Promise<IprsResult> {
   const maxRetries = 3;
   let lastError: unknown;
