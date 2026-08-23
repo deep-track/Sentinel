@@ -1,6 +1,6 @@
-import { findUser } from "@/actions/auth-actions";
+import { findUser } from "@/backend/actions/auth-actions";
 import ApiKeysTable from "@/app/(platform)/api-keys/api-keys-table";
-import { getAuth } from "@/lib/auth";
+import { getAuth } from "@/backend/lib/auth";
 import { redirect } from "next/navigation";
 import CreateApiKeyForm from "./create-api-key-form";
 
@@ -17,7 +17,7 @@ export default async function ApiKeysPage() {
 
 	if (!dbUser) return redirect("/new-user");
 
-	const apiKeys: import("@/lib/types/api-keys").APIKey[] = [];
+	const apiKeys: import("@/backend/lib/types/api-keys").APIKey[] = [];
 
 	return (
 		<div className="space-y-4 p-6">

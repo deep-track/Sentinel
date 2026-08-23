@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { KYIRecord } from "@/lib/kyi-types";
+import type { KYIRecord } from "@/backend/lib/kyi-types";
 import { KYIStatusBadge } from "@/modules/kyi/kyi-status-badge";
 import { toast } from "sonner";
 import {
@@ -26,7 +26,7 @@ import {
   AlertTriangle,
   TrendingUp,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/backend/lib/utils";
 
 // NOTE: reviewKYI previously came from actions/kyi.ts, which was
 // removed as part of the Convex backend migration. There is no public

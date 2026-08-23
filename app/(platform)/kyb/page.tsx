@@ -55,7 +55,7 @@ function StatCard({
 }
 
 export default async function KYBPage() {
-	const records: import("@/lib/types/kyb").KYBRecord[] = [];
+	const records: import("@/backend/lib/types/kyb").KYBRecord[] = [];
 	const stats = {
 		total: 0,
 		approved: 0,

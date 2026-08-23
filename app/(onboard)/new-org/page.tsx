@@ -1,5 +1,5 @@
-import { addNewUser, findUser } from "@/actions/auth-actions";
-import { getCurrentUser } from "@/lib/auth";
+import { addNewUser, findUser } from "@/backend/actions/auth-actions";
+import { getCurrentUser } from "@/backend/lib/auth";
 import CreateOrganization from "@/modules/organization/create-organization";
 import { redirect } from "next/navigation";
 import React from "react";

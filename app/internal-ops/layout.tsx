@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
-import { getCurrentUser, isInternalOpsRole } from "@/lib/auth";
+import { getCurrentUser, isInternalOpsRole } from "@/backend/lib/auth";
 
 const internalOpsItems = [
   { title: "Overview", url: "/internal-ops" },

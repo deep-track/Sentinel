@@ -7,7 +7,7 @@
 // to list members for the current user's client, so this page can't load
 // real data. Showing an honest unavailable state instead of faking a list.
 import EmptyState from "@/components/empty-state";
-import { getAuth } from "@/lib/auth";
+import { getAuth } from "@/backend/lib/auth";
 import { redirect } from "next/navigation";
 
 export default async function MembersPage() {

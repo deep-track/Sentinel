@@ -1,6 +1,6 @@
 "use server";
 
-import { getAuth } from "@/lib/auth";
+import { getAuth } from "@/backend/lib/auth";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 

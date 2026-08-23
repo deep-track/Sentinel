@@ -1,4 +1,4 @@
-import { getAuth0 } from "@/lib/auth0";
+import { getAuth0 } from "@/backend/lib/auth0";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";

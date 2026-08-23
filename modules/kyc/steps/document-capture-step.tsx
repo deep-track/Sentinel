@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { kycSubmissionSchema, type KYCSubmissionData } from "@/lib/kyc-types";
-import { uploadFiles } from "@/lib/uploadthing";
+import { kycSubmissionSchema, type KYCSubmissionData } from "@/backend/lib/kyc-types";
+import { uploadFiles } from "@/backend/lib/uploadthing";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Upload, Image as ImageIcon, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/backend/lib/utils";
 import { VerificationTips } from "@/modules/kyc/components/verification-tips";
 
 interface DocumentCaptureStepProps {

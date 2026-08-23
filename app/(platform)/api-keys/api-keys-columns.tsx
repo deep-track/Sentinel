@@ -1,6 +1,6 @@
 "use client";
 
-import type { APIKey } from "@/lib/types/api-keys";
+import type { APIKey } from "@/backend/lib/types/api-keys";
 import { Badge } from "@/components/ui/badge";
 import { TypographyInlineCode } from "@/components/ui/typography";
 import { ColumnDef } from "@tanstack/react-table";

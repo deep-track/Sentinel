@@ -2,8 +2,8 @@
 
 
 import { Button } from "@/components/ui/button";
-import type { KYCStatus, KYCSubmissionData } from "@/lib/kyc-types";
-import { cn } from "@/lib/utils";
+import type { KYCStatus, KYCSubmissionData } from "@/backend/lib/kyc-types";
+import { cn } from "@/backend/lib/utils";
 
 // NOTE: getKYCRecord and submitKYC previously came from actions/kyc.ts,
 // removed as part of the Convex backend migration. No public Convex

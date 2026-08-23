@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { type KYCSubmissionData } from "@/lib/kyc-types";
+import { type KYCSubmissionData } from "@/backend/lib/kyc-types";
 import { ArrowLeft, Loader2, Send } from "lucide-react";
 import { useState } from "react";
 

@@ -3,8 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { countries, documentTypeLabels } from "@/lib/kyb-types";
-import type { DocumentType, KYBStepData } from "@/lib/kyb-types";
+import { countries, documentTypeLabels } from "@/backend/lib/kyb-types";
+import type { DocumentType, KYBStepData } from "@/backend/lib/kyb-types";
 import {
 	AlertCircle,
 	Building2,

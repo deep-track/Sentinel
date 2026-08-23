@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/backend/lib/auth";
 
 const REQUIRED_ENV = [
   "AUTH0_DOMAIN",

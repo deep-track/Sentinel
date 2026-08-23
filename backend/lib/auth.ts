@@ -1,4 +1,4 @@
-import { getAuth0 } from "@/lib/auth0";
+import { getAuth0 } from "@/backend/lib/auth0";
 
 export type AppRole = "user" | "admin" | "head" | "internal_admin" | "reviewer";
 

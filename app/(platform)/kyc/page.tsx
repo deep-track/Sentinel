@@ -4,8 +4,8 @@ import Link from "next/link";
 import { anyApi } from "convex/server";
 import { CheckCircle, Clock3, FileCheck, ShieldAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getAuthenticatedConvexClient } from "@/lib/convex-server";
-import type { KYCRecord, KYCStatus } from "@/lib/kyc-types";
+import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
+import type { KYCRecord, KYCStatus } from "@/backend/lib/kyc-types";
 import { KYCTable } from "@/modules/kyc/kyc-table";
 
 type KYCView = {

@@ -8,8 +8,8 @@ import {
 	documentTypeLabels,
 	documentTypes,
 	mandatoryKYBDocuments,
-} from "@/lib/kyb-types";
-import { cn } from "@/lib/utils";
+} from "@/backend/lib/kyb-types";
+import { cn } from "@/backend/lib/utils";
 import {
 	CheckCircle,
 	FileText,

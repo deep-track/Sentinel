@@ -10,7 +10,7 @@ import {
   ACCREDITATION_LABELS,
   SOURCE_OF_FUNDS_LABELS,
   NET_WORTH_LABELS,
-} from "@/lib/kyi-types";
+} from "@/backend/lib/kyi-types";
 import {
   Form,
   FormControl,

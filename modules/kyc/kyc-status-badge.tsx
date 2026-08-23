@@ -1,7 +1,7 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import type { KYCStatus } from "@/lib/kyc-types";
+import { cn } from "@/backend/lib/utils";
+import type { KYCStatus } from "@/backend/lib/kyc-types";
 import {
   CheckCircle,
   XCircle,

@@ -10,7 +10,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { businessInfoSchema, countries } from "@/lib/kyb-types";
+import { businessInfoSchema, countries } from "@/backend/lib/kyb-types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Search } from "lucide-react";
 import { useState } from "react";

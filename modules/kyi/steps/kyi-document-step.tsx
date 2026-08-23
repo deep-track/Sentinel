@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { kyiIdentitySchema, KYIIdentityData } from "@/lib/kyi-types";
+import { kyiIdentitySchema, KYIIdentityData } from "@/backend/lib/kyi-types";
 import {
   Form,
   FormControl,

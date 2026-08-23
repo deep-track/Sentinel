@@ -1,7 +1,7 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import type { KYIStatus } from "@/lib/kyi-types";
+import { cn } from "@/backend/lib/utils";
+import type { KYIStatus } from "@/backend/lib/kyi-types";
 import {
   CheckCircle,
   XCircle,

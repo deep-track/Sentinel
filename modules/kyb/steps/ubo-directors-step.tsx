@@ -10,8 +10,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { type Position, positionOptions } from "@/lib/kyb-types";
-import { cn } from "@/lib/utils";
+import { type Position, positionOptions } from "@/backend/lib/kyb-types";
+import { cn } from "@/backend/lib/utils";
 import { Info, Plus, X } from "lucide-react";
 import { useState } from "react";
 

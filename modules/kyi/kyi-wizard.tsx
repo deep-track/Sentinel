@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle, ChevronRight } from "lucide-react";
-import type { KYIStatus, KYISubmissionData, InvestorProfileData, KYIIdentityData, FinancialDocsData } from "@/lib/kyi-types";
+import type { KYIStatus, KYISubmissionData, InvestorProfileData, KYIIdentityData, FinancialDocsData } from "@/backend/lib/kyi-types";
 import { InvestorProfileStep } from "@/modules/kyi/steps/investor-profile-step";
 import { KYIDocumentStep } from "@/modules/kyi/steps/kyi-document-step";
 import { FinancialDocsStep } from "@/modules/kyi/steps/financial-docs-step";

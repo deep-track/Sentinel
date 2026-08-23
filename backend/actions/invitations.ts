@@ -3,7 +3,7 @@
 import {
   createOrganizationInvitation,
   revokeOrganizationInvitation,
-} from "@/lib/auth0-management";
+} from "@/backend/lib/auth0-management";
 
 function validateRedirectUrl(redirectUrl: string) {
   const appBaseUrl = process.env.APP_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL;

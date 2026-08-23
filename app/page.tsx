@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/backend/lib/auth";
 import Image from "next/image";
 import Link from "next/link";
 

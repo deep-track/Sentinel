@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuth0 } from "@/lib/auth0";
+import { getAuth0 } from "@/backend/lib/auth0";
 
 // This route exists purely to bridge Auth0's server-side session (kept in
 // an encrypted cookie, never exposed to the browser directly) to Convex's

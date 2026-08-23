@@ -1,7 +1,7 @@
 "use server"
 
-import { findUser } from "@/actions/auth-actions"
-import { getAuth } from "@/lib/auth"
+import { findUser } from "@/backend/actions/auth-actions"
+import { getAuth } from "@/backend/lib/auth"
 import { revalidateTag } from "next/cache"
 import {redirect} from "next/navigation"
 

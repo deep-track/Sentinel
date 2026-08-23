@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import { getEntityById } from "@/lib/opensanctions";
-import { getAMLRiskLevel } from "@/lib/opensanctions";
-import { TOPIC_LABELS, COLOR_CLASSES } from "@/lib/opensanctions";
+import { getEntityById } from "@/backend/lib/opensanctions";
+import { getAMLRiskLevel } from "@/backend/lib/opensanctions";
+import { TOPIC_LABELS, COLOR_CLASSES } from "@/backend/lib/opensanctions";
 import Link from "next/link";
 import {
   Shield,

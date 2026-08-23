@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { KYITable } from "@/modules/kyi/kyi-table";
 import { Button } from "@/components/ui/button";
-import type { KYIRecord } from "@/lib/kyi-types";
+import type { KYIRecord } from "@/backend/lib/kyi-types";
 import {
   CheckCircle,
   Clock3,

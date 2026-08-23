@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { uploadFiles } from "@/lib/uploadthing";
-import { type KYCSubmissionData } from "@/lib/kyc-types";
+import { uploadFiles } from "@/backend/lib/uploadthing";
+import { type KYCSubmissionData } from "@/backend/lib/kyc-types";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Upload } from "lucide-react";
 import { VerificationTips } from "@/modules/kyc/components/verification-tips";

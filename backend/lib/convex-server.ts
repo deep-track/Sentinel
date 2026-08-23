@@ -1,5 +1,5 @@
 import { ConvexHttpClient } from "convex/browser";
-import { getAuth0 } from "@/lib/auth0";
+import { getAuth0 } from "@/backend/lib/auth0";
 
 function getConvexUrl() {
   const value = process.env.NEXT_PUBLIC_CONVEX_URL?.trim();

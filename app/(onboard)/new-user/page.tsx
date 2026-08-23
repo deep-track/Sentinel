@@ -1,6 +1,6 @@
-import { addNewUser, findUser } from "@/actions/auth-actions";
+import { addNewUser, findUser } from "@/backend/actions/auth-actions";
 import { TypographyMuted } from "@/components/ui/typography";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/backend/lib/auth";
 import { Loader } from "lucide-react";
 import { redirect } from "next/navigation";
 import React from "react";

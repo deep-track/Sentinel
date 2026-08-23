@@ -17,8 +17,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import type { KYCRecord, KYCStatus } from "@/lib/kyc-types";
-import { cn } from "@/lib/utils";
+import type { KYCRecord, KYCStatus } from "@/backend/lib/kyc-types";
+import { cn } from "@/backend/lib/utils";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 import {
 	type ColumnDef,

@@ -1,9 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { KYBStepData } from "@/lib/kyb-types";
-import { createInitialKYBData } from "@/lib/kyb-types";
-import { cn } from "@/lib/utils";
+import type { KYBStepData } from "@/backend/lib/kyb-types";
+import { createInitialKYBData } from "@/backend/lib/kyb-types";
+import { cn } from "@/backend/lib/utils";
 import { BusinessInfoStep } from "@/modules/kyb/steps/business-info-step";
 import { DocumentsStep } from "@/modules/kyb/steps/documents-step";
 import { ReviewStep } from "@/modules/kyb/steps/review-step";

@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-table";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { KYIRecord, KYIStatus } from "@/lib/kyi-types";
+import type { KYIRecord, KYIStatus } from "@/backend/lib/kyi-types";
 import { KYIStatusBadge } from "@/modules/kyi/kyi-status-badge";
 import {
   Table,
@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowUpDown, ChevronLeft, ChevronRight, Eye, Search, X } from "lucide-react";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn } from "@/backend/lib/utils";
 
 interface KYITableProps {
   records: KYIRecord[];

@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import type { APIKey } from "@/lib/types/api-keys";
+import type { APIKey } from "@/backend/lib/types/api-keys";
 import SubmitButton from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
 import {

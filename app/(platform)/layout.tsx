@@ -1,8 +1,8 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { getCurrentUser } from "@/lib/auth";
-import { getAuth0 } from "@/lib/auth0";
+import { getCurrentUser } from "@/backend/lib/auth";
+import { getAuth0 } from "@/backend/lib/auth0";
 import { redirect } from "next/navigation";
 
 
