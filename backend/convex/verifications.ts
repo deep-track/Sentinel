@@ -115,6 +115,53 @@ export const _getByReferenceForClient = internalQuery({
   },
 });
 
+export const _listForClient = internalQuery({
+  args: {
+    clientId: v.id("clients"),
+    status: v.optional(
+      v.union(
+        v.literal("queued"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed"),
+      ),
+    ),
+    type: v.optional(
+      v.union(
+        v.literal("idp"),
+        v.literal("kyb"),
+        v.literal("aml"),
+        v.literal("liveness"),
+      ),
+    ),
+    limit: v.optional(v.number()),
+    before: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(Math.floor(args.limit ?? 25), 1), 100);
+    const rows = await ctx.db
+      .query("verifications")
+      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .collect();
+    const matchingRows = rows
+      .filter((row) =>
+        (!args.status || row.status === args.status) &&
+        (!args.type || row.type === args.type) &&
+        (args.before === undefined || row.createdAt < args.before),
+      )
+      .sort((a, b) => b.createdAt - a.createdAt);
+    const records = matchingRows.slice(0, limit);
+
+    return {
+      records,
+      nextCursor:
+        matchingRows.length > records.length
+          ? records[records.length - 1]?.createdAt
+          : null,
+    };
+  },
+});
+
 export const _getById = internalQuery({
   args: { id: v.id("verifications") },
   handler: async (ctx, args) => {

@@ -33,6 +33,33 @@ export const _getBalance = internalQuery({
   },
 });
 
+export const _getLedgerHistory = internalQuery({
+  args: {
+    clientId: v.id("clients"),
+    limit: v.optional(v.number()),
+    before: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(Math.floor(args.limit ?? 25), 1), 100);
+    const rows = await ctx.db
+      .query("creditLedger")
+      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .collect();
+    const matchingRows = rows
+      .filter((row) => args.before === undefined || row.createdAt < args.before)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    const entries = matchingRows.slice(0, limit);
+
+    return {
+      entries,
+      nextCursor:
+        matchingRows.length > entries.length
+          ? entries[entries.length - 1]?.createdAt
+          : null,
+    };
+  },
+});
+
 
 export const getBalanceForClient = query({
   args: { clientId: v.id("clients") },

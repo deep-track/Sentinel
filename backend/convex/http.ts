@@ -23,12 +23,12 @@ async function authenticateAndRateLimit(
     { runQuery: ctx.runQuery, runMutation: ctx.runMutation },
     request.headers.get("Authorization"),
   );
-  if (!auth.ok) {
+  if (auth.ok === false) {
     return { response: json({ error: auth.error }, auth.status) };
   }
 
   const rateLimit = await checkApiRateLimit(ctx, auth.plan, auth.apiKeyId);
-  if (!rateLimit.ok) {
+  if (rateLimit.ok === false) {
     const retryAfterSeconds = Math.ceil(rateLimit.retryAfterMs / 1000);
     return {
       response: json(
@@ -154,7 +154,7 @@ http.route({
     });
 
     return json({
-      data: result.records.map((r: any) => ({
+      data: listResult.records.map((r) => ({
         id: r.reference,
         type: r.type,
         status: r.status,
@@ -241,7 +241,7 @@ http.route({
     });
 
     return json({
-      data: result.entries.map((r: any) => ({
+      data: ledgerResult.entries.map((r) => ({
         type: r.type,
         amount: r.amount,
         reason: r.reason,

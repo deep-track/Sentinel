@@ -1,7 +1,11 @@
 import { RateLimiter, MINUTE } from "@convex-dev/rate-limiter";
 import { components } from "../_generated/api";
 
-export const rateLimiter = new RateLimiter(components.rateLimiter, {
+type RateLimiterComponent = ConstructorParameters<typeof RateLimiter>[0];
+
+const rateLimiterComponent = (components as { rateLimiter: RateLimiterComponent }).rateLimiter;
+
+export const rateLimiter = new RateLimiter(rateLimiterComponent, {
   publicApiTrial: { kind: "token bucket", rate: 10, period: MINUTE, capacity: 10 },
   publicApiStarter: { kind: "token bucket", rate: 60, period: MINUTE, capacity: 10 },
   publicApiGrowth: { kind: "token bucket", rate: 200, period: MINUTE, capacity: 30 },
@@ -28,6 +32,6 @@ export async function checkApiRateLimit(
 ): Promise<{ ok: true } | { ok: false; retryAfterMs: number }> {
   const limiterName = limiterNameForPlan(plan);
   const result = await rateLimiter.limit(ctx as any, limiterName, { key: apiKeyId });
-  if (result.ok) return { ok: true };
+  if (result.ok === true) return { ok: true };
   return { ok: false, retryAfterMs: result.retryAfter };
 }
