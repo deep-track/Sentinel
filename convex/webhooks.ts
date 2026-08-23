@@ -4,13 +4,14 @@ import { internal } from "./_generated/api";
 import { requireClientRole } from "./lib/rbac";
 import {
   buildWebhookPayload,
+  buildFailureWebhookPayload,
   deliverWebhook,
   WEBHOOK_RETRY_SCHEDULE_MS,
   MAX_WEBHOOK_ATTEMPTS,
 } from "./lib/webhookDispatch";
 
-// Called (fire-and-forget, via scheduler) right after a verification
-// reaches a completed state (pass/review/reject) — see idp.ts. Does
+// Called (fire-and-forget, via scheduler) after a verification reaches
+// a terminal state — completed (pass/review/reject) OR failed. Does
 // nothing if the client hasn't registered a webhook URL, per Section
 // 8.4's "if a webhook is registered".
 export const dispatchWebhook = internalAction({
@@ -28,14 +29,27 @@ export const dispatchWebhook = internalAction({
       return; // no webhook registered — nothing to do
     }
 
+    // Previously this only ever built a pass/review/reject payload,
+    // which meant a genuine processing failure (verifications.status
+    // === "failed") never notified the client at all — they'd be left
+    // polling GET /v1/verify/{id} indefinitely. Now branches on status
+    // first, verdict second.
+    const payload =
+      verification.status === "failed"
+        ? buildFailureWebhookPayload({
+            reference: verification.reference,
+            failureReason: verification.failureReason,
+          })
+        : buildWebhookPayload({
+            reference: verification.reference,
+            verdict: verification.verdict ?? "review",
+            result: verification.result,
+          });
+
     const deliveryId: any = await ctx.runMutation(internal.webhooks._createDelivery, {
       clientId: verification.clientId,
       verificationId: args.verificationId,
-      payload: buildWebhookPayload({
-        reference: verification.reference,
-        verdict: verification.verdict ?? "review",
-        result: verification.result,
-      }),
+      payload,
     });
 
     await ctx.runAction(internal.webhooks.attemptDelivery, { deliveryId });

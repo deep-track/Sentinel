@@ -13,7 +13,7 @@ export const MAX_WEBHOOK_ATTEMPTS = WEBHOOK_RETRY_SCHEDULE_MS.length + 1;
 export type WebhookPayload = {
   event: "sentinel.scan.complete";
   scan_id: string;
-  status: "PASS" | "REVIEW" | "REJECT";
+  status: "PASS" | "REVIEW" | "REJECT" | "FAILED";
   timestamp: string; // ISO 8601
   result: unknown;
 };
@@ -87,4 +87,16 @@ export async function deliverWebhook(
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+export function buildFailureWebhookPayload(params: {
+  reference: string;
+  failureReason?: string;
+}): WebhookPayload {
+  return {
+    event: "sentinel.scan.complete",
+    scan_id: params.reference,
+    status: "FAILED",
+    timestamp: new Date().toISOString(),
+    result: { failureReason: params.failureReason ?? null },
+  };
 }

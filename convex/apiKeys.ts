@@ -1,10 +1,14 @@
-import { v, ConvexError } from "convex/values";
+import { v } from "convex/values";
 import { action, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildRawApiKey, sha256Hex, safeCompareHex } from "./lib/crypto";
 import { requireInternalUser } from "./lib/rbac";
 import type { Id } from "./_generated/dataModel";
 
+// Bootstraps a new tenant. Gated behind a signed-in Convex Auth user
+// (dashboard-only, same as notes.create) — this is NOT part of the
+// public /v1 API. Anyone hitting this without a session is rejected.
+// Tighten further with an admin-role check once you have roles.
 export const createClient = mutation({
   args: {
     name: v.string(),
@@ -25,13 +29,17 @@ export const createClient = mutation({
       status: "active",
       creditLimit: args.creditLimit,
       rpmCap: args.rpmCap,
-      creditThresholdPct: 80, //override per-client later via a settings mutation
+      creditThresholdPct: 80, // Section 1.1 default — override per-client later via a settings mutation
       createdAt: Date.now(),
     });
   },
 });
 
-// generate a new key for a client
+// ── Public: generate a new key for a client ────────────────────
+// Call this from your (authenticated, internal-dashboard-only) UI.
+// This is NOT the public /v1 API — this creates keys, it doesn't
+// consume them. Gate this behind whatever admin/dashboard auth you
+// already have via Convex Auth before calling it.
 export const generateApiKey = action({
   args: {
     clientId: v.id("clients"),
@@ -48,7 +56,9 @@ export const generateApiKey = action({
       environment: args.environment,
     });
 
-    // rawKey is returned ONCE only the hash is stored
+    // rawKey is returned ONCE. Nothing after this point can recover it —
+    // only the hash is stored. Make sure your caller surfaces this to
+    // the client immediately and doesn't log it anywhere.
     return { rawKey, prefix };
   },
 });
@@ -89,11 +99,30 @@ export const _touchLastUsed = internalMutation({
   },
 });
 
-// Auth result shape used by http.ts
+export const _getClientById = internalQuery({
+  args: { clientId: v.id("clients") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.clientId);
+  },
+});
+
+// ── Auth result shape used by http.ts ──────────────────────────
 export type ApiKeyAuthResult =
-  | { ok: true; clientId: Id<"clients">; apiKeyId: Id<"apiKeys"> }
+  | {
+      ok: true;
+      clientId: Id<"clients">;
+      apiKeyId: Id<"apiKeys">;
+      plan: "trial" | "starter" | "growth" | "enterprise";
+    }
   | { ok: false; status: number; error: string };
 
+// Called from httpActions. Takes the raw Authorization header value,
+// looks up by prefix (indexed, cheap), hashes the full presented key,
+// and compares against the stored hash. Never queries by hashedKey
+// directly off untrusted input in a way that would allow timing
+// enumeration of prefixes — prefix lookup is intentionally public
+// information (it's shown in dashboards), only the secret suffix
+// is sensitive.
 export async function authenticateApiKey(
   ctx: { runQuery: any; runMutation: any },
   authHeader: string | null,
@@ -121,9 +150,22 @@ export async function authenticateApiKey(
   if (!safeCompareHex(presentedHash, keyRow.hashedKey)) {
     return { ok: false, status: 401, error: "Invalid API key" };
   }
- 
-  // Fire-and-forget last-used tracking don't block the request on it.
+
+  // Previously missing entirely: a suspended client's keys still
+  // worked. Section 4.1 lists client status as active/suspended/
+  // trial_expired specifically so it can gate access — now it does.
+  const client = await ctx.runQuery(internal.apiKeys._getClientById, {
+    clientId: keyRow.clientId,
+  });
+  if (!client) {
+    return { ok: false, status: 401, error: "Invalid API key" };
+  }
+  if (client.status !== "active") {
+    return { ok: false, status: 403, error: `Account is ${client.status}` };
+  }
+
+  // Fire-and-forget last-used tracking — don't block the request on it.
   ctx.runMutation(internal.apiKeys._touchLastUsed, { apiKeyId: keyRow._id });
- 
-  return { ok: true, clientId: keyRow.clientId, apiKeyId: keyRow._id };
+
+  return { ok: true, clientId: keyRow.clientId, apiKeyId: keyRow._id, plan: client.plan };
 }
