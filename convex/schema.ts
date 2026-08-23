@@ -84,7 +84,8 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_reference", ["reference"])
     .index("by_client_and_status", ["clientId", "status"])
-    .index("by_client_and_type", ["clientId", "type"]),
+    .index("by_client_and_type", ["clientId", "type"])
+    .index("by_created_at", ["createdAt"]),
 
   creditLedger: defineTable({
     clientId: v.id("clients"),
@@ -100,6 +101,57 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_client", ["clientId"]),
 
+  watchlistSources: defineTable({
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    displayName: v.string(),
+    sourceUrl: v.string(),
+    cadence: v.union(v.literal("daily"), v.literal("weekly")),
+    enabled: v.boolean(),
+    currentVersionId: v.optional(v.id("watchlistVersions")),
+    lastAttemptedAt: v.optional(v.number()),
+    lastSuccessfulAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_source_key", ["sourceKey"]),
+
+  watchlistVersions: defineTable({
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceUrl: v.string(),
+    sourceVersion: v.string(),
+    contentHash: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("active"),
+      v.literal("superseded"),
+      v.literal("failed"),
+    ),
+    recordCount: v.number(),
+    fetchedAt: v.number(),
+    activatedAt: v.optional(v.number()),
+    failureReason: v.optional(v.string()),
+  })
+    .index("by_source_and_status", ["sourceKey", "status"])
+    .index("by_source_and_version", ["sourceKey", "sourceVersion"]),
+
+  watchlistEntries: defineTable({
+    versionId: v.id("watchlistVersions"),
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceRecordId: v.string(),
+    entityType: v.union(v.literal("individual"), v.literal("entity"), v.literal("unknown")),
+    primaryName: v.string(),
+    aliases: v.array(v.string()),
+    normalizedNames: v.array(v.string()),
+    countries: v.array(v.string()),
+    programs: v.array(v.string()),
+    identifiers: v.optional(v.any()),
+    isActive: v.boolean(),
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+  })
+    .index("by_version", ["versionId"])
+    .index("by_source_record", ["sourceKey", "sourceRecordId"])
+    .index("by_source_and_active", ["sourceKey", "isActive"]),
+
   flaggedEntities: defineTable({
     entityName: v.string(),
     source: v.union(
@@ -111,6 +163,9 @@ export default defineSchema({
     matchScore: v.number(), // 0-100
     clientId: v.id("clients"),
     verificationId: v.id("verifications"),
+    watchlistVersionId: v.id("watchlistVersions"),
+    watchlistEntryId: v.id("watchlistEntries"),
+    matchMethod: v.union(v.literal("exact"), v.literal("normalized"), v.literal("alias"), v.literal("fuzzy")),
     riskLevel: v.union(v.literal("critical"), v.literal("high")),
     matchedCountry: v.optional(v.string()),
     createdAt: v.number(),
@@ -148,7 +203,8 @@ export default defineSchema({
     resolvedAt: v.optional(v.number()),
   })
     .index("by_client_and_status", ["clientId", "status"])
-    .index("by_verification", ["verificationId"]),
+    .index("by_verification", ["verificationId"])
+    .index("by_created_at", ["createdAt"]),
 
   feedbackLabels: defineTable({
     verificationId: v.id("verifications"),
@@ -176,7 +232,31 @@ export default defineSchema({
     timestamp: v.number(),
   })
     .index("by_client", ["clientId"])
-    .index("by_target", ["targetType", "targetId"]),
+    .index("by_target", ["targetType", "targetId"])
+    .index("by_timestamp", ["timestamp"]),
+
+  complianceReports: defineTable({
+    reportType: v.literal("weekly_compliance"),
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    generatedAt: v.number(),
+    status: v.union(v.literal("completed"), v.literal("failed")),
+    verificationCount: v.number(),
+    amlVerificationCount: v.number(),
+    completedCount: v.number(),
+    failedCount: v.number(),
+    passCount: v.number(),
+    reviewCount: v.number(),
+    rejectCount: v.number(),
+    reviewQueueCount: v.number(),
+    screeningAuditCount: v.number(),
+    screeningFailureCount: v.number(),
+    exportData: v.any(),
+    exportHash: v.string(),
+    failureReason: v.optional(v.string()),
+  })
+    .index("by_generated_at", ["generatedAt"])
+    .index("by_period", ["periodStart", "periodEnd"]),
 
   webhookDeliveries: defineTable({
     clientId: v.id("clients"),

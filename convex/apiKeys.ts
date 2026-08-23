@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { action, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildRawApiKey, sha256Hex, safeCompareHex } from "./lib/crypto";
@@ -35,11 +35,17 @@ export const createClient = mutation({
   },
 });
 
-// ── Public: generate a new key for a client ────────────────────
-// Call this from your (authenticated, internal-dashboard-only) UI.
-// This is NOT the public /v1 API — this creates keys, it doesn't
-// consume them. Gate this behind whatever admin/dashboard auth you
-// already have via Convex Auth before calling it.
+export const revoke = mutation({
+  args: { keyId: v.id("apiKeys") },
+  handler: async (ctx, args) => {
+    await requireInternalUser(ctx);
+    const key = await ctx.db.get(args.keyId);
+    if (!key) throw new ConvexError({ code: "not_found", message: "API key not found." });
+    await ctx.db.patch(args.keyId, { revoked: true });
+    return { revoked: true };
+  },
+});
+
 export const generateApiKey = action({
   args: {
     clientId: v.id("clients"),

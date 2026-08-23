@@ -1,24 +1,39 @@
 "use server";
 
-export async function revokeInvitation(invitationId: string) {
-	void invitationId;
-	throw new Error(
-		"Invitation revocation is not configured for Auth0 yet. Set up Auth0 Organizations Management API integration first.",
-	);
+import {
+  createOrganizationInvitation,
+  revokeOrganizationInvitation,
+} from "@/lib/auth0-management";
+
+function validateRedirectUrl(redirectUrl: string) {
+  const appBaseUrl = process.env.APP_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  if (!appBaseUrl) throw new Error("Application base URL is not configured");
+
+  const target = new URL(redirectUrl, appBaseUrl);
+  const base = new URL(appBaseUrl);
+  if (target.origin !== base.origin) {
+    throw new Error("Invitation redirect must remain on the application origin");
+  }
+  return target.toString();
 }
 
-// Function to create a new invitation
+export async function revokeInvitation(invitationId: string) {
+  await revokeOrganizationInvitation(invitationId);
+  return { success: true };
+}
+
 export async function createInvitation(
-		email: string,
-		redirectUrl: string,
-		role: "admin" | "user",
-		companyId: string,
-	) {
-		void email;
-		void redirectUrl;
-		void role;
-		void companyId;
-		throw new Error(
-			"Invitation flow now requires Auth0 Organizations setup. Configure Management API credentials and organization mapping first.",
-		);
-	}
+  email: string,
+  redirectUrl: string,
+  role: "admin" | "user",
+  companyId: string,
+) {
+  if (role !== "user") {
+    throw new Error("Only standard user invitations are enabled");
+  }
+  if (!companyId.trim()) {
+    throw new Error("Company context is required");
+  }
+
+  return createOrganizationInvitation(email, validateRedirectUrl(redirectUrl));
+}

@@ -1,0 +1,19 @@
+import { NextResponse } from "next/server";
+import { getAuth0 } from "@/lib/auth0";
+
+
+export async function GET() {
+  const { auth0, isAuth0Configured } = getAuth0();
+
+  if (!isAuth0Configured || !auth0) {
+    return NextResponse.json({ token: null }, { status: 200 });
+  }
+
+  try {
+    const accessToken = await auth0.getAccessToken();
+    return NextResponse.json({ token: accessToken?.accessToken ?? null });
+  } catch (error) {
+    console.error("[Convex Token Bridge] Failed to get Auth0 token:", error);
+    return NextResponse.json({ token: null }, { status: 200 });
+  }
+}

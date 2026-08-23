@@ -27,17 +27,31 @@ export async function GET(
         },
       });
       return NextResponse.json(
-        { error: "Auth0 is not configured", endpoint },
+        { error: "Authentication service is not configured" },
         { status: 503 }
       );
     }
 
-    const baseUrl = new URL(req.url).origin;
-    const requestUrl = new URL(req.url);
+		const baseUrl = new URL(req.url).origin;
+		const requestUrl = new URL(req.url);
 
-    // Create a request-like object for the Auth0 client
-    const auth0Request = new Request(
-      `${baseUrl}/auth/${endpoint}${requestUrl.search}`,
+		// Auth0 Business Users applications require an organization on login.
+		// Keep the client-facing flow credentials-first by supplying the approved
+		// organization ID server-side; clients never need to type its name.
+		if (endpoint === "login" && !requestUrl.searchParams.has("organization")) {
+			const organizationId = process.env.AUTH0_ORGANIZATION_ID?.trim();
+			if (!organizationId) {
+				return NextResponse.json(
+					{ error: "B2B organization login is not configured" },
+					{ status: 503 },
+				);
+			}
+			requestUrl.searchParams.set("organization", organizationId);
+		}
+
+		// Create a request-like object for the Auth0 client
+		const auth0Request = new Request(
+			`${baseUrl}/auth/${endpoint}${requestUrl.search}`,
       {
         method: req.method,
         headers: new Headers(req.headers),
@@ -48,7 +62,7 @@ export async function GET(
   } catch (error) {
     console.error("[Auth0 Route Error]", error);
     return NextResponse.json(
-      { error: "Authentication error", details: String(error) },
+      { error: "Authentication request failed" },
       { status: 500 }
     );
   }

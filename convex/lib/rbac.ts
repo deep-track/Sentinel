@@ -3,29 +3,70 @@ import type { Id } from "../_generated/dataModel";
 
 export type ClientRole = "client_admin" | "compliance_analyst" | "developer" | "viewer";
 
-async function requireAuth0Identity(ctx: { auth: any }): Promise<string> {
-  const identity = await ctx.auth.getUserIdentity();
+export const INTERNAL_ROLES = [
+  "admin",
+  "head",
+  "administrator",
+  "internal_admin",
+  "reviewer",
+  "compliance_analyst",
+  "compliance_reviewer",
+] as const;
+
+type AuthIdentity = {
+  subject: string;
+  role?: unknown;
+  roles?: unknown;
+  permissions?: unknown;
+  [key: string]: unknown;
+};
+
+function normalizeRole(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function claimValues(identity: AuthIdentity): unknown[] {
+  return [
+    identity.role,
+    identity.roles,
+    identity.permissions,
+    identity["https://deeptrack.io/role"],
+    identity["https://deeptrack.io/roles"],
+    identity["https://deeptrack.io/permissions"],
+  ];
+}
+
+function hasApprovedInternalRole(identity: AuthIdentity): boolean {
+  const values = claimValues(identity);
+  const candidates = values.flatMap((value) => (Array.isArray(value) ? value : [value]));
+  return candidates.some((candidate) => {
+    const role = normalizeRole(candidate);
+    return role !== null && INTERNAL_ROLES.includes(role as (typeof INTERNAL_ROLES)[number]);
+  });
+}
+
+async function requireAuth0Identity(ctx: { auth: any }): Promise<AuthIdentity> {
+  const identity = (await ctx.auth.getUserIdentity()) as AuthIdentity | null;
   if (!identity) {
     throw new ConvexError({ code: "unauthenticated", message: "Sign in required." });
   }
-  return identity.subject;
+  return identity;
 }
 
-// Client-portal check: is this user an active member of this client
+// Client-portal check: is this user an active member of this client.
 export async function requireClientRole(
   ctx: { db: any; auth: any },
   clientId: Id<"clients">,
   allowedRoles: ClientRole[],
 ): Promise<{ userId: string; role: ClientRole }> {
-  const userId = await requireAuth0Identity(ctx);
-
+  const identity = await requireAuth0Identity(ctx);
   const membership = await ctx.db
     .query("clientMembers")
     .withIndex("by_client_and_user", (q: any) =>
-      q.eq("clientId", clientId).eq("userId", userId),
+      q.eq("clientId", clientId).eq("userId", identity.subject),
     )
     .unique();
-
   if (!membership || !membership.isActive) {
     throw new ConvexError({
       code: "forbidden",
@@ -38,10 +79,18 @@ export async function requireClientRole(
       message: `This action requires one of: ${allowedRoles.join(", ")}.`,
     });
   }
-
-  return { userId, role: membership.role };
+  return { userId: identity.subject, role: membership.role };
 }
 
+// Internal operations require an Auth0 role claim. The claim can be emitted
+// as a namespaced scalar/array or as standard role/roles/permissions claims.
 export async function requireInternalUser(ctx: { db: any; auth: any }): Promise<string> {
-  return await requireAuth0Identity(ctx);
+  const identity = await requireAuth0Identity(ctx);
+  if (!hasApprovedInternalRole(identity)) {
+    throw new ConvexError({
+      code: "forbidden",
+      message: "An approved Sentinel internal role is required.",
+    });
+  }
+  return identity.subject;
 }
