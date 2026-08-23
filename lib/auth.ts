@@ -1,6 +1,6 @@
 import { getAuth0 } from "@/lib/auth0";
 
-export type AppRole = "user" | "admin" | "head";
+export type AppRole = "user" | "admin" | "head" | "internal_admin" | "reviewer";
 
 export type AppUser = {
 	id: string;
@@ -45,31 +45,43 @@ function getClaimValue(user: Record<string, unknown>, key: string) {
 	return user[key];
 }
 
+const INTERNAL_ROLES: AppRole[] = ["internal_admin", "reviewer"];
+
 function getRole(user: Record<string, unknown>): AppRole {
 	const roleFromCustomClaim = getClaimValue(user, ROLE_CLAIM);
 
 	if (typeof roleFromCustomClaim === "string") {
+		if (INTERNAL_ROLES.includes(roleFromCustomClaim as AppRole)) {
+			return roleFromCustomClaim as AppRole;
+		}
 		if (roleFromCustomClaim === "admin" || roleFromCustomClaim === "head") {
 			return roleFromCustomClaim;
 		}
-		// Auth0 production uses the explicit Sentinel role name. Preserve the
-		// existing application contract while recognizing the production claim.
-		if (roleFromCustomClaim === "administrator") return "admin";
 		return "user";
 	}
 
 	if (Array.isArray(roleFromCustomClaim)) {
+		if (roleFromCustomClaim.includes("internal_admin")) return "internal_admin";
+		if (roleFromCustomClaim.includes("reviewer")) return "reviewer";
 		if (roleFromCustomClaim.includes("head")) return "head";
-		if (roleFromCustomClaim.includes("admin") || roleFromCustomClaim.includes("administrator")) {
-			return "admin";
-		}
+		if (roleFromCustomClaim.includes("admin")) return "admin";
 	}
 
 	const fallbackRole = getClaimValue(user, "role");
-	if (fallbackRole === "admin" || fallbackRole === "head") return fallbackRole;
-	if (fallbackRole === "administrator") return "admin";
+	if (
+		fallbackRole === "admin" ||
+		fallbackRole === "head" ||
+		fallbackRole === "internal_admin" ||
+		fallbackRole === "reviewer"
+	) {
+		return fallbackRole;
+	}
 
 	return "user";
+}
+
+export function isInternalOpsRole(role: AppRole): boolean {
+	return INTERNAL_ROLES.includes(role);
 }
 
 function getCompanyId(user: Record<string, unknown>) {

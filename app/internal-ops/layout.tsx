@@ -1,5 +1,7 @@
 ﻿import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
+import { getCurrentUser, isInternalOpsRole } from "@/lib/auth";
 
 const internalOpsItems = [
   { title: "Overview", url: "/internal-ops" },
@@ -8,18 +10,42 @@ const internalOpsItems = [
   { title: "Credit Ledger", url: "/internal-ops/ledger" },
   { title: "API Key Management", url: "/internal-ops/api-keys" },
   { title: "Review Queue", url: "/internal-ops/review-queue" },
-  { title: "AML Screening Monitor", url: "/internal-ops/monitoring" },
   { title: "Model Metrics & Drift", url: "/internal-ops/model-metrics" },
   { title: "Audit Log", url: "/internal-ops/audit-log" },
   { title: "System Alerts", url: "/internal-ops/alerts" },
   { title: "Settings", url: "/internal-ops/settings" },
 ];
 
-export default function InternalOpsLayout({
+const isAuth0Configured = Boolean(
+  process.env.AUTH0_SECRET &&
+  process.env.AUTH0_DOMAIN &&
+  process.env.AUTH0_CLIENT_ID &&
+  process.env.AUTH0_CLIENT_SECRET &&
+  process.env.APP_BASE_URL,
+);
+
+// Real role check, per the build plan (Section 8): internal ops screens
+// require role internal_admin or reviewer. Previously this layout had no
+// enforcement at all (see prior TODO) because no role model existed for
+// internal staff. lib/auth.ts now reads internal_admin/reviewer from the
+// same AUTH0_ROLE_CLAIM already used for client roles, so this can
+// actually gate access now.
+//
+// Local dev note: when Auth0 is disabled (dev-bypass mode), this grants
+// internal_admin automatically so the pages remain testable without real
+// credentials - matching the same pattern used in app/(platform)/layout.tsx.
+// This bypass never applies once Auth0 is configured.
+export default async function InternalOpsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  if (isAuth0Configured) {
+    const user = await getCurrentUser();
+    if (!user) redirect("/auth/login");
+    if (!isInternalOpsRole(user.role)) redirect("/dashboard");
+  }
+
   return (
     <div className="flex min-h-screen">
       <aside className="w-64 flex-shrink-0 bg-black text-white flex flex-col">

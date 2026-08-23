@@ -20,6 +20,7 @@ import {
 	Fingerprint,
 	Home,
 	Key,
+	Lock,
 	Settings,
 	Shield,
 	ShieldCheck,
@@ -56,9 +57,12 @@ const accountItems = [
 	{ title: "Settings", url: "/settings", icon: Settings },
 ];
 
+// Kept in sync with AppRole in lib/auth.ts.
 type Props = {
-	role: "user" | "admin" | "head";
+	role: "user" | "admin" | "head" | "internal_admin" | "reviewer";
 };
+
+const INTERNAL_OPS_ROLES = ["internal_admin", "reviewer"];
 
 function NavSection({
 	label,
@@ -108,6 +112,16 @@ export function AppSidebar({ role }: Props) {
 	const mainItems = getMainItems();
 	if (role === "admin" || role === "head") {
 		mainItems.splice(1, 0, { title: "Members", url: "/members", icon: User2 });
+	}
+
+	// Per the build plan (Section 8), Internal Ops is restricted to
+	// internal_admin/reviewer roles and must never be visible to client
+	// users. Backend enforcement lives in app/internal-ops/layout.tsx;
+	// this hides the link entirely for anyone without the role, same
+	// pattern as the Members link above.
+	const canSeeInternalOps = INTERNAL_OPS_ROLES.includes(role);
+	if (canSeeInternalOps) {
+		mainItems.push({ title: "Internal Ops", url: "/internal-ops", icon: Lock });
 	}
 
 	React.useEffect(() => {

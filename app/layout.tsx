@@ -3,7 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import NextTopLoader from "nextjs-toploader";
-import { ConvexClientProvider } from "@/convex/client-provider";
+import { ConvexClientProvider } from "@/components/convex-client-provider";
 
 const outfit = localFont({
 	src: "../fonts/Outfit.ttf",
