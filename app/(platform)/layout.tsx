@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { getCurrentUser } from "@/backend/lib/auth";
 import { getAuth0 } from "@/backend/lib/auth0";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 
@@ -30,7 +31,7 @@ export default async function Layout({
 								{user.fullName}
 							</span>
 									<Button asChild size="sm" variant="outline">
-										<a href="/auth/logout">Logout</a>
+										<Link href="/auth/logout">Logout</Link>
 									</Button>
 						</div>
 					</div>

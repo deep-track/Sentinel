@@ -5,6 +5,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 const PUBLIC_ROUTES = [
+	"/auth",       // Auth0 login/callback/logout are handled by app/auth/[auth0]/route.ts
 	"/api/auth",
 	"/sign-in",
 	"/logged-out",
