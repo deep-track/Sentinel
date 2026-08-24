@@ -18,9 +18,9 @@ export async function getAuthenticatedConvexClient() {
   // convex/auth.config.ts. Requesting the default Auth0 token can return an
   // opaque/session token that Convex cannot authenticate.
   const accessToken = await auth0.getAccessToken({ audience: auth0Audience });
-  if (!accessToken?.accessToken) return null;
+  if (!accessToken?.token) return null;
 
   const client = new ConvexHttpClient(convexUrl);
-  client.setAuth(accessToken.accessToken);
+  client.setAuth(accessToken.token);
   return client;
 }

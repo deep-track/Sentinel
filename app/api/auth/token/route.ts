@@ -14,7 +14,7 @@ export async function GET() {
       audience ? { audience } : undefined,
     );
 
-    return NextResponse.json({ token: accessToken?.accessToken ?? null });
+    return NextResponse.json({ token: accessToken?.token ?? null });
   } catch (error) {
     console.error("[Convex Token Bridge] Failed to get Auth0 token:", error);
     return NextResponse.json({ token: null }, { status: 200 });
