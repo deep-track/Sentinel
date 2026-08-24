@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { api } from "@/convex/_generated/api";
+import { api } from "@/backend/convex/_generated/api";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 
 export const dynamic = "force-dynamic";
