@@ -15,6 +15,7 @@ const INTERNAL_ADMIN_ROLES = ["admin", "head", "administrator", "internal_admin"
 
 type AuthIdentity = {
   subject: string;
+  email?: unknown;
   role?: unknown;
   roles?: unknown;
   permissions?: unknown;
@@ -24,6 +25,15 @@ type AuthIdentity = {
 function normalizeRole(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function configuredAdminEmails(): Set<string> {
+  return new Set(
+    (process.env.SENTINEL_INTERNAL_ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+  );
 }
 
 function configuredAdminSubjects(): Set<string> {
@@ -112,6 +122,12 @@ export async function isInternalAdmin(ctx: { auth: any }): Promise<boolean> {
   // allowlist provides a deterministic bootstrap path when a provider action
   // has not yet attached the role claim to a newly issued token.
   if (configuredAdminSubjects().has(identity.subject)) return true;
+  if (
+    typeof identity.email === "string" &&
+    configuredAdminEmails().has(identity.email.trim().toLowerCase())
+  ) {
+    return true;
+  }
 
   const values = claimValues(identity);
   const candidates = values.flatMap((value) => (Array.isArray(value) ? value : [value]));
