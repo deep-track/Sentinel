@@ -48,6 +48,7 @@ Use `.env.example` as the non-secret key inventory. Real values must be supplied
 | Application URL | `APP_BASE_URL`, `NEXT_PUBLIC_APP_URL` |
 | Auth0 runtime | `AUTH0_SECRET`, `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET` |
 | Auth0 claims | `AUTH0_ROLE_CLAIM`, `AUTH0_COMPANY_ID_CLAIM` |
+| Internal administrator bootstrap | `SENTINEL_INTERNAL_ADMIN_SUBJECTS`, `SENTINEL_INTERNAL_ADMIN_EMAILS` |
 | Auth0 invitations | `AUTH0_MANAGEMENT_CLIENT_ID`, `AUTH0_MANAGEMENT_CLIENT_SECRET`, `AUTH0_ORGANIZATION_ID`, `AUTH0_INVITATION_CLIENT_ID`, `AUTH0_INVITATION_CONNECTION_ID` |
 | Convex | `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_DEPLOYMENT`, `CONVEX_SITE_URL` |
 | Server integrations | `DEEPTRACK_BACKEND_URL`, `OPENSANCTIONS_API_KEY` |
@@ -60,6 +61,8 @@ Use `.env.example` as the non-secret key inventory. Real values must be supplied
 Auth0 is the authoritative login provider for the Next.js application. The application maps the configured role claim to `user`, `admin`, or `head`, and maps the configured company claim to the tenant boundary used by Convex authorization helpers. All data reads and writes must enforce identity and company scope in server-side or Convex functions; hiding a button in React is not an authorization control.
 
 The Auth0 Organizations Management API is required for invitation creation and revocation. Configure the required management API scopes and organization/client/connection IDs before enabling administrator invitation actions. Invitation management is intentionally unavailable when this integration is incomplete.
+
+For local development, set `SENTINEL_INTERNAL_ADMIN_EMAILS` in the local environment to the approved internal developer emails, separated by commas. The production Convex deployment currently contains the approved internal administrator emails `bryan@deeptrack.io`, `barbarawangui2002@gmail.com`, and `stacymacharia08@gmail.com`. Auth0 role claims and exact subject allowlists remain preferred for long-term identity administration; email fallback should be limited to verified Auth0 identities and reviewed whenever team access changes.
 
 ## Deployment
 
