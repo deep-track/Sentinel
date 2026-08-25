@@ -16,10 +16,10 @@ export default function LoggedOutPage() {
           {/* Content */}
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              You've been logged out
+              You&apos;ve been logged out
             </h1>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Your session has been securely ended. You'll be redirected to the sign-in page shortly.
+              Your session has been securely ended. You&apos;ll be redirected to the sign-in page shortly.
             </p>
           </div>
 

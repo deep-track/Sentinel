@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, query } from "./_generated/server";
+import { requireClientRole } from "./lib/rbac";
 
 export const _insertLedgerEntry = internalMutation({
   args: {
@@ -60,10 +61,15 @@ export const _getLedgerHistory = internalQuery({
   },
 });
 
-
 export const getBalanceForClient = query({
   args: { clientId: v.id("clients") },
   handler: async (ctx, args) => {
+    await requireClientRole(ctx, args.clientId, [
+      "client_admin",
+      "compliance_analyst",
+      "developer",
+      "viewer",
+    ]);
     const rows = await ctx.db
       .query("creditLedger")
       .withIndex("by_client", (q) => q.eq("clientId", args.clientId))

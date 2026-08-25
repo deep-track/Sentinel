@@ -2,7 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { action, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildRawApiKey, sha256Hex, safeCompareHex } from "./lib/crypto";
-import { requireInternalUser } from "./lib/rbac";
+import { requireInternalAdmin } from "./lib/rbac";
 import type { Id } from "./_generated/dataModel";
 
 // Bootstraps a new tenant. Gated behind a signed-in Convex Auth user
@@ -22,7 +22,7 @@ export const createClient = mutation({
     rpmCap: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireInternalUser(ctx);
+    await requireInternalAdmin(ctx);
     return await ctx.db.insert("clients", {
       name: args.name,
       plan: args.plan,
@@ -38,7 +38,7 @@ export const createClient = mutation({
 export const revoke = mutation({
   args: { keyId: v.id("apiKeys") },
   handler: async (ctx, args) => {
-    await requireInternalUser(ctx);
+    await requireInternalAdmin(ctx);
     const key = await ctx.db.get(args.keyId);
     if (!key) throw new ConvexError({ code: "not_found", message: "API key not found." });
     await ctx.db.patch(args.keyId, { revoked: true });

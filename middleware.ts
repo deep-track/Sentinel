@@ -38,6 +38,22 @@ export function middleware(request: NextRequest) {
 	}
 
 	try {
+		// Auth0 Business Users applications require an organization on login.
+		// Inject it before the SDK middleware dispatches /auth/login.
+		if (
+			request.nextUrl.pathname === "/auth/login" &&
+			!request.nextUrl.searchParams.has("organization")
+		) {
+			const organizationId = process.env.AUTH0_ORGANIZATION_ID?.trim();
+			if (!organizationId) {
+				return NextResponse.json(
+					{ error: "B2B organization login is not configured" },
+					{ status: 503 },
+				);
+			}
+			request.nextUrl.searchParams.set("organization", organizationId);
+		}
+
 		return auth0.middleware(request);
 	} catch (error) {
 		if (!isRecoverableMiddlewareError(error)) {

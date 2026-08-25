@@ -48,9 +48,10 @@ export function getAuth0() {
 	);
 	const auth0Domain = normalizeDomain(getEnv("AUTH0_DOMAIN"));
 	const auth0ClientId = getEnv("AUTH0_CLIENT_ID");
-	const auth0ClientSecret = getEnv("AUTH0_CLIENT_SECRET");
+		const auth0ClientSecret = getEnv("AUTH0_CLIENT_SECRET");
+		const auth0Audience = getEnv("AUTH0_AUDIENCE") ?? auth0ClientId;
 
-	const isConfigured =
+		const isConfigured =
 		Boolean(auth0Secret) &&
 		Boolean(appBaseUrl) &&
 		Boolean(auth0Domain) &&
@@ -67,9 +68,13 @@ export function getAuth0() {
 				secret: auth0Secret as string,
 				appBaseUrl: appBaseUrl as string,
 				domain: auth0Domain as string,
-				clientId: auth0ClientId as string,
-				clientSecret: auth0ClientSecret as string,
-			});
+					clientId: auth0ClientId as string,
+					clientSecret: auth0ClientSecret as string,
+					authorizationParameters: {
+						audience: auth0Audience as string,
+						scope: "openid profile email",
+					},
+				});
 			_initialized = true;
 			console.log("[Auth0] Successfully initialized with domain:", auth0Domain);
 		} catch (error) {
