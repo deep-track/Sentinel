@@ -1,6 +1,7 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import { isInternalAdmin } from "./lib/rbac";
 
 const dashboardResult = v.object({
   total: v.number(),
@@ -37,13 +38,22 @@ export const overview = query({
       throw new ConvexError({ code: "unauthenticated", message: "Sign in required." });
     }
 
-    const memberships = await ctx.db
-      .query("clientMembers")
-      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .collect();
-    const clientIds = memberships
-      .filter((membership) => membership.isActive)
-      .map((membership) => membership.clientId);
+    const clientIds = await (async () => {
+      if (await isInternalAdmin(ctx)) {
+        const clients = await ctx.db.query("clients").collect();
+        return clients
+          .filter((client: any) => client.status === "active")
+          .map((client: any) => client._id);
+      }
+
+      const memberships = await ctx.db
+        .query("clientMembers")
+        .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+        .collect();
+      return memberships
+        .filter((membership: any) => membership.isActive)
+        .map((membership: any) => membership.clientId);
+    })();
 
     const since = Date.now() - (args.timeRangeMs ?? 30 * 24 * 60 * 60 * 1000);
     const recentLimit = Math.min(Math.max(args.recentLimit ?? 10, 1), 50);
@@ -178,6 +188,10 @@ export const currentAccess = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return { authorized: false, memberships: [] };
+
+    if (await isInternalAdmin(ctx)) {
+      return { authorized: true, memberships: [] };
+    }
 
     try {
       const rows = await ctx.db

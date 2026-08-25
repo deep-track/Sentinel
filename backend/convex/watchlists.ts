@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { isInternalAdmin } from "./lib/rbac";
 
 const SOURCE_KEYS = ["OFAC_SDN", "UN_CONSOLIDATED"] as const;
 type SourceKey = (typeof SOURCE_KEYS)[number];
@@ -339,6 +340,12 @@ export const currentAccess = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return { authorized: false, memberships: [] };
+
+    // Internal administrators have product-wide access and do not need a
+    // customer membership. Regular users remain fail-closed below.
+    if (await isInternalAdmin(ctx)) {
+      return { authorized: true, memberships: [] };
+    }
 
     try {
       const rows = await ctx.db

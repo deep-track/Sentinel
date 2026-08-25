@@ -95,15 +95,20 @@ export async function requireInternalUser(ctx: { db: any; auth: any }): Promise<
   return identity.subject;
 }
 
-export async function requireInternalAdmin(ctx: { db: any; auth: any }): Promise<string> {
-  const identity = await requireAuth0Identity(ctx);
+export async function isInternalAdmin(ctx: { auth: any }): Promise<boolean> {
+  const identity = (await ctx.auth.getUserIdentity()) as AuthIdentity | null;
+  if (!identity) return false;
   const values = claimValues(identity);
   const candidates = values.flatMap((value) => (Array.isArray(value) ? value : [value]));
-  const isAdmin = candidates.some((candidate) => {
+  return candidates.some((candidate) => {
     const role = normalizeRole(candidate);
     return role !== null && INTERNAL_ADMIN_ROLES.includes(role as (typeof INTERNAL_ADMIN_ROLES)[number]);
   });
-  if (!isAdmin) {
+}
+
+export async function requireInternalAdmin(ctx: { db: any; auth: any }): Promise<string> {
+  const identity = await requireAuth0Identity(ctx);
+  if (!(await isInternalAdmin({ auth: { getUserIdentity: async () => identity } }))) {
     throw new ConvexError({
       code: "forbidden",
       message: "An approved Sentinel administrator role is required.",
