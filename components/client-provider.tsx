@@ -13,7 +13,7 @@ import { ConvexProviderWithAuth } from "convex/react";
 function useAuthFromAuth0() {
   const fetchAccessToken = useCallback(
     async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
-      try {
+      try {URL
         const res = await fetch("/api/auth/token", {
           cache: forceRefreshToken ? "no-store" : "default",
         });
