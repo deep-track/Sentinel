@@ -27,7 +27,7 @@ export default async function Layout({
   }
 
   try {
-    const access = await convexClient.query(anyApi.dashboard.currentAccess, {});
+    const access = await convexClient.query(anyApi.watchlists.currentAccess, {});
     if (!access.authorized) {
       redirect("/access-pending");
     }
