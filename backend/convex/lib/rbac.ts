@@ -26,6 +26,15 @@ function normalizeRole(value: unknown): string | null {
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
+function configuredAdminSubjects(): Set<string> {
+  return new Set(
+    (process.env.SENTINEL_INTERNAL_ADMIN_SUBJECTS ?? "")
+      .split(",")
+      .map((subject) => subject.trim())
+      .filter(Boolean),
+  );
+}
+
 function claimValues(identity: AuthIdentity): unknown[] {
   return [
     identity.role,
@@ -98,6 +107,12 @@ export async function requireInternalUser(ctx: { db: any; auth: any }): Promise<
 export async function isInternalAdmin(ctx: { auth: any }): Promise<boolean> {
   const identity = (await ctx.auth.getUserIdentity()) as AuthIdentity | null;
   if (!identity) return false;
+
+  // Auth0 roles remain the primary source. The deployment-configured subject
+  // allowlist provides a deterministic bootstrap path when a provider action
+  // has not yet attached the role claim to a newly issued token.
+  if (configuredAdminSubjects().has(identity.subject)) return true;
+
   const values = claimValues(identity);
   const candidates = values.flatMap((value) => (Array.isArray(value) ? value : [value]));
   return candidates.some((candidate) => {
