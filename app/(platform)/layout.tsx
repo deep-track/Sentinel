@@ -26,14 +26,18 @@ export default async function Layout({
     redirect("/access-pending?reason=authorization-unavailable");
   }
 
+  let access;
   try {
-    const access = await convexClient.query(anyApi.watchlists.currentAccess, {});
-    if (!access.authorized) {
-      redirect("/access-pending");
-    }
+    access = await convexClient.query(anyApi.watchlists.currentAccess, {});
   } catch (error) {
-    console.error("[platform-authz] access check failed", error);
+    console.error("[platform-authz] access query failed", error);
     redirect("/access-pending?reason=authorization-unavailable");
+  }
+
+  // Keep the expected authorization redirect outside the try/catch. Next.js
+  // implements redirect() by throwing a control-flow sentinel.
+  if (!access.authorized) {
+    redirect("/access-pending");
   }
 
   return (
