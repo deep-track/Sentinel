@@ -9,12 +9,8 @@ export async function GET() {
   }
 
   try {
-    const audience = process.env.AUTH0_CLIENT_ID?.trim();
-    const accessToken = await auth0.getAccessToken(
-      audience ? { audience } : undefined,
-    );
-
-    return NextResponse.json({ token: accessToken?.token ?? null });
+    const session = await auth0.getSession();
+    return NextResponse.json({ token: session?.tokenSet?.idToken ?? null });
   } catch (error) {
     console.error("[Convex Token Bridge] Failed to get Auth0 token:", error);
     return NextResponse.json({ token: null }, { status: 200 });

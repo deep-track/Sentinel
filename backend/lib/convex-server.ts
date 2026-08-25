@@ -11,16 +11,14 @@ export async function getAuthenticatedConvexClient() {
   const { auth0 } = getAuth0();
   if (!convexUrl || !auth0) return null;
 
-  const auth0Audience = process.env.AUTH0_CLIENT_ID?.trim();
-  if (!auth0Audience) return null;
-
-  // Convex validates the JWT audience against `applicationID` in
-  // convex/auth.config.ts. Requesting the default Auth0 token can return an
-  // opaque/session token that Convex cannot authenticate.
-  const accessToken = await auth0.getAccessToken({ audience: auth0Audience });
-  if (!accessToken?.token) return null;
+  // Convex's supported Auth0 adapter authenticates with the signed OIDC ID
+  // token. Its `aud` claim is the Auth0 application client ID configured in
+  // backend/convex/auth.config.ts.
+  const session = await auth0.getSession();
+  const idToken = session?.tokenSet?.idToken;
+  if (!idToken) return null;
 
   const client = new ConvexHttpClient(convexUrl);
-  client.setAuth(accessToken.token);
+  client.setAuth(idToken);
   return client;
 }
