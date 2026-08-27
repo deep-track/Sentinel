@@ -87,6 +87,20 @@ export default defineSchema({
     .index("by_client_and_type", ["clientId", "type"])
     .index("by_created_at", ["createdAt"]),
 
+  livenessRequests: defineTable({
+    clientId: v.id("clients"),
+    contact: v.string(),
+    method: v.union(v.literal("sms"), v.literal("whatsapp"), v.literal("email")),
+    status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
+    verificationId: v.optional(v.id("verifications")),
+    createdAt: v.number(),
+    sentAt: v.number(),
+    completedAt: v.optional(v.number()),
+    failureReason: v.optional(v.string()),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_verification", ["verificationId"]),
+
   creditLedger: defineTable({
     clientId: v.id("clients"),
     verificationId: v.optional(v.id("verifications")),

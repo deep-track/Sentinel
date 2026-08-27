@@ -1,8 +1,8 @@
 import { v, ConvexError } from "convex/values";
-import { action, mutation, internalMutation, internalQuery } from "./_generated/server";
+import { action, mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { buildRawApiKey, sha256Hex, safeCompareHex } from "./lib/crypto";
-import { requireInternalAdmin } from "./lib/rbac";
+import { requireClientRole, requireInternalAdmin } from "./lib/rbac";
 import type { Id } from "./_generated/dataModel";
 
 // Bootstraps a new tenant. Gated behind a signed-in Convex Auth user
@@ -35,14 +35,36 @@ export const createClient = mutation({
   },
 });
 
+export const listForClient = query({
+  args: { clientId: v.id("clients") },
+  handler: async (ctx, args) => {
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    const keys = await ctx.db.query("apiKeys").withIndex("by_client", (q) => q.eq("clientId", args.clientId)).collect();
+    return keys.map((key) => ({ _id: key._id, prefix: key.prefix, environment: key.environment, revoked: key.revoked, createdAt: key.createdAt, lastUsedAt: key.lastUsedAt }));
+  },
+});
+
 export const revoke = mutation({
   args: { keyId: v.id("apiKeys") },
   handler: async (ctx, args) => {
-    await requireInternalAdmin(ctx);
     const key = await ctx.db.get(args.keyId);
     if (!key) throw new ConvexError({ code: "not_found", message: "API key not found." });
+    await requireClientRole(ctx, key.clientId, ["client_admin"]);
     await ctx.db.patch(args.keyId, { revoked: true });
     return { revoked: true };
+  },
+});
+
+export const createForClient = mutation({
+  args: { clientId: v.id("clients"), environment: v.union(v.literal("live"), v.literal("test")) },
+  handler: async (ctx, args) => {
+    await requireClientRole(ctx, args.clientId, ["client_admin"]);
+    const client = await ctx.db.get(args.clientId);
+    if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
+    const { rawKey, prefix } = buildRawApiKey(args.environment);
+    const hashedKey = await sha256Hex(rawKey);
+    await ctx.db.insert("apiKeys", { clientId: args.clientId, prefix, hashedKey, environment: args.environment, revoked: false, createdAt: Date.now() });
+    return { rawKey, prefix };
   },
 });
 

@@ -4,6 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, Eye, EyeOff, Key, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useMutation } from "convex/react";
+import { anyApi } from "convex/server";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -40,23 +42,6 @@ type Props = {
 	companyId: string;
 };
 
-// NOTE: createApiKey previously came from actions/api-keys.ts, which was
-// removed as part of the Convex backend migration. There is no public
-// Convex mutation yet that creates an API key for a client (only
-// generateApiKey exists, scoped differently). This throws an honest
-// error instead of pretending to succeed.
-/* eslint-disable @typescript-eslint/no-unused-vars */
-async function createApiKey(
-	userId: string,
-	name: string,
-	companyId: string
-): Promise<APIKey> {
-	/* eslint-enable @typescript-eslint/no-unused-vars */
-	throw new Error(
-		"API key creation isn't wired to the backend yet - no key was created."
-	);
-}
-
 function CreateApiKeyForm({ userId, companyId }: Props) {
 	const [open, setOpen] = useState(false);
 	const [showKey, setShowKey] = useState(false);
@@ -65,10 +50,13 @@ function CreateApiKeyForm({ userId, companyId }: Props) {
 		resolver: zodResolver(formSchema),
 	});
 	const router = useRouter();
+	const createKey = useMutation(anyApi.apiKeys.createForClient);
 
 	async function onSubmit(values: z.infer<typeof formSchema>) {
 		try {
-			const newKey = await createApiKey(userId, values.name, companyId);
+			if (!companyId) throw new Error("No client organization is assigned to this account.");
+			const generated = await createKey({ clientId: companyId as any, environment: "live" });
+			const newKey: APIKey = { id: generated.prefix, name: values.name, apiKey: generated.rawKey, status: "Active", createdAt: new Date() };
 			setApiKey(newKey);
 
 			toast.success("Key successfully created");

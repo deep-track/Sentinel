@@ -190,7 +190,16 @@ export const currentAccess = query({
     if (!identity) return { authorized: false, memberships: [] };
 
     if (await isInternalAdmin(ctx)) {
-      return { authorized: true, memberships: [] };
+      const clients = (await ctx.db.query("clients").collect()).filter((client) => client.status === "active");
+      return {
+        authorized: clients.length > 0,
+        memberships: clients.map((client) => ({
+          clientId: client._id,
+          clientName: client.name,
+          clientStatus: client.status,
+          role: "client_admin" as const,
+        })),
+      };
     }
 
     try {

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { anyApi } from "convex/server";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,30 +28,14 @@ type LivenessRequest = {
   sentAt: Date;
 };
 
-// TODO(backend): wire this to the real endpoint once it exists. Per the
-// operator flow, this should trigger the backend to generate a unique
-// liveness link and dispatch it via SMS/WhatsApp/email to the end user's
-// phone. The end user completes the camera check on their own device —
-// nothing about that step happens in this web app. This function
-// intentionally does not pretend to succeed against a real backend yet.
-/* eslint-disable @typescript-eslint/no-unused-vars */
-async function sendLivenessLink(
-  contact: string,
-  method: DeliveryMethod
-): Promise<never> {
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-  throw new Error(
-    "Link-sending endpoint isn't built yet — no request was actually sent."
-  );
-}
-
-export function LivenessRequestPanel() {
+export function LivenessRequestPanel({ clientId }: { clientId: string }) {
   const [contact, setContact] = useState("");
   const [method, setMethod] = useState<DeliveryMethod>("sms");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [requests, setRequests] = useState<LivenessRequest[]>([]);
+  const requestsData = useQuery(anyApi.liveness.list, clientId ? { clientId: clientId as any, limit: 50 } : "skip");
+  const submit = useMutation(anyApi.liveness.submit);
+  const requests: LivenessRequest[] = (requestsData ?? []).map((row: any) => ({ id: row._id, contact: row.contact, method: row.method, status: row.status, sentAt: new Date(row.sentAt) }));
 
   async function handleSend() {
     if (!contact) {
@@ -59,7 +45,8 @@ export function LivenessRequestPanel() {
     setError(null);
     setSending(true);
     try {
-      await sendLivenessLink(contact, method);
+      if (!clientId) throw new Error("No client organization is assigned to this account.");
+      await submit({ clientId: clientId as any, contact, method });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send link");
     } finally {

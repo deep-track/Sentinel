@@ -1,7 +1,8 @@
-import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { internalAction, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { requireClientRole } from "./lib/rbac";
 
 const internalApi: any = internal;
 
@@ -9,6 +10,41 @@ const MATCH_LIMIT = 25;
 const FUZZY_REVIEW_THRESHOLD = 70;
 const FUZZY_REJECT_THRESHOLD = 94;
 const AML_CREDIT_COST = 1;
+
+export const submit = mutation({
+  args: {
+    clientId: v.id("clients"),
+    subjectName: v.string(),
+    entityType: v.union(v.literal("individual"), v.literal("entity")),
+    country: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    const subjectName = args.subjectName.trim();
+    if (!subjectName) throw new ConvexError({ code: "invalid_argument", message: "Subject name is required." });
+    const client = await ctx.db.get(args.clientId);
+    if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
+    const now = Date.now();
+    const verificationId = await ctx.db.insert("verifications", {
+      clientId: args.clientId,
+      type: "aml",
+      status: "queued",
+      creditsUsed: AML_CREDIT_COST,
+      input: { subjectName, entityType: args.entityType, country: args.country ?? null },
+      reference: `aml_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.scheduler.runAfter(0, internalApi.aml.runScreening, {
+      verificationId,
+      clientId: args.clientId,
+      subjectName,
+      entityType: args.entityType,
+      country: args.country,
+    });
+    return { verificationId };
+  },
+});
 
 type Entry = {
   _id: Id<"watchlistEntries">;

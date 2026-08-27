@@ -1,14 +1,15 @@
 import { Shield } from "lucide-react";
+import { anyApi } from "convex/server";
+import { redirect } from "next/navigation";
+import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
+import { AMLScreeningForm } from "./aml-screening-form";
 
-// NOTE: searchAML previously came from actions/aml.ts, which called
-// lib/opensanctions.ts directly (a third-party OpenSanctions API
-// integration, independent of the Convex backend). Removed to keep the
-// actions/ folder matching the backend's current shape — only
-// auth-actions.ts and invitations.ts remain. There is no Convex
-// equivalent yet, so this page cannot run a live search. Showing an
-// honest unavailable state instead of a dead form.
-
-export default function AMLCheckPage() {
+export default async function AMLCheckPage() {
+  const client = await getAuthenticatedConvexClient();
+  if (!client) redirect("/access-pending?reason=authorization-unavailable");
+  const access = await client.query(anyApi.dashboard.currentAccess, {});
+  const scope = access.memberships[0];
+  if (!access.authorized || !scope) redirect("/access-pending");
   return (
     <div className="p-6 sm:p-8 max-w-4xl mx-auto space-y-8">
       <div className="flex items-center gap-3">
@@ -23,11 +24,7 @@ export default function AMLCheckPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 p-8 text-center">
-        <p className="text-amber-700 dark:text-amber-400 font-medium">
-          AML screening is temporarily unavailable while the backend migrates to Convex.
-        </p>
-      </div>
+      <AMLScreeningForm clientId={scope.clientId} />
     </div>
   );
 }

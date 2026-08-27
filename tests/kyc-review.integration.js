@@ -30,3 +30,21 @@ test("KYC review decisions expose the three supported outcomes", () => {
     assert.match(actions, new RegExp(`submit\\(\\"${verdict}\\"\\)`));
   }
 });
+
+test("new admin backend contracts are present and authorization-bound", () => {
+  const aml = read("backend/convex/aml.ts");
+  const liveness = read("backend/convex/liveness.ts");
+  const apiKeys = read("backend/convex/apiKeys.ts");
+  const memberships = read("backend/convex/memberships.ts");
+  assert.match(aml, /export const submit = mutation/);
+  assert.match(aml, /requireClientRole\(ctx/);
+  assert.match(aml, /runScreening/);
+  assert.match(liveness, /export const submit = mutation/);
+  assert.match(liveness, /export const status = query/);
+  assert.match(liveness, /requireClientRole\(ctx/);
+  assert.match(apiKeys, /export const listForClient = query/);
+  assert.match(apiKeys, /export const revoke = mutation/);
+  assert.match(apiKeys, /requireClientRole\(ctx/);
+  assert.match(memberships, /export const listForClient = query/);
+  assert.match(memberships, /export const upsert = mutation/);
+});

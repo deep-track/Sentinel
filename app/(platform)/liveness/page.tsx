@@ -1,6 +1,14 @@
 import { LivenessRequestPanel } from "./liveness-request-panel";
+import { anyApi } from "convex/server";
+import { redirect } from "next/navigation";
+import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 
-export default function LivenessPage() {
+export default async function LivenessPage() {
+  const client = await getAuthenticatedConvexClient();
+  if (!client) redirect("/access-pending?reason=authorization-unavailable");
+  const access = await client.query(anyApi.dashboard.currentAccess, {});
+  const scope = access.memberships[0];
+  if (!access.authorized || !scope) redirect("/access-pending");
   return (
     <div className="flex flex-col gap-6 p-6 lg:p-8 max-w-3xl mx-auto">
       <div>
@@ -13,7 +21,7 @@ export default function LivenessPage() {
         </p>
       </div>
 
-      <LivenessRequestPanel />
+      <LivenessRequestPanel clientId={scope.clientId} />
     </div>
   );
 }

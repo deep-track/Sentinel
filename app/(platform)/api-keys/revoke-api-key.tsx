@@ -3,6 +3,8 @@
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useMutation } from "convex/react";
+import { anyApi } from "convex/server";
 import { HiMiniArchiveBoxArrowDown } from "react-icons/hi2";
 import { toast } from "sonner";
 
@@ -25,31 +27,16 @@ type Props = {
 	companyId: string;
 };
 
-// NOTE: revokeApiKey previously came from actions/api-keys.ts, which was
-// removed as part of the Convex backend migration. There is no public
-// Convex mutation yet that revokes an API key. This throws an honest
-// error instead of pretending to succeed.
-/* eslint-disable @typescript-eslint/no-unused-vars */
-async function revokeApiKey(
-	keyId: string,
-	userId: string,
-	companyId: string
-): Promise<void> {
-	/* eslint-enable @typescript-eslint/no-unused-vars */
-	throw new Error(
-		"API key revocation isn't wired to the backend yet."
-	);
-}
-
 export default function RevokeApiKey({ keyId, userId, companyId }: Props) {
 	const router = useRouter();
 	const [loading, setLoading] = useState(false);
 	const [open, setOpen] = useState(false);
+	const revoke = useMutation(anyApi.apiKeys.revoke);
 
 	const handleRevoke = async () => {
 		setLoading(true);
 		try {
-			await revokeApiKey(keyId, userId, companyId);
+			await revoke({ keyId: keyId as any });
 			toast.success("API key revoked successfully");
 			router.refresh();
 		} catch (error) {

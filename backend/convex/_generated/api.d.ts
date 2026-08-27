@@ -30,6 +30,7 @@ import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_rbac from "../lib/rbac.js";
 import type * as lib_riskEngine from "../lib/riskEngine.js";
 import type * as lib_webhookDispatch from "../lib/webhookDispatch.js";
+import type * as liveness from "../liveness.js";
 import type * as memberships from "../memberships.js";
 import type * as monitoring from "../monitoring.js";
 import type * as reviewQueue from "../reviewQueue.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "lib/rbac": typeof lib_rbac;
   "lib/riskEngine": typeof lib_riskEngine;
   "lib/webhookDispatch": typeof lib_webhookDispatch;
+  liveness: typeof liveness;
   memberships: typeof memberships;
   monitoring: typeof monitoring;
   reviewQueue: typeof reviewQueue;
