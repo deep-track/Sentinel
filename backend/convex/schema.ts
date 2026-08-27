@@ -92,15 +92,17 @@ export default defineSchema({
     contact: v.string(),
     method: v.union(v.literal("sms"), v.literal("whatsapp"), v.literal("email")),
     status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
+    deliveryStatus: v.union(v.literal("pending"), v.literal("sent"), v.literal("failed")),
+    providerMessageId: v.optional(v.string()),
     verificationId: v.optional(v.id("verifications")),
     createdAt: v.number(),
     sentAt: v.number(),
     completedAt: v.optional(v.number()),
     failureReason: v.optional(v.string()),
-  })
+    })
     .index("by_client", ["clientId"])
-    .index("by_verification", ["verificationId"]),
-
+    .index("by_verification", ["verificationId"])
+    .index("by_provider_message", ["providerMessageId"]),
   creditLedger: defineTable({
     clientId: v.id("clients"),
     verificationId: v.optional(v.id("verifications")),

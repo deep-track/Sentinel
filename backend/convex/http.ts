@@ -253,4 +253,43 @@ http.route({
   }),
 });
 
+async function validHmac(rawBody: string, signature: string | null, secret: string): Promise<boolean> {
+  if (!signature) return false;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const expected = signature.replace(/^sha256=/, "").toLowerCase();
+  const bytes = new Uint8Array(expected.match(/.{1,2}/g)?.map((part) => Number.parseInt(part, 16)) ?? []);
+  return bytes.length === 32 && await crypto.subtle.verify("HMAC", key, bytes, new TextEncoder().encode(rawBody));
+}
+
+http.route({
+  path: "/webhooks/liveness/result",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const rawBody = await request.text();
+    const secret = process.env.LIVENESS_CALLBACK_SECRET;
+    if (!secret || !(await validHmac(rawBody, request.headers.get("X-Liveness-Signature"), secret))) return json({ error: "Invalid signature" }, 401);
+    let body: any;
+    try { body = JSON.parse(rawBody); } catch { return json({ error: "Invalid JSON body" }, 400); }
+    if (typeof body.providerMessageId !== "string" || !["completed", "failed"].includes(body.status)) return json({ error: "Invalid callback payload" }, 400);
+    const result = await ctx.runMutation(internal.liveness.applyCallback, { providerMessageId: body.providerMessageId, status: body.status, verdict: body.verdict, result: body.result });
+    return json(result, result.accepted ? 200 : 404);
+  }),
+});
+
+http.route({
+  path: "/webhooks/liveness/delivery",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const rawBody = await request.text();
+    const secret = process.env.LIVENESS_CALLBACK_SECRET;
+    if (!secret || !(await validHmac(rawBody, request.headers.get("X-Liveness-Signature"), secret))) return json({ error: "Invalid signature" }, 401);
+    let body: any;
+    try { body = JSON.parse(rawBody); } catch { return json({ error: "Invalid JSON body" }, 400); }
+    if (typeof body.providerMessageId !== "string") return json({ error: "Missing providerMessageId" }, 400);
+    const deliveryStatus = ["delivered", "sent", "queued"].includes(body.status) ? "sent" : "failed";
+    const result = await ctx.runMutation(internal.liveness.applyDeliveryCallback, { providerMessageId: body.providerMessageId, deliveryStatus, reason: body.errorMessage });
+    return json(result, result.accepted ? 200 : 404);
+  }),
+});
+
 export default http;
