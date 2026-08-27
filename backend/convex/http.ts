@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { authenticateApiKey, type ApiKeyAuthResult } from "./apiKeys";
 import { checkApiRateLimit } from "./lib/rateLimits";
+import { mapTwilioDeliveryStatus, verifyTwilioSignature } from "./lib/twilio";
 
 const http = httpRouter();
 
@@ -281,13 +282,14 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const rawBody = await request.text();
-    const secret = process.env.LIVENESS_CALLBACK_SECRET;
-    if (!secret || !(await validHmac(rawBody, request.headers.get("X-Liveness-Signature"), secret))) return json({ error: "Invalid signature" }, 401);
-    let body: any;
-    try { body = JSON.parse(rawBody); } catch { return json({ error: "Invalid JSON body" }, 400); }
-    if (typeof body.providerMessageId !== "string") return json({ error: "Missing providerMessageId" }, 400);
-    const deliveryStatus = ["delivered", "sent", "queued"].includes(body.status) ? "sent" : "failed";
-    const result = await ctx.runMutation(internal.liveness.applyDeliveryCallback, { providerMessageId: body.providerMessageId, deliveryStatus, reason: body.errorMessage });
+    const params = new URLSearchParams(rawBody);
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const signature = request.headers.get("X-Twilio-Signature");
+    if (!authToken || !(await verifyTwilioSignature(request.url, params, signature, authToken))) return json({ error: "Invalid Twilio signature" }, 401);
+    const providerMessageId = params.get("MessageSid");
+    if (!providerMessageId) return json({ error: "Missing MessageSid" }, 400);
+    const deliveryStatus = mapTwilioDeliveryStatus(params.get("MessageStatus"));
+    const result = await ctx.runMutation(internal.liveness.applyDeliveryCallback, { providerMessageId, deliveryStatus, reason: params.get("ErrorMessage") ?? undefined });
     return json(result, result.accepted ? 200 : 404);
   }),
 });
