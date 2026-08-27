@@ -26,9 +26,11 @@ import type * as lib_awsClients_internalFetch from "../lib/awsClients/internalFe
 import type * as lib_awsClients_iprsClient from "../lib/awsClients/iprsClient.js";
 import type * as lib_awsClients_livenessClient from "../lib/awsClients/livenessClient.js";
 import type * as lib_crypto from "../lib/crypto.js";
+import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_rbac from "../lib/rbac.js";
 import type * as lib_riskEngine from "../lib/riskEngine.js";
 import type * as lib_webhookDispatch from "../lib/webhookDispatch.js";
+import type * as memberships from "../memberships.js";
 import type * as monitoring from "../monitoring.js";
 import type * as reviewQueue from "../reviewQueue.js";
 import type * as verifications from "../verifications.js";
@@ -60,9 +62,11 @@ declare const fullApi: ApiFromModules<{
   "lib/awsClients/iprsClient": typeof lib_awsClients_iprsClient;
   "lib/awsClients/livenessClient": typeof lib_awsClients_livenessClient;
   "lib/crypto": typeof lib_crypto;
+  "lib/rateLimits": typeof lib_rateLimits;
   "lib/rbac": typeof lib_rbac;
   "lib/riskEngine": typeof lib_riskEngine;
   "lib/webhookDispatch": typeof lib_webhookDispatch;
+  memberships: typeof memberships;
   monitoring: typeof monitoring;
   reviewQueue: typeof reviewQueue;
   verifications: typeof verifications;
@@ -96,4 +100,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+};
