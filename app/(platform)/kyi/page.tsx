@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { KYITable } from "@/modules/kyi/kyi-table";
 import { Button } from "@/components/ui/button";
+import { anyApi } from "convex/server";
+import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import type { KYIRecord } from "@/backend/lib/kyi-types";
 import {
   CheckCircle,
@@ -13,11 +15,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-// NOTE: getKYIList and getKYIStats previously came from actions/kyi.ts,
-// which was removed as part of the Convex backend migration. There is
-// no public Convex query yet for listing or getting stats on KYI
-// records. This page shows an honest empty state until those queries
-// exist.
 
 function StatCard({
   label,
@@ -53,15 +50,26 @@ function StatCard({
 }
 
 export default async function KYIPage() {
-  const records: KYIRecord[] = [];
+  let records: KYIRecord[] = [];
+  try {
+    const client = await getAuthenticatedConvexClient();
+    const response = client ? await client.query(anyApi.verifications.list, { type: "idp", limit: 100 }) : null;
+    records = (response?.records ?? []).map((row: any) => {
+      const input = row.input && typeof row.input === "object" ? row.input : {};
+      const status = row.verdict === "pass" ? "approved" : row.verdict === "reject" ? "declined" : row.verdict === "review" ? "requires_review" : row.status === "processing" ? "processing" : "pending";
+      return { id: row._id, reference: row.reference, userId: "", userName: input.subjectName ?? input.firstName ?? "", userEmail: input.email ?? "", status, isPEP: Boolean(input.isPEP), createdAt: new Date(row.createdAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString() } as KYIRecord;
+    });
+  } catch (error) {
+    console.error("[kyi] Convex query failed", error);
+  }
   const stats = {
-    total: 0,
-    approved: 0,
-    declined: 0,
-    pending: 0,
-    processing: 0,
-    requires_review: 0,
-    pepCount: 0,
+    total: records.length,
+    approved: records.filter((row) => row.status === "approved").length,
+    declined: records.filter((row) => row.status === "declined").length,
+    pending: records.filter((row) => row.status === "pending").length,
+    processing: records.filter((row) => row.status === "processing").length,
+    requires_review: records.filter((row) => row.status === "requires_review").length,
+    pepCount: records.filter((row) => row.isPEP).length,
   };
 
   return (
@@ -84,9 +92,6 @@ export default async function KYIPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-4 text-sm text-amber-800 dark:text-amber-300">
-          KYI records and stats are temporarily unavailable while the backend migrates to Convex.
-        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
           <StatCard label="Total" value={stats.total ?? 0} icon={FileCheck} tone="slate" />
