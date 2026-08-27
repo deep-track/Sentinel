@@ -27,6 +27,7 @@ function normalizeStatus(status: string): KYCStatus {
   if (status === "PENDING_REVIEW") return "requires_review";
   if (status === "PROCESSING") return "processing";
   if (status === "QUEUED") return "pending";
+  if (status === "FAILED") return "declined";
   return "pending";
 }
 
