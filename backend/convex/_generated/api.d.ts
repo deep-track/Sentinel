@@ -29,6 +29,7 @@ import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_rbac from "../lib/rbac.js";
 import type * as lib_riskEngine from "../lib/riskEngine.js";
+import type * as lib_twilio from "../lib/twilio.js";
 import type * as lib_webhookDispatch from "../lib/webhookDispatch.js";
 import type * as liveness from "../liveness.js";
 import type * as memberships from "../memberships.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "lib/rateLimits": typeof lib_rateLimits;
   "lib/rbac": typeof lib_rbac;
   "lib/riskEngine": typeof lib_riskEngine;
+  "lib/twilio": typeof lib_twilio;
   "lib/webhookDispatch": typeof lib_webhookDispatch;
   liveness: typeof liveness;
   memberships: typeof memberships;
