@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 export const kycSubmissionSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  idNumber: z.string().min(1, "ID number is required"),
+  dateOfBirth: z.string().min(1, "Date of birth is required"),
+  gender: z.string().min(1, "Gender is required"),
   documentType: z.enum(["passport", "id_card", "driving_license"], {
     required_error: "Document type is required",
   }),
@@ -10,6 +15,8 @@ export const kycSubmissionSchema = z.object({
   documentBackBase64: z.string().optional(),
   selfieUrl: z.string().min(1, "Selfie is required"),
   selfieBase64: z.string().min(1, "Selfie image data required"),
+  livenessFramesBase64: z.string().min(1, "Liveness data is required"),
+  livenessMediaType: z.enum(["jpeg_frames", "mp4"]),
 });
 
 export type KYCSubmissionData = z.infer<typeof kycSubmissionSchema>;

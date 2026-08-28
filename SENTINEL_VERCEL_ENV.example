@@ -1,0 +1,43 @@
+# Sentinel — Vercel Production Environment
+# Add these in Vercel Project Settings → Environment Variables → Production.
+# Do not commit a file containing the real secret values.
+
+NODE_ENV=production
+APP_BASE_URL=https://sentinel.deeptrack.io
+NEXT_PUBLIC_APP_URL=https://sentinel.deeptrack.io
+
+# Auth0 runtime authentication
+AUTH0_SECRET=<generate-a-long-random-secret-at-least-32-bytes>
+AUTH0_DOMAIN=dev-08kwsss3wr77v0k0.us.auth0.com
+AUTH0_CLIENT_ID=<Sentinel-Auth0-SPA-or-web-client-ID>
+AUTH0_CLIENT_SECRET=<Sentinel-Auth0-client-secret>
+AUTH0_ROLE_CLAIM=https://deeptrack.io/roles
+AUTH0_COMPANY_ID_CLAIM=https://deeptrack.io/companyId
+
+# Auth0 Organizations — required for the current organization-enforced login flow
+AUTH0_ORGANIZATION_ID=org_KsbBhzesUXlz9lFo
+
+# Required only if the Sentinel back office sends Auth0 organization invitations
+AUTH0_MANAGEMENT_CLIENT_ID=<Auth0-machine-to-machine-management-client-ID>
+AUTH0_MANAGEMENT_CLIENT_SECRET=<Auth0-machine-to-machine-management-client-secret>
+AUTH0_INVITATION_CLIENT_ID=<Auth0-application-client-ID-used-for-invitations>
+AUTH0_INVITATION_CONNECTION_ID=<Auth0-database-connection-ID-used-for-invitations>
+
+# Convex production
+NEXT_PUBLIC_CONVEX_URL=https://insightful-lark-924.convex.cloud
+CONVEX_DEPLOYMENT=insightful-lark-924
+CONVEX_SITE_URL=https://insightful-lark-924.convex.site
+
+# Fail-closed internal administrator bootstrap
+SENTINEL_INTERNAL_ADMIN_EMAILS=bryan@deeptrack.io,barbarawangui2002@gmail.com,stacymacharia08@gmail.com
+# Keep empty unless the approved Auth0 subject IDs are explicitly known.
+SENTINEL_INTERNAL_ADMIN_SUBJECTS=
+
+# Optional server-side integrations — configure only if enabled by the application
+DEEPTRACK_BACKEND_URL=<approved-private-Deeptrack-backend-URL>
+OPENSANCTIONS_API_KEY=<OpenSanctions-key-if-enabled>
+UPLOADTHING_TOKEN=<UploadThing-token-if-the-upload-module-is-enabled>
+RESEND_API_KEY=<Resend-key-if-email-invitations-are-enabled>
+
+# Do not add Auth0 secrets, Convex secrets, database credentials, or API keys
+# as NEXT_PUBLIC_* variables.

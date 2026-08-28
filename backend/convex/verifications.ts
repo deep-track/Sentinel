@@ -1,4 +1,5 @@
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
 import { buildVerificationReference } from "./lib/crypto";
 import { isInternalAdmin, requireClientRole, requireInternalUser } from "./lib/rbac";
@@ -56,6 +57,28 @@ export const create = mutation({
     const now = Date.now();
     const reference = buildVerificationReference();
     const id = await ctx.db.insert("verifications", { clientId: args.clientId, type: args.type, status: "queued", creditsUsed: args.creditsUsed, input: args.input, reference, createdAt: now, updatedAt: now });
+    return { id, reference };
+  },
+});
+
+export const createKyc = mutation({
+  args: {
+    clientId: v.id("clients"),
+    firstName: v.string(), lastName: v.string(), idNumber: v.string(), dateOfBirth: v.string(), gender: v.string(),
+    documentType: v.union(v.literal("passport"), v.literal("id_card"), v.literal("driving_license")),
+    documentFrontUrl: v.string(), documentBackUrl: v.optional(v.string()), documentFrontBase64: v.string(), documentBackBase64: v.optional(v.string()),
+    selfieUrl: v.string(), selfieBase64: v.string(), livenessFramesBase64: v.string(), livenessMediaType: v.union(v.literal("jpeg_frames"), v.literal("mp4")),
+  },
+  handler: async (ctx, args) => {
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    const required = [args.firstName, args.lastName, args.idNumber, args.dateOfBirth, args.gender, args.documentFrontUrl, args.documentFrontBase64, args.selfieUrl, args.selfieBase64, args.livenessFramesBase64];
+    if (required.some((field) => !field.trim())) throw new ConvexError({ code: "invalid_argument", message: "All identity, document, selfie, and liveness fields are required." });
+    const client = await ctx.db.get(args.clientId);
+    if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
+    const now = Date.now();
+    const reference = buildVerificationReference();
+    const id = await ctx.db.insert("verifications", { clientId: args.clientId, type: "idp", status: "queued", creditsUsed: 1, input: { firstName: args.firstName, lastName: args.lastName, idNumber: args.idNumber, dateOfBirth: args.dateOfBirth, gender: args.gender, documentType: args.documentType, documentFrontUrl: args.documentFrontUrl, documentBackUrl: args.documentBackUrl, selfieUrl: args.selfieUrl, livenessMediaType: args.livenessMediaType }, reference, createdAt: now, updatedAt: now });
+    await ctx.scheduler.runAfter(0, internal.idp.processIdpVerification, { verificationId: id, clientId: args.clientId, livenessFramesBase64: args.livenessFramesBase64, livenessMediaType: args.livenessMediaType, documentFrontBase64: args.documentFrontBase64, documentBackBase64: args.documentBackBase64, idNumber: args.idNumber, firstName: args.firstName, lastName: args.lastName, dateOfBirth: args.dateOfBirth, gender: args.gender });
     return { id, reference };
   },
 });
