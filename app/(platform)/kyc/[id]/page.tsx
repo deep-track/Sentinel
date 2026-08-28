@@ -1,32 +1,154 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import { anyApi } from "convex/server";
+import { ChevronLeft } from "lucide-react";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
+import type { KYCStatus } from "@/backend/lib/kyc-types";
+import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 
 interface KYCDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-function displayStatus(row: any) {
-  if (row.verdict === "pass") return "Approved";
-  if (row.verdict === "reject") return "Declined";
-  if (row.verdict === "review") return "Needs review";
-  return row.status === "processing" ? "Processing" : "Queued";
+type VerificationRecord = {
+  _id: string;
+  clientId: string;
+  type: string;
+  status: string;
+  verdict?: "pass" | "review" | "reject" | null;
+  confidence?: number | null;
+  creditsUsed: number;
+  input: unknown;
+  result?: unknown;
+  reference: string;
+  failureReason?: string | null;
+  disputeReason?: string | null;
+  disputedAt?: number | null;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number | null;
+};
+
+function normalizeStatus(row: { status: string; verdict?: string | null }): KYCStatus {
+  if (row.verdict === "pass") return "approved";
+  if (row.verdict === "reject") return "declined";
+  if (row.verdict === "review") return "requires_review";
+  if (row.status === "processing") return "processing";
+  if (row.status === "queued") return "pending";
+  return "pending";
+}
+
+function subjectName(input: unknown): string | null {
+  if (typeof input === "object" && input !== null && "firstName" in input) {
+    const rec = input as Record<string, unknown>;
+    const first = typeof rec.firstName === "string" ? rec.firstName : "";
+    const last = typeof rec.lastName === "string" ? rec.lastName : "";
+    const full = [first, last].filter(Boolean).join(" ");
+    return full || null;
+  }
+  return null;
+}
+
+async function getRecord(
+  id: string,
+): Promise<{ record: VerificationRecord | null; error?: string }> {
+  try {
+    const client = await getAuthenticatedConvexClient();
+    if (!client) return { record: null, error: "Authentication is not configured." };
+
+    const record: VerificationRecord | null = await client.query(anyApi.verifications.get, { id });
+    return { record };
+  } catch (error) {
+    console.error("[kyc detail] Convex query failed", error);
+    return { record: null, error: "Record details are temporarily unavailable." };
+  }
+}
+
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800 last:border-0">
+      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="text-sm font-medium text-slate-900 dark:text-white">{value}</span>
+    </div>
+  );
 }
 
 export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
   const { id } = await params;
-  const client = await getAuthenticatedConvexClient();
-  if (!client) notFound();
-  let record: any = null;
-  try {
-    record = await client.query(anyApi.verifications.get, { id: id as any });
-  } catch (error) {
-    console.error("[kyc.detail] Convex query failed", error);
-  }
-  if (!record || record.type !== "idp") notFound();
-  const input = record.input && typeof record.input === "object" ? record.input : {};
-  const result = record.result && typeof record.result === "object" ? record.result : {};
-  return <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4"><div className="max-w-3xl mx-auto"><Link href="/kyc" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-8"><ChevronLeft className="h-4 w-4" />Back to KYC</Link><div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 sm:p-8 space-y-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wide text-slate-500">Identity verification</p><h1 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{input.subjectName ?? input.name ?? "Unnamed subject"}</h1><p className="font-mono text-sm text-slate-500 mt-1">{record.reference}</p></div><span className="rounded-full bg-violet-100 text-violet-700 px-3 py-1 text-sm font-medium">{displayStatus(record)}</span></div><dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[["Document type", input.documentType ?? "Identity document"],["Submitted", new Date(record.createdAt).toLocaleString()],["Updated", new Date(record.updatedAt).toLocaleString()],["Confidence", record.confidence == null ? "—" : `${Math.round(record.confidence * 100)}%`]].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 dark:bg-slate-800 p-4"><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 text-sm font-medium text-slate-900 dark:text-white">{value}</dd></div>)}</dl>{record.failureReason ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{record.failureReason}</div> : null}<div><h2 className="font-semibold text-slate-900 dark:text-white">Verification result</h2><pre className="mt-2 overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-200">{JSON.stringify(result, null, 2)}</pre></div>{record.verdict === "review" ? <Link href={`/kyc/${id}/review`} className="inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white">Open review</Link> : null}</div></div></div>;
+  const { record, error } = await getRecord(id);
+
+  return (
+    <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4">
+      <div className="max-w-3xl mx-auto">
+        <Link
+          href="/kyc"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 mb-8"
+        >
+          <ChevronLeft className="h-4 w-4" /> Back to KYC
+        </Link>
+
+        {!record ? (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 p-8 text-center">
+            <p className="text-amber-700 dark:text-amber-400 font-medium">
+              {error ?? "This record doesn't exist, or you don't have access to it."}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {subjectName(record.input) ?? "Identity Verification"}
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-mono">
+                  {record.reference}
+                </p>
+              </div>
+              <KYCStatusBadge status={normalizeStatus(record)} size="lg" />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
+              <InfoRow label="Type" value={record.type.toUpperCase()} />
+              <InfoRow
+                label="Submitted"
+                value={new Date(record.createdAt).toLocaleString()}
+              />
+              <InfoRow
+                label="Last updated"
+                value={new Date(record.updatedAt).toLocaleString()}
+              />
+              {record.completedAt ? (
+                <InfoRow
+                  label="Completed"
+                  value={new Date(record.completedAt).toLocaleString()}
+                />
+              ) : null}
+              {record.confidence != null ? (
+                <InfoRow
+                  label="Confidence score"
+                  value={`${Math.round(record.confidence * 100)}%`}
+                />
+              ) : null}
+              {record.failureReason ? (
+                <InfoRow label="Failure reason" value={record.failureReason} />
+              ) : null}
+              {record.disputeReason ? (
+                <InfoRow label="Dispute reason" value={record.disputeReason} />
+              ) : null}
+            </div>
+
+            {normalizeStatus(record) === "requires_review" ? (
+              <Link
+                href={`/kyc/${id}/review`}
+                className="inline-block text-sm font-medium text-violet-600 hover:text-violet-700"
+              >
+                View review status →
+              </Link>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

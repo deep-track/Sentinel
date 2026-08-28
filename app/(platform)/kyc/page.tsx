@@ -8,6 +8,17 @@ import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import type { KYCRecord, KYCStatus } from "@/backend/lib/kyc-types";
 import { KYCTable } from "@/modules/kyc/kyc-table";
 
+type VerificationRow = {
+  _id: string;
+  reference: string;
+  status: string;
+  verdict?: "pass" | "review" | "reject" | null;
+  confidence?: number | null;
+  input: unknown;
+  createdAt: number;
+  updatedAt: number;
+};
+
 type KYCView = {
   records: KYCRecord[];
   stats: {
@@ -31,38 +42,55 @@ function normalizeStatus(status: string): KYCStatus {
   return "pending";
 }
 
+function subjectNameFromInput(input: unknown): string {
+  if (typeof input === "object" && input !== null && "firstName" in input) {
+    const rec = input as Record<string, unknown>;
+    const first = typeof rec.firstName === "string" ? rec.firstName : "";
+    const last = typeof rec.lastName === "string" ? rec.lastName : "";
+    return [first, last].filter(Boolean).join(" ");
+  }
+  return "";
+}
+
 async function getKYCView(): Promise<KYCView> {
   try {
     const client = await getAuthenticatedConvexClient();
     if (!client) return { records: [], stats: emptyStats(), error: "Authentication is not configured." };
 
-    const overview = await client.query(anyApi.dashboard.overview, {
-      timeRangeMs: 365 * 24 * 60 * 60 * 1000,
-      recentLimit: 50,
+    // Uses the dedicated verifications.list query (type-filtered, paginated
+    // via `before`), rather than pulling from dashboard.overview and
+    // filtering client-side.
+    const { records: rows } = await client.query(anyApi.verifications.list, {
+      type: "idp",
+      limit: 50,
     });
 
-    // The Convex verification model stores legacy identity verification as `idp`.
-    // Treat it as KYC for this customer-facing view; future records may use `kyc`.
-    const records: KYCRecord[] = overview.recent
-      .filter((row: { type: string }) => row.type === "idp" || row.type === "kyc")
-      .map((row: (typeof overview.recent)[number]) => {
-        const status = normalizeStatus(row.status);
-        const createdAt = new Date(row.createdAt).toISOString();
-        return {
-          id: row.id,
-          reference: row.caseId,
-          userId: "",
-          userEmail: "",
-          userName: row.subjectName ?? "",
-          companyId: "",
-          status,
-          documentType: "identity document",
-          createdAt,
-          updatedAt: createdAt,
-          submittedAt: createdAt,
-          riskScore: row.sentinelScore ?? undefined,
-        } satisfies KYCRecord;
-      });
+    const records: KYCRecord[] = rows.map((row: VerificationRow) => {
+      const composedStatus =
+        row.verdict === "pass"
+          ? "APPROVED"
+          : row.verdict === "reject"
+            ? "REJECTED"
+            : row.verdict === "review"
+              ? "PENDING_REVIEW"
+              : row.status.toUpperCase();
+      const status = normalizeStatus(composedStatus);
+      const createdAt = new Date(row.createdAt).toISOString();
+      return {
+        id: row._id,
+        reference: row.reference,
+        userId: "",
+        userEmail: "",
+        userName: subjectNameFromInput(row.input),
+        companyId: "",
+        status,
+        documentType: "identity document",
+        createdAt,
+        updatedAt: new Date(row.updatedAt).toISOString(),
+        submittedAt: createdAt,
+        riskScore: row.confidence != null ? row.confidence * 100 : undefined,
+      } satisfies KYCRecord;
+    });
 
     return {
       records,
