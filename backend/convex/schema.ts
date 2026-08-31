@@ -59,6 +59,7 @@ export default defineSchema({
       v.literal("kyb"),
       v.literal("aml"),
       v.literal("liveness"),
+      v.literal("kyi"),
     ),
     status: v.union(
       v.literal("queued"),

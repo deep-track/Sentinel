@@ -132,12 +132,13 @@ async function dispatchProcessing(
       return;
     }
     case "kyi": {
-      await ctx.scheduler.runAfter(0, internal.kyi.processKyiVerification, {
-        verificationId: id,
-        clientId,
-      });
-      return;
-    }
+  await ctx.db.patch(id, {
+    status: "failed",
+    failureReason: "Standalone KYI submissions aren't supported here",
+    updatedAt: Date.now(),
+  });
+  return;
+}
     case "kyb": {
       await ctx.scheduler.runAfter(0, internal.kyb.processKybVerification, {
         verificationId: id,
@@ -217,6 +218,7 @@ export const _create = internalMutation({
       v.literal("kyb"),
       v.literal("aml"),
       v.literal("liveness"),
+      v.literal("kyi"),
     ),
     input: v.any(),
     creditsUsed: v.number(),
@@ -339,6 +341,7 @@ export const _listForClient = internalQuery({
         v.literal("kyb"),
         v.literal("aml"),
         v.literal("liveness"),
+        v.literal("kyi"),
       ),
     ),
     limit: v.optional(v.number()),
