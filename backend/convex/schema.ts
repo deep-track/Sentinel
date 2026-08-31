@@ -292,4 +292,76 @@ export default defineSchema({
   })
     .index("by_client", ["clientId"])
     .index("by_status_and_retry", ["status", "nextRetryAt"]),
+
+  kyiRecords: defineTable({
+  verificationId: v.id("verifications"),
+  clientId: v.id("clients"),
+
+  // Investor profile
+  firstName: v.string(),
+  lastName: v.string(),
+  email: v.string(),
+  phone: v.optional(v.string()),
+  nationality: v.optional(v.string()),
+  countryOfResidence: v.optional(v.string()),
+  dateOfBirth: v.string(),
+
+  // Classification
+  investorType: v.union(
+    v.literal("individual"), v.literal("joint"), v.literal("corporate"),
+    v.literal("fund"), v.literal("trust"), v.literal("institutional"),
+  ),
+  accreditationStatus: v.union(
+    v.literal("accredited"), v.literal("qualified"),
+    v.literal("institutional"), v.literal("retail"),
+  ),
+  sourceOfFunds: v.union(
+    v.literal("employment"), v.literal("business"), v.literal("investments"),
+    v.literal("inheritance"), v.literal("property"), v.literal("savings"), v.literal("other"),
+  ),
+  netWorthRange: v.optional(v.union(
+    v.literal("under_100k"), v.literal("100k_500k"), v.literal("500k_1m"),
+    v.literal("1m_5m"), v.literal("above_5m"),
+  )),
+  investmentAmount: v.optional(v.number()),
+  investmentCurrency: v.optional(v.string()),
+
+  // PEP declaration
+  isPEP: v.boolean(),
+  pepDetails: v.optional(v.string()),
+
+  // Identity verification inputs
+  governmentIdType: v.union(v.literal("passport"), v.literal("national_id"), v.literal("driving_license")),
+  governmentIdFrontUrl: v.string(),
+  governmentIdBackUrl: v.optional(v.string()),
+  selfieUrl: v.string(),
+
+  // Financial documents
+  bankStatementUrl: v.string(),
+  proofOfAddressUrl: v.string(),
+  proofOfNetWorthUrl: v.optional(v.string()),
+  accreditationLetterUrl: v.optional(v.string()),
+  sourceOfFundsDocUrl: v.optional(v.string()),
+  corporateDocUrl: v.optional(v.string()),
+
+  createdAt: v.number(),
+})
+  .index("by_verification", ["verificationId"])
+  .index("by_client", ["clientId"]),
+
+kybDirectors: defineTable({
+  kybVerificationId: v.id("verifications"), // parent KYB verification
+  clientId: v.id("clients"),
+  firstName: v.string(),
+  lastName: v.string(),
+  email: v.string(),
+  position: v.string(),
+  shareholding: v.optional(v.string()),
+  dateOfBirth: v.string(),
+  idNumber: v.string(),
+  idpVerificationId: v.optional(v.id("verifications")), // linked IDP sub-check
+  status: v.union(v.literal("pending"), v.literal("verified"), v.literal("failed")),
+  createdAt: v.number(),
+})
+  .index("by_kyb_verification", ["kybVerificationId"]),
 });

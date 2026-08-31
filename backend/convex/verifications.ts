@@ -4,7 +4,7 @@ import { ConvexError, v } from "convex/values";
 import { buildVerificationReference } from "./lib/crypto";
 import { isInternalAdmin, requireClientRole, requireInternalUser } from "./lib/rbac";
 
-const verificationType = v.union(v.literal("idp"), v.literal("kyb"), v.literal("aml"), v.literal("liveness"));
+const verificationType = v.union(v.literal("idp"), v.literal("kyb"), v.literal("aml"), v.literal("liveness"), v.literal("kyi"));
 const verificationVerdict = v.union(v.literal("pass"), v.literal("review"), v.literal("reject"));
 
 async function accessibleClientIds(ctx: { db: any; auth: any }) {
@@ -48,18 +48,132 @@ export const get = query({
 });
 
 export const create = mutation({
-  args: { clientId: v.id("clients"), type: verificationType, input: v.any(), creditsUsed: v.number() },
+  args: {
+    clientId: v.id("clients"),
+    type: verificationType,
+    input: v.any(),
+  },
   handler: async (ctx, args) => {
     await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
     const client = await ctx.db.get(args.clientId);
-    if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
-    if (!Number.isFinite(args.creditsUsed) || args.creditsUsed < 0) throw new ConvexError({ code: "invalid_argument", message: "Invalid credit amount." });
+    if (!client || client.status !== "active") {
+      throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
+    }
+    const creditsUsed = creditsForType(args.type);
+
     const now = Date.now();
     const reference = buildVerificationReference();
-    const id = await ctx.db.insert("verifications", { clientId: args.clientId, type: args.type, status: "queued", creditsUsed: args.creditsUsed, input: args.input, reference, createdAt: now, updatedAt: now });
+    const id = await ctx.db.insert("verifications", {
+      clientId: args.clientId,
+      type: args.type,
+      status: "queued",
+      creditsUsed,
+      input: args.input,
+      reference,
+      createdAt: now,
+      updatedAt: now,
+    });
+    // dispatches based on type.
+    await dispatchProcessing(ctx, args.type, id, args.clientId, args.input);
+
     return { id, reference };
   },
 });
+
+function creditsForType(type: "idp" | "kyb" | "aml" | "liveness" | "kyi"): number {
+  switch (type) {
+    case "idp": return 1;
+    case "kyi": return 1;
+    case "kyb": return 3;
+    case "aml": return 1;
+    case "liveness": return 1;
+  }
+}
+
+async function dispatchProcessing(
+  ctx: any,
+  type: "idp" | "kyb" | "aml" | "liveness" | "kyi",
+  id: any,
+  clientId: any,
+  input: any,
+) {
+  switch (type) {
+    case "idp": {
+      const required = [
+        "livenessFramesBase64", "livenessMediaType", "documentFrontBase64",
+        "idNumber", "firstName", "lastName", "dateOfBirth", "gender",
+      ];
+      const missing = required.filter((k) => !input?.[k]);
+      if (missing.length > 0) {
+        // Fail loudly and immediately rather than sitting at "queued"
+        // with no explanation — this is the fix for "the wizard
+        // doesn't collect all required information" surfacing as a
+        // silent hang instead of a clear error the frontend can show.
+        await ctx.db.patch(id, {
+          status: "failed",
+          failureReason: `Missing required fields: ${missing.join(", ")}`,
+          updatedAt: Date.now(),
+        });
+        return;
+      }
+      await ctx.scheduler.runAfter(0, internal.idp.processIdpVerification, {
+        verificationId: id,
+        clientId,
+        livenessFramesBase64: input.livenessFramesBase64,
+        livenessMediaType: input.livenessMediaType,
+        documentFrontBase64: input.documentFrontBase64,
+        documentBackBase64: input.documentBackBase64,
+        idNumber: input.idNumber,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        dateOfBirth: input.dateOfBirth,
+        gender: input.gender,
+      });
+      return;
+    }
+    case "kyi": {
+      await ctx.scheduler.runAfter(0, internal.kyi.processKyiVerification, {
+        verificationId: id,
+        clientId,
+      });
+      return;
+    }
+    case "kyb": {
+      await ctx.scheduler.runAfter(0, internal.kyb.processKybVerification, {
+        verificationId: id,
+        clientId,
+      });
+      return;
+    }
+    case "liveness": {
+      const required = ["livenessFramesBase64", "livenessMediaType"];
+      const missing = required.filter((k) => !input?.[k]);
+      if (missing.length > 0) {
+        await ctx.db.patch(id, {
+          status: "failed",
+          failureReason: `Missing required fields: ${missing.join(", ")}`,
+          updatedAt: Date.now(),
+        });
+        return;
+      }
+      await ctx.scheduler.runAfter(0, internal.liveness.processLivenessVerification, {
+        verificationId: id,
+        clientId,
+        framesBase64: input.livenessFramesBase64,
+        mediaType: input.livenessMediaType,
+      });
+      return;
+    }
+    case "aml": {
+      await ctx.db.patch(id, {
+        status: "failed",
+        failureReason: "Standalone AML screening isn't available yet — AML runs as part of the IDP verification flow.",
+        updatedAt: Date.now(),
+      });
+      return;
+    }
+  }
+}
 
 export const createKyc = mutation({
   args: {
