@@ -65,6 +65,12 @@ function hasApprovedInternalRole(identity: AuthIdentity): boolean {
   });
 }
 
+function isViewOnlyAdmin(identity: AuthIdentity): boolean {
+  const values = claimValues(identity);
+  const candidates = values.flatMap((value) => (Array.isArray(value) ? value : [value]));
+  return candidates.some((candidate) => normalizeRole(candidate) === "view_only");
+}
+
 async function requireAuth0Identity(ctx: { auth: any }): Promise<AuthIdentity> {
   const identity = (await ctx.auth.getUserIdentity()) as AuthIdentity | null;
   if (!identity) {
@@ -78,8 +84,19 @@ export async function requireClientRole(
   ctx: { db: any; auth: any },
   clientId: Id<"clients">,
   allowedRoles: ClientRole[],
-): Promise<{ userId: string; role: ClientRole }> {
+): Promise<{ userId: string; role: ClientRole | "internal_admin" }> {
   const identity = await requireAuth0Identity(ctx);
+
+  if (await isInternalAdmin({ auth: { getUserIdentity: async () => identity } })) {
+    if (isViewOnlyAdmin(identity)) {
+      throw new ConvexError({
+        code: "forbidden",
+        message: "This admin account is view-only and can't act on behalf of a client.",
+      });
+    }
+    return { userId: identity.subject, role: "internal_admin" };
+  }
+
   const membership = await ctx.db
     .query("clientMembers")
     .withIndex("by_client_and_user", (q: any) =>
@@ -101,8 +118,7 @@ export async function requireClientRole(
   return { userId: identity.subject, role: membership.role };
 }
 
-// Internal operations require an Auth0 role claim. The claim can be emitted
-// as a namespaced scalar/array or as standard role/roles/permissions claims.
+// Internal operations require an Auth0 role claim. 
 export async function requireInternalUser(ctx: { db: any; auth: any }): Promise<string> {
   const identity = await requireAuth0Identity(ctx);
   if (!hasApprovedInternalRole(identity)) {
@@ -118,9 +134,7 @@ export async function isInternalAdmin(ctx: { auth: any }): Promise<boolean> {
   const identity = (await ctx.auth.getUserIdentity()) as AuthIdentity | null;
   if (!identity) return false;
 
-  // Auth0 roles remain the primary source. The deployment-configured subject
-  // allowlist provides a deterministic bootstrap path when a provider action
-  // has not yet attached the role claim to a newly issued token.
+  // Auth0 roles 
   if (configuredAdminSubjects().has(identity.subject)) return true;
   if (
     typeof identity.email === "string" &&

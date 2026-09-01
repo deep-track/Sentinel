@@ -9,8 +9,8 @@ export const processIdpVerification = internalAction({
   args: {
     verificationId: v.id("verifications"),
     clientId: v.id("clients"),
-    livenessFramesBase64: v.string(),
-    livenessMediaType: v.union(v.literal("jpeg_frames"), v.literal("mp4")),
+    livenessFramesBase64: v.optional(v.string()),
+    livenessMediaType: v.optional(v.union(v.literal("jpeg_frames"), v.literal("mp4"))),
     documentFrontBase64: v.string(),
     documentBackBase64: v.optional(v.string()),
     idNumber: v.string(),
@@ -44,8 +44,8 @@ async function runOrchestration(
   args: {
     verificationId: any;
     clientId: any;
-    livenessFramesBase64: string;
-    livenessMediaType: "jpeg_frames" | "mp4";
+    livenessFramesBase64?: string;
+    livenessMediaType?: "jpeg_frames" | "mp4";
     documentFrontBase64: string;
     documentBackBase64?: string;
     idNumber: string;
@@ -56,10 +56,9 @@ async function runOrchestration(
   },
 ) {
     const result = await orchestrateIdpVerification({
-      liveness: {
-        frames: args.livenessFramesBase64,
-        mediaType: args.livenessMediaType,
-      },
+      liveness: args.livenessFramesBase64
+        ? { frames: args.livenessFramesBase64, mediaType: args.livenessMediaType! }
+        : undefined,
       document: {
         frontImageBase64: args.documentFrontBase64,
         backImageBase64: args.documentBackBase64,
@@ -83,7 +82,7 @@ async function runOrchestration(
         triggerReason: result.reviewTrigger?.triggerReason ?? result.reason,
         priority: "normal",
       });
-      // No credit deduction Deduct on final Confirm/Keep-verdict
+      // No credit deduction. Deduct on final Confirm/Keep-verdict.
       await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, {
         verificationId: args.verificationId,
       });
@@ -95,6 +94,7 @@ async function runOrchestration(
       id: args.verificationId,
       verdict: result.verdict,
       confidence: result.verdict === "pass" ? 1 : 0,
+      result: result.stepResults,
     });
 
     await ctx.runMutation(internal.creditLedger._insertLedgerEntry, {

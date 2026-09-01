@@ -12,7 +12,9 @@ import { queryIprs, resolveIprsAction, type IprsQuery } from "./awsClients/iprsC
 import { queryAml, resolveAmlAction, type AmlMatch } from "./awsClients/amlClient";
 
 export type IdpOrchestrationInput = {
-  liveness: LivenessRequest;
+  // Optional: KYC's plain-selfie flow doesn't collect this. Only the
+  // standalone Liveness flow (and any future combined flow) supplies it.
+  liveness?: LivenessRequest;
   document: DocScanRequest;
   identity: IprsQuery;
   amlEntityName: string;
@@ -44,16 +46,20 @@ export async function orchestrateIdpVerification(
 ): Promise<IdpOrchestrationResult> {
   const stepResults: IdpOrchestrationResult["stepResults"] = {};
 
-  // liveness + doc scan
+  // Liveness only runs when the caller actually collected it. We skip the
+  // AWS call entirely rather than sending it an empty/fake payload —
+  // KYC's plain-selfie flow simply never has this step.
   const [livenessOutcome, docScanOutcome] = await Promise.allSettled([
-    checkLiveness(input.liveness),
+    input.liveness ? checkLiveness(input.liveness) : Promise.resolve(undefined),
     scanDocument(input.document),
   ]);
 
-  if (livenessOutcome.status === "rejected") {
-    stepResults.liveness = { error: String(livenessOutcome.reason) };
-  } else {
-    stepResults.liveness = livenessOutcome.value;
+  if (input.liveness) {
+    if (livenessOutcome.status === "rejected") {
+      stepResults.liveness = { error: String(livenessOutcome.reason) };
+    } else {
+      stepResults.liveness = livenessOutcome.value as Awaited<ReturnType<typeof checkLiveness>>;
+    }
   }
   if (docScanOutcome.status === "rejected") {
     stepResults.docScan = { error: String(docScanOutcome.reason) };
@@ -61,8 +67,10 @@ export async function orchestrateIdpVerification(
     stepResults.docScan = docScanOutcome.value;
   }
 
-  // failure on either scan -> review, never reject.
-  if (livenessOutcome.status === "rejected" || docScanOutcome.status === "rejected") {
+  // Failure on either scan -> review, never reject. Liveness only counts
+  // as a failure here if it was actually requested in the first place.
+  const livenessErrored = Boolean(input.liveness) && livenessOutcome.status === "rejected";
+  if (livenessErrored || docScanOutcome.status === "rejected") {
     return {
       verdict: "review",
       reason: "Liveness or document scan service unavailable — held for manual review.",
@@ -71,7 +79,13 @@ export async function orchestrateIdpVerification(
     };
   }
 
-  const livenessPassed = passesLivenessThreshold(livenessOutcome.value);
+  const livenessResult =
+    input.liveness && livenessOutcome.status === "fulfilled"
+      ? livenessOutcome.value
+      : undefined;
+  const livenessPassed = livenessResult
+    ? passesLivenessThreshold(livenessResult)
+    : !input.liveness; // not collected for this flow — nothing to threshold-check
   const docScanPassed = passesDocScanThreshold(docScanOutcome.value);
 
   if (!livenessPassed || !docScanPassed) {
@@ -86,14 +100,13 @@ export async function orchestrateIdpVerification(
     };
   }
 
-  //  IPRS
+  // IPRS
   let iprsStatus: string;
   try {
     const iprsResult = await queryIprs(input.identity);
     stepResults.iprs = { status: iprsResult.status };
     iprsStatus = iprsResult.status;
   } catch (err) {
-    //  IPRS unavailable -> queue for manual verification
     stepResults.iprs = { error: String(err) };
     return {
       verdict: "review",
@@ -139,7 +152,7 @@ export async function orchestrateIdpVerification(
       break;
   }
 
-  //  AML.
+  // AML
   let amlStatus: string;
   let amlMatches: AmlMatch[];
   try {
@@ -167,7 +180,6 @@ export async function orchestrateIdpVerification(
     };
   }
 
-  //  uncertain-match escalation
   if (hasUncertainWatchlistMatch(amlMatches)) {
     return {
       verdict: "review",

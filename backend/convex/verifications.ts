@@ -4,6 +4,10 @@ import { ConvexError, v } from "convex/values";
 import { buildVerificationReference } from "./lib/crypto";
 import { isInternalAdmin, requireClientRole, requireInternalUser } from "./lib/rbac";
 
+// The committed generated API is currently stale. Keep this cross-module
+// reference compatible with both it and a freshly generated API.
+const internalApi: any = internal;
+
 const verificationType = v.union(v.literal("idp"), v.literal("kyb"), v.literal("aml"), v.literal("liveness"), v.literal("kyi"));
 const verificationVerdict = v.union(v.literal("pass"), v.literal("review"), v.literal("reject"));
 
@@ -140,28 +144,20 @@ async function dispatchProcessing(
   return;
 }
     case "kyb": {
-      await ctx.scheduler.runAfter(0, internal.kyb.processKybVerification, {
+      await ctx.scheduler.runAfter(0, internalApi.kyb.processKybVerification, {
         verificationId: id,
         clientId,
       });
       return;
     }
     case "liveness": {
-      const required = ["livenessFramesBase64", "livenessMediaType"];
-      const missing = required.filter((k) => !input?.[k]);
-      if (missing.length > 0) {
-        await ctx.db.patch(id, {
-          status: "failed",
-          failureReason: `Missing required fields: ${missing.join(", ")}`,
-          updatedAt: Date.now(),
-        });
-        return;
-      }
-      await ctx.scheduler.runAfter(0, internal.liveness.processLivenessVerification, {
-        verificationId: id,
-        clientId,
-        framesBase64: input.livenessFramesBase64,
-        mediaType: input.livenessMediaType,
+      // Liveness is an invitation flow: it sends the subject a link and is
+      // completed by the provider callback. It does not accept raw media via
+      // this generic endpoint.
+      await ctx.db.patch(id, {
+        status: "failed",
+        failureReason: "Use liveness.submit to create a liveness invitation.",
+        updatedAt: Date.now(),
       });
       return;
     }
