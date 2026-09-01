@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { anyApi } from "convex/server";
+import { redirect } from "next/navigation";
+import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import { KYIWizard } from "@/modules/kyi/kyi-wizard";
 
 interface NewKYIPageProps {
@@ -8,6 +11,13 @@ interface NewKYIPageProps {
 
 export default async function NewKYIPage({ searchParams }: NewKYIPageProps) {
   const params = await searchParams;
+  void params;
+
+  const client = await getAuthenticatedConvexClient();
+  if (!client) redirect("/access-pending?reason=authorization-unavailable");
+  const access = await client.query(anyApi.dashboard.currentAccess, {});
+  const scope = access.memberships[0];
+  if (!access.authorized || !scope) redirect("/access-pending");
 
   return (
     <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6">
@@ -26,7 +36,7 @@ export default async function NewKYIPage({ searchParams }: NewKYIPageProps) {
           </p>
         </div>
 
-        <KYIWizard />
+        <KYIWizard clientId={scope.clientId} />
       </div>
     </div>
   );

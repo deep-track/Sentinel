@@ -53,11 +53,11 @@ export default async function KYIPage() {
   let records: KYIRecord[] = [];
   try {
     const client = await getAuthenticatedConvexClient();
-    const response = client ? await client.query(anyApi.verifications.list, { type: "idp", limit: 100 }) : null;
-    records = (response?.records ?? []).map((row: any) => {
-      const input = row.input && typeof row.input === "object" ? row.input : {};
+    const response = client ? await client.query(anyApi.verifications.list, { type: "kyi", limit: 100 }) : null;
+    records = (response?.records ?? []).map((row: { _id: string; reference: string; input: unknown; status: string; verdict?: string | null; createdAt: number; updatedAt: number }) => {
+      const input = row.input && typeof row.input === "object" ? (row.input as Record<string, unknown>) : {};
       const status = row.verdict === "pass" ? "approved" : row.verdict === "reject" ? "declined" : row.verdict === "review" ? "requires_review" : row.status === "processing" ? "processing" : "pending";
-      return { id: row._id, reference: row.reference, userId: "", userName: input.subjectName ?? input.firstName ?? "", userEmail: input.email ?? "", status, isPEP: Boolean(input.isPEP), createdAt: new Date(row.createdAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString() } as KYIRecord;
+      return { id: row._id, reference: row.reference, userId: "", userName: (input.firstName as string) ?? "", userEmail: (input.email as string) ?? "", status, isPEP: Boolean(input.isPEP), createdAt: new Date(row.createdAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString() } as KYIRecord;
     });
   } catch (error) {
     console.error("[kyi] Convex query failed", error);
