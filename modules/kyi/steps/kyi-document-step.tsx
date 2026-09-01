@@ -68,6 +68,7 @@ export function KYIDocumentStep({
         resolve(result.split(",")[1]); // Remove data:image/...;base64, prefix
       };
       reader.onerror = reject;
+      reader.readAsDataURL(file); // was missing — without this the reader never starts, so the promise never resolves
     });
   }, []);
 
