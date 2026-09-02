@@ -6,11 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { financialDocsSchema, FinancialDocsData } from "@/backend/lib/kyi-types";
 import {
   Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -72,6 +67,7 @@ export function FinancialDocsStep({
         resolve(result);
       };
       reader.onerror = reject;
+      reader.readAsDataURL(file); // was missing — without this the reader never starts, so the promise never resolves
     });
   }, []);
 

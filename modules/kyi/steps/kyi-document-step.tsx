@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -190,6 +189,7 @@ export function KYIDocumentStep({
           <Card className="p-6 border-2 border-dashed">
             {governmentIdImage ? (
               <div className="space-y-4">
+                {/* eslint-disable-next-line @next/next/no-img-element -- base64 data URL preview, next/image isn't a fit here */}
                 <img
                   src={governmentIdImage}
                   alt="Government ID front"
@@ -244,6 +244,7 @@ export function KYIDocumentStep({
           <Card className="p-6 border-2 border-dashed">
             {governmentIdBackImage ? (
               <div className="space-y-4">
+                {/* eslint-disable-next-line @next/next/no-img-element -- base64 data URL preview, next/image isn't a fit here */}
                 <img
                   src={governmentIdBackImage}
                   alt="Government ID back"
@@ -301,6 +302,7 @@ export function KYIDocumentStep({
           <Card className="p-6 border-2 border-dashed">
             {selfieImage ? (
               <div className="space-y-4">
+                {/* eslint-disable-next-line @next/next/no-img-element -- base64 data URL preview, next/image isn't a fit here */}
                 <img
                   src={selfieImage}
                   alt="Selfie"
