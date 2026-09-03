@@ -25,7 +25,9 @@ export default async function AccessPendingPage({
           Sentinel access
         </p>
         <h1 className="mt-3 text-2xl font-bold text-slate-900 dark:text-white">
-          {authorizationUnavailable ? "Access service unavailable" : "Access is being prepared"}
+          {authorizationUnavailable
+            ? "Access service unavailable"
+            : "Access is being prepared"}
         </h1>
         <p className="mt-4 text-slate-600 dark:text-slate-300">
           {authorizationUnavailable
@@ -33,14 +35,16 @@ export default async function AccessPendingPage({
             : "Your sign-in succeeded, but no active customer workspace is assigned to this account yet."}
         </p>
         <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-          Signed in as {user.email}. Contact your Sentinel administrator if you believe you should already have access.
+          Signed in as {user.email}. Contact your Sentinel administrator if you
+          believe you should already have access.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild>
             <Link href="/">Try again</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/auth/logout">Sign out</Link>
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a href="/auth/logout">Logout</a>
           </Button>
         </div>
       </section>

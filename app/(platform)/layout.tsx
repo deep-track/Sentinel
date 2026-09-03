@@ -5,7 +5,6 @@ import { getAuth0 } from "@/backend/lib/auth0";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import { anyApi } from "convex/server";
 import { AppSidebar } from "@/components/app-sidebar";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function Layout({
@@ -52,7 +51,8 @@ export default async function Layout({
                 {user.fullName}
               </span>
               <Button asChild size="sm" variant="outline">
-                <Link href="/auth/logout">Logout</Link>
+                {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                <a href="/auth/logout">Logout</a>
               </Button>
             </div>
           </div>
