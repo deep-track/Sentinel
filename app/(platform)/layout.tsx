@@ -33,8 +33,6 @@ export default async function Layout({
     redirect("/access-pending?reason=authorization-unavailable");
   }
 
-  // Keep the expected authorization redirect outside the try/catch. Next.js
-  // implements redirect() by throwing a control-flow sentinel.
   if (!access.authorized) {
     redirect("/access-pending");
   }
