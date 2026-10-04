@@ -39,9 +39,11 @@ export default async function Layout({
 
   return (
     <SidebarProvider>
-      <AppSidebar role={user.role} />
+      <div className="print:hidden contents">
+        <AppSidebar role={user.role} />
+      </div>
       <main className="w-full">
-        <div className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 dark:border-border h-11">
+        <div className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 dark:border-border h-11 print:hidden">
           <div className="flex items-center justify-between mx-8 mt-4">
             <SidebarTrigger />
             <div className="flex items-center gap-3">

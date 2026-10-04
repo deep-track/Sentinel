@@ -2,14 +2,25 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { anyApi } from "convex/server";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import type { KYCStatus } from "@/backend/lib/kyc-types";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
+import { DownloadReportButton } from "../[id]/report-actions";
 
 interface KYCDetailPageProps {
   params: Promise<{ id: string }>;
 }
+
+type StepResults = {
+  liveness?: { livenessScore: number; deepfakeFlag: boolean; confidence: number } | { error: string };
+  docScan?: { fakeScore: number; flags: string[]; documentType: string } | { error: string };
+  iprs?: { status: string } | { error: string };
+  aml?: {
+    status: string;
+    matches: Array<{ source: string; program: string; matchScore: number; matchedCountry: string | null }>;
+  } | { error: string };
+};
 
 type VerificationRecord = {
   _id: string;
@@ -20,7 +31,7 @@ type VerificationRecord = {
   confidence?: number | null;
   creditsUsed: number;
   input: unknown;
-  result?: unknown;
+  result?: StepResults;
   reference: string;
   failureReason?: string | null;
   disputeReason?: string | null;
@@ -29,6 +40,28 @@ type VerificationRecord = {
   updatedAt: number;
   completedAt?: number | null;
 };
+
+function hasError(step: unknown): step is { error: string } {
+  return Boolean(step && typeof step === "object" && "error" in step);
+}
+
+function formatPreciseTime(ms: number): string {
+  return new Date(ms).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    fractionalSecondDigits: 3,
+    hour12: true,
+  });
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
 
 function normalizeStatus(row: { status: string; verdict?: string | null }): KYCStatus {
   if (row.verdict === "pass") return "approved";
@@ -74,6 +107,46 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function ResultIcon({ ok }: { ok: boolean | null }) {
+  if (ok === null) return <AlertTriangle className="h-5 w-5 text-amber-500" />;
+  return ok ? (
+    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+  ) : (
+    <XCircle className="h-5 w-5 text-red-600" />
+  );
+}
+
+// Thresholds mirrored from backend/convex/lib/riskEngine.ts /
+// awsClients/*.ts so the report shows the real pass/fail logic, not a
+// re-interpretation of it. If those thresholds ever change on the
+// backend, this display logic should be updated to match.
+function ReportStep({
+  title,
+  skippedMessage,
+  step,
+  children,
+}: {
+  title: string;
+  skippedMessage?: string;
+  step: unknown;
+  children: (data: Record<string, unknown>) => React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">{title}</h3>
+      {!step ? (
+        <p className="text-xs text-slate-400 italic">
+          {skippedMessage ?? "This step did not run for this verification."}
+        </p>
+      ) : hasError(step) ? (
+        <p className="text-xs text-red-600">Service error: {step.error}</p>
+      ) : (
+        children(step as Record<string, unknown>)
+      )}
+    </div>
+  );
+}
+
 export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
   const { id } = await params;
   const { record, error } = await getRecord(id);
@@ -105,24 +178,24 @@ export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
                   {record.reference}
                 </p>
               </div>
-              <KYCStatusBadge status={normalizeStatus(record)} size="lg" />
+              <div className="flex items-center gap-3">
+                <KYCStatusBadge status={normalizeStatus(record)} size="lg" />
+                <DownloadReportButton />
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
               <InfoRow label="Type" value={record.type.toUpperCase()} />
-              <InfoRow
-                label="Submitted"
-                value={new Date(record.createdAt).toLocaleString()}
-              />
-              <InfoRow
-                label="Last updated"
-                value={new Date(record.updatedAt).toLocaleString()}
-              />
+              <InfoRow label="Submitted" value={formatPreciseTime(record.createdAt)} />
+              <InfoRow label="Last updated" value={formatPreciseTime(record.updatedAt)} />
               {record.completedAt ? (
-                <InfoRow
-                  label="Completed"
-                  value={new Date(record.completedAt).toLocaleString()}
-                />
+                <>
+                  <InfoRow label="Completed" value={formatPreciseTime(record.completedAt)} />
+                  <InfoRow
+                    label="Processing time"
+                    value={formatDuration(record.completedAt - record.createdAt)}
+                  />
+                </>
               ) : null}
               {record.confidence != null ? (
                 <InfoRow
@@ -141,11 +214,111 @@ export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
             {normalizeStatus(record) === "requires_review" ? (
               <Link
                 href={`/kyc/${id}/review`}
-                className="inline-block text-sm font-medium text-violet-600 hover:text-violet-700"
+                className="inline-block text-sm font-medium text-violet-600 hover:text-violet-700 print:hidden"
               >
                 View review status →
               </Link>
             ) : null}
+
+            {/* Verification report — what was actually checked, and why */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">
+                Verification Report
+              </h2>
+              <p className="text-xs text-slate-400 mb-4">
+                Step-by-step results from the identity verification pipeline.
+              </p>
+
+              {!record.result ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+                  No step-by-step results are stored for this verification.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <ReportStep
+                    title="Document Authenticity"
+                    step={record.result.docScan}
+                  >
+                    {(d) => {
+                      const fakeScore = d.fakeScore as number;
+                      const flags = d.flags as string[];
+                      const passed = fakeScore <= 0.25 && flags.length === 0;
+                      return (
+                        <div className="flex items-start gap-3">
+                          <ResultIcon ok={passed} />
+                          <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                            <p>Document type: <span className="font-medium">{String(d.documentType)}</span></p>
+                            <p>Forgery score: <span className="font-medium">{(fakeScore * 100).toFixed(1)}%</span> (pass threshold: ≤25%)</p>
+                            <p>Flags: {flags.length ? flags.join(", ") : "none"}</p>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </ReportStep>
+
+                  <ReportStep
+                    title="Liveness Check"
+                    skippedMessage="Not collected — this verification used the selfie-upload flow, which doesn't include a liveness check."
+                    step={record.result.liveness}
+                  >
+                    {(d) => {
+                      const livenessScore = d.livenessScore as number;
+                      const deepfakeFlag = d.deepfakeFlag as boolean;
+                      const passed = livenessScore >= 0.85 && !deepfakeFlag;
+                      return (
+                        <div className="flex items-start gap-3">
+                          <ResultIcon ok={passed} />
+                          <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                            <p>Liveness score: <span className="font-medium">{(livenessScore * 100).toFixed(1)}%</span> (pass threshold: ≥85%)</p>
+                            <p>Deepfake flagged: <span className="font-medium">{deepfakeFlag ? "Yes" : "No"}</span></p>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </ReportStep>
+
+                  <ReportStep title="Identity Registry (IPRS)" step={record.result.iprs}>
+                    {(d) => {
+                      const status = String(d.status);
+                      const passed = status === "MATCH";
+                      return (
+                        <div className="flex items-start gap-3">
+                          <ResultIcon ok={status === "PARTIAL_MATCH" ? null : passed} />
+                          <p className="text-xs text-slate-600 dark:text-slate-300">
+                            Status: <span className="font-medium">{status.replace("_", " ")}</span>
+                          </p>
+                        </div>
+                      );
+                    }}
+                  </ReportStep>
+
+                  <ReportStep title="AML / Sanctions Screening" step={record.result.aml}>
+                    {(d) => {
+                      const status = String(d.status);
+                      const matches = (d.matches as Array<{ source: string; program: string; matchScore: number; matchedCountry: string | null }>) ?? [];
+                      const passed = status === "CLEAR";
+                      return (
+                        <div className="flex items-start gap-3">
+                          <ResultIcon ok={status === "PEP" ? null : passed} />
+                          <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2 flex-1">
+                            <p>Status: <span className="font-medium">{status.replace("_", " ")}</span></p>
+                            {matches.length > 0 ? (
+                              <div className="space-y-1">
+                                {matches.map((m, i) => (
+                                  <div key={i} className="rounded bg-slate-50 dark:bg-slate-800 px-2 py-1">
+                                    {m.source.replace("_", " ")} — {m.program} ({m.matchScore}% match{m.matchedCountry ? `, ${m.matchedCountry}` : ""})
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </ReportStep>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

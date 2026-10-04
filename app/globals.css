@@ -1,5 +1,3 @@
-
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -105,5 +103,26 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Verification report printing (Download Report buttons use window.print()).
+   Forces light colors regardless of the viewer's dark mode, since dark
+   backgrounds print as solid black/wasted ink and dark-mode text can be
+   invisible against a printed white page. */
+@media print {
+  html {
+    color-scheme: light;
+  }
+  body, main {
+    background: #ffffff !important;
+  }
+  * {
+    color: #0f172a !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+  .print\:hidden {
+    display: none !important;
   }
 }
