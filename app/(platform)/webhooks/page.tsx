@@ -1,38 +1,24 @@
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { anyApi } from "convex/server";
+import { redirect } from "next/navigation";
+import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import { WebhookCreateDialog } from "./webhook-create-dialog";
 
-type Webhook = {
-  id: string;
-  url: string;
-  events: string[];
-  isActive: boolean;
-  lastStatus: string | null;
-  lastDelivery: string | null;
-  failCount: number;
-  createdAt: string;
-};
-
-async function getWebhooks(): Promise<Webhook[]> {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/client/webhooks`,
-    { cache: "no-store" }
-  );
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data ?? [];
-}
+// There's currently no public Convex query that returns a client's
+// configured webhookUrl, delivery history, or failure counts — only the
+// one-shot registerWebhook mutation (sets/rotates the URL) and
+// resendWebhook (needs a deliveryId the client has no way to discover).
+// So this page can't show what's currently configured or past deliveries
+// — that needs a new backend query (e.g. webhooks.getForClient returning
+// { webhookUrl, recentDeliveries }) before this page can show real status
+// instead of just the set/rotate action.
 
 export default async function WebhooksPage() {
-  const webhooks = await getWebhooks();
+  const client = await getAuthenticatedConvexClient();
+  if (!client) redirect("/access-pending?reason=authorization-unavailable");
+  const access = await client.query(anyApi.dashboard.currentAccess, {});
+  const scope = access.memberships[0];
+  if (!access.authorized || !scope) redirect("/access-pending");
 
   return (
     <div className="flex flex-col gap-6 p-6 lg:p-8 max-w-5xl mx-auto">
@@ -45,62 +31,16 @@ export default async function WebhooksPage() {
             Get notified when a verification completes
           </p>
         </div>
-        <WebhookCreateDialog />
+        <WebhookCreateDialog clientId={scope.clientId} />
       </div>
 
-      {webhooks.length === 0 ? (
-        <Card className="p-6 border-dashed">
-          <p className="text-sm text-muted-foreground">
-            No webhooks configured yet. Add one to receive real-time
-            verification results at your own endpoint.
-          </p>
-        </Card>
-      ) : (
-        <Card className="bg-card border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Endpoint URL</TableHead>
-                <TableHead>Events</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last delivery</TableHead>
-                <TableHead>Failures</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {webhooks.map((wh) => (
-                <TableRow key={wh.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {wh.url}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {wh.events.map((event) => (
-                        <Badge key={event} variant="outline">
-                          {event}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={wh.isActive ? "success" : "secondary"}>
-                      {wh.isActive ? "active" : "disabled"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {wh.lastDelivery
-                      ? new Date(wh.lastDelivery).toLocaleString()
-                      : "Never"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {wh.failCount}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
+      <Card className="p-6 border-dashed">
+        <p className="text-sm text-muted-foreground">
+          Viewing your currently-configured webhook and delivery history isn&apos;t available
+          yet — use &quot;Set webhook&quot; to configure or rotate your endpoint. Each call
+          replaces the previous URL and issues a new signing secret.
+        </p>
+      </Card>
     </div>
   );
 }
