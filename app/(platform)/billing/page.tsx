@@ -1,17 +1,51 @@
 import { Card } from "@/components/ui/card";
 import { CreditCard } from "lucide-react";
+import { anyApi } from "convex/server";
+import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 
-async function getBilling() {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/client/billing`,
-    { cache: "no-store" }
-  );
-  if (!res.ok) return null;
-  return res.json();
+// NOTE: creditLedger.getBalanceForClient (the one real, public credit
+// function) only returns a running balance — allocations minus
+// deductions. There's no public concept of a monthly "cycle," a plan-
+// level cap, or a usage percentage, and no public query for transaction
+// history (only an internal one). Shown honestly below rather than
+// inventing cycle/percentage numbers that aren't backed by anything.
+
+type BillingData = {
+  plan: string;
+  balance: number;
+  multiClient: boolean;
+};
+
+async function getBilling(): Promise<{ billing: BillingData | null; error?: string }> {
+  try {
+    const client = await getAuthenticatedConvexClient();
+    if (!client) return { billing: null, error: "Authentication is not configured." };
+
+    const [access, user] = await Promise.all([
+      client.query(anyApi.dashboard.currentAccess, {}),
+      client.query(anyApi.settings.getCurrentUser, {}),
+    ]);
+    if (!access.authorized || access.memberships.length === 0) {
+      return { billing: null, error: "No organization membership found for this account." };
+    }
+
+    const balances = await Promise.all(
+      access.memberships.map((m: { clientId: string }) =>
+        client.query(anyApi.creditLedger.getBalanceForClient, { clientId: m.clientId }),
+      ),
+    );
+    const balance = balances.reduce((sum: number, b: number) => sum + b, 0);
+    const plan = user?.organizations?.[0]?.plan ?? "—";
+
+    return { billing: { plan, balance, multiClient: access.memberships.length > 1 } };
+  } catch (error) {
+    console.error("[billing] Convex query failed", error);
+    return { billing: null, error: "Billing details are temporarily unavailable." };
+  }
 }
 
 export default async function BillingPage() {
-  const billing = await getBilling();
+  const { billing, error } = await getBilling();
 
   return (
     <div className="flex flex-col gap-6 p-6 lg:p-8 max-w-4xl mx-auto">
@@ -27,8 +61,7 @@ export default async function BillingPage() {
       {!billing ? (
         <Card className="p-6 border-dashed">
           <p className="text-sm text-muted-foreground">
-            No active session found, so billing details can&apos;t be loaded
-            right now. Sign in to view your plan and credit usage.
+            {error ?? "Billing details can't be loaded right now."}
           </p>
         </Card>
       ) : (
@@ -51,25 +84,14 @@ export default async function BillingPage() {
 
           <Card className="p-6 bg-card border-border">
             <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-              Credits this cycle
+              Credit balance{billing.multiClient ? " (all orgs)" : ""}
             </p>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-3xl font-semibold text-foreground">
-                {billing.scanCreditsUsed.toLocaleString()}
+                {billing.balance.toLocaleString()}
               </span>
-              <span className="text-sm text-muted-foreground">
-                / {billing.scanCredits.toLocaleString()} credits
-              </span>
+              <span className="text-sm text-muted-foreground">credits</span>
             </div>
-            <div className="mt-4 h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${Math.min(billing.percentUsed, 100)}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {billing.percentUsed}% used
-            </p>
           </Card>
 
           <Card className="p-6 bg-card border-border">
@@ -77,8 +99,9 @@ export default async function BillingPage() {
               Billing history
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Transaction history isn&apos;t available yet — this will show
-              once the credit ledger is wired up on the backend.
+              Transaction history isn&apos;t available yet — the backend has
+              ledger data internally, but no public query exposes it to this
+              page yet.
             </p>
           </Card>
         </>
