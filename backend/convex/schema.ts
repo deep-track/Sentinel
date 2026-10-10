@@ -33,6 +33,9 @@ export default defineSchema({
       v.literal("trial_expired"),
     ),
     creditLimit: v.number(), 
+    // Running balance maintained by lib/credits.ts. Optional for rows created
+    // before it existed; lazily backfilled from the ledger on first use.
+    creditBalance: v.optional(v.number()),
     rpmCap: v.number(),      // requests per min cap
     creditThresholdPct: v.number(), // alert fires when credits are low
     webhookUrl: v.optional(v.string()),
@@ -116,7 +119,10 @@ export default defineSchema({
     amount: v.number(), // positive = added, negative = consumed
     reason: v.string(),
     createdAt: v.number(),
-  }).index("by_client", ["clientId"]),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_client_created_at", ["clientId", "createdAt"])
+    .index("by_verification", ["verificationId"]),
 
   watchlistSources: defineTable({
     sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
