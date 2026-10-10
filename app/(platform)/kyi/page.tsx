@@ -5,7 +5,7 @@ import { KYITable } from "@/modules/kyi/kyi-table";
 import { Button } from "@/components/ui/button";
 import { anyApi } from "convex/server";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
-import type { KYIRecord } from "@/backend/lib/kyi-types";
+import type { KYIRecord, KYIStatus } from "@/backend/lib/kyi-types";
 import {
   CheckCircle,
   Clock3,
@@ -49,18 +49,58 @@ function StatCard({
   );
 }
 
+type VerificationRow = {
+  _id: string;
+  reference: string;
+  input: unknown;
+  status: string;
+  verdict?: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+function normalizeStatus(row: VerificationRow): KYIStatus {
+  if (row.verdict === "pass") return "approved";
+  if (row.verdict === "reject") return "declined";
+  if (row.verdict === "review") return "requires_review";
+  // A failed run (e.g. missing documents) is terminal, not pending.
+  if (row.status === "failed") return "declined";
+  if (row.status === "processing") return "processing";
+  return "pending";
+}
+
+function text(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
 export default async function KYIPage() {
   let records: KYIRecord[] = [];
+  let error: string | undefined;
   try {
     const client = await getAuthenticatedConvexClient();
-    const response = client ? await client.query(anyApi.verifications.list, { type: "kyi", limit: 100 }) : null;
-    records = (response?.records ?? []).map((row: { _id: string; reference: string; input: unknown; status: string; verdict?: string | null; createdAt: number; updatedAt: number }) => {
+    if (!client) throw new Error("Authentication or Convex is not configured.");
+    const response = await client.query(anyApi.verifications.list, { type: "kyi", limit: 100 });
+    records = (response.records as VerificationRow[]).map((row) => {
       const input = row.input && typeof row.input === "object" ? (row.input as Record<string, unknown>) : {};
-      const status = row.verdict === "pass" ? "approved" : row.verdict === "reject" ? "declined" : row.verdict === "review" ? "requires_review" : row.status === "processing" ? "processing" : "pending";
-      return { id: row._id, reference: row.reference, userId: "", userName: (input.firstName as string) ?? "", userEmail: (input.email as string) ?? "", status, isPEP: Boolean(input.isPEP), createdAt: new Date(row.createdAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString() } as KYIRecord;
+      // The verification row only stores a summary of the investor profile
+      // (name, investor type, accreditation, PEP); email and investment
+      // amount live on the kyiRecords row shown on the detail page.
+      return {
+        id: row._id,
+        reference: row.reference,
+        userId: "",
+        userName: [text(input.firstName), text(input.lastName)].filter(Boolean).join(" "),
+        investorType: text(input.investorType),
+        accreditationStatus: text(input.accreditationStatus),
+        status: normalizeStatus(row),
+        isPEP: Boolean(input.isPEP),
+        createdAt: new Date(row.createdAt).toISOString(),
+        updatedAt: new Date(row.updatedAt).toISOString(),
+      } satisfies KYIRecord;
     });
-  } catch (error) {
-    console.error("[kyi] Convex query failed", error);
+  } catch (cause) {
+    console.error("[kyi] Convex query failed", cause);
+    error = "KYI data is temporarily unavailable.";
   }
   const stats = {
     total: records.length,
@@ -92,6 +132,11 @@ export default async function KYIPage() {
           </div>
         </div>
 
+        {error ? (
+          <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-800 dark:text-red-300">
+            {error}
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
           <StatCard label="Total" value={stats.total ?? 0} icon={FileCheck} tone="slate" />

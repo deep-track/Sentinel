@@ -59,7 +59,10 @@ export const investorProfileSchema = z.object({
   netWorthRange: z.enum(["under_100k", "100k_500k", "500k_1m", "1m_5m", "above_5m"], {
     required_error: "Net worth range is required",
   }),
-  investmentAmount: z.string().min(1, "Investment amount is required"),
+  investmentAmount: z
+    .string()
+    .min(1, "Investment amount is required")
+    .refine((value) => Number.isFinite(Number(value)) && Number(value) > 0, "Enter a positive number"),
   investmentCurrency: z.string().default("USD"),
 
   // PEP Declaration

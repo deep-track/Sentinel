@@ -1,14 +1,21 @@
 import { v, ConvexError } from "convex/values";
-import { action, mutation, query, internalMutation, internalQuery } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
+import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { buildRawApiKey, sha256Hex, safeCompareHex } from "./lib/crypto";
+import { buildRawApiKey, parseApiKeyPrefix, sha256Hex, safeCompareHex } from "./lib/crypto";
 import { requireClientRole, requireInternalAdmin } from "./lib/rbac";
-import type { Id } from "./_generated/dataModel";
+import { recordLedgerEntry } from "./lib/credits";
+import { actorTypeForClientRole, recordAudit } from "./auditLog";
+import type { Doc, Id } from "./_generated/dataModel";
 
-// Bootstraps a new tenant. Gated behind a signed-in Convex Auth user
-// (dashboard-only, same as notes.create) — this is NOT part of the
-// public /v1 API. Anyone hitting this without a session is rejected.
-// Tighten further with an admin-role check once you have roles.
+const MAX_KEYS_LISTED = 200;
+const KEY_INSERT_ATTEMPTS = 5;
+// lastUsedAt is informational; don't write it on every request.
+const LAST_USED_WRITE_INTERVAL_MS = 60 * 1000;
+
+// Bootstraps a new tenant. Internal administrators only — this is NOT part
+// of the public /v1 API. The plan's creditLimit is recorded as an
+// "allocation" ledger entry so the tenant starts with a spendable balance.
 export const createClient = mutation({
   args: {
     name: v.string(),
@@ -22,16 +29,46 @@ export const createClient = mutation({
     rpmCap: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireInternalAdmin(ctx);
-    return await ctx.db.insert("clients", {
-      name: args.name,
+    const actorId = await requireInternalAdmin(ctx);
+    const name = args.name.trim();
+    if (!name) {
+      throw new ConvexError({ code: "invalid_argument", message: "Client name is required." });
+    }
+    if (!Number.isFinite(args.creditLimit) || args.creditLimit < 0) {
+      throw new ConvexError({ code: "invalid_argument", message: "creditLimit must be a non-negative number." });
+    }
+    if (!Number.isFinite(args.rpmCap) || args.rpmCap <= 0) {
+      throw new ConvexError({ code: "invalid_argument", message: "rpmCap must be a positive number." });
+    }
+
+    const clientId = await ctx.db.insert("clients", {
+      name,
       plan: args.plan,
       status: "active",
       creditLimit: args.creditLimit,
+      creditBalance: 0,
       rpmCap: args.rpmCap,
       creditThresholdPct: 80, // Section 1.1 default — override per-client later via a settings mutation
       createdAt: Date.now(),
     });
+    if (args.creditLimit > 0) {
+      await recordLedgerEntry(ctx, {
+        clientId,
+        type: "allocation",
+        amount: args.creditLimit,
+        reason: `Plan credit allocation (${args.plan})`,
+      });
+    }
+    await recordAudit(ctx, {
+      actorId,
+      actorType: "internal_admin",
+      action: "client.created",
+      targetType: "client",
+      targetId: clientId,
+      clientId,
+      metadata: { name, plan: args.plan, creditLimit: args.creditLimit, rpmCap: args.rpmCap },
+    });
+    return clientId;
   },
 });
 
@@ -39,7 +76,11 @@ export const listForClient = query({
   args: { clientId: v.id("clients") },
   handler: async (ctx, args) => {
     await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
-    const keys = await ctx.db.query("apiKeys").withIndex("by_client", (q) => q.eq("clientId", args.clientId)).collect();
+    const keys = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .order("desc")
+      .take(MAX_KEYS_LISTED);
     return keys.map((key) => ({ _id: key._id, prefix: key.prefix, environment: key.environment, revoked: key.revoked, createdAt: key.createdAt, lastUsedAt: key.lastUsedAt }));
   },
 });
@@ -49,81 +90,93 @@ export const revoke = mutation({
   handler: async (ctx, args) => {
     const key = await ctx.db.get(args.keyId);
     if (!key) throw new ConvexError({ code: "not_found", message: "API key not found." });
-    await requireClientRole(ctx, key.clientId, ["client_admin"]);
+    const actor = await requireClientRole(ctx, key.clientId, ["client_admin"]);
     await ctx.db.patch(args.keyId, { revoked: true });
+    await recordAudit(ctx, {
+      actorId: actor.userId,
+      actorType: actorTypeForClientRole(actor.role),
+      action: "api_key.revoked",
+      targetType: "api_key",
+      targetId: args.keyId,
+      clientId: key.clientId,
+      metadata: { prefix: key.prefix, environment: key.environment, alreadyRevoked: key.revoked },
+    });
     return { revoked: true };
   },
 });
 
-export const createForClient = mutation({
-  args: { clientId: v.id("clients"), environment: v.union(v.literal("live"), v.literal("test")) },
-  handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin"]);
-    const client = await ctx.db.get(args.clientId);
-    if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
-    const { rawKey, prefix } = buildRawApiKey(args.environment);
+// Inserts a key, regenerating on the (unlikely) event of a prefix collision.
+// The prefix read and the insert share one transaction, so two concurrent
+// inserts can't both claim the same prefix.
+async function insertUniqueApiKey(
+  ctx: MutationCtx,
+  clientId: Id<"clients">,
+  environment: "live" | "test",
+) {
+  for (let attempt = 0; attempt < KEY_INSERT_ATTEMPTS; attempt++) {
+    const { rawKey, prefix } = buildRawApiKey(environment);
+    const clash = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_prefix", (q) => q.eq("prefix", prefix))
+      .first();
+    if (clash) continue;
     const hashedKey = await sha256Hex(rawKey);
-    await ctx.db.insert("apiKeys", { clientId: args.clientId, prefix, hashedKey, environment: args.environment, revoked: false, createdAt: Date.now() });
-    return { rawKey, prefix };
-  },
-});
-
-export const generateApiKey = action({
-  args: {
-    clientId: v.id("clients"),
-    environment: v.union(v.literal("live"), v.literal("test")),
-  },
-  handler: async (ctx, args): Promise<{ rawKey: string; prefix: string }> => {
-    const { rawKey, prefix } = buildRawApiKey(args.environment);
-    const hashedKey = await sha256Hex(rawKey);
-
-    await ctx.runMutation(internal.apiKeys._insert, {
-      clientId: args.clientId,
+    const keyId = await ctx.db.insert("apiKeys", {
+      clientId,
       prefix,
       hashedKey,
-      environment: args.environment,
-    });
-
-    // rawKey is returned ONCE. Nothing after this point can recover it —
-    // only the hash is stored. Make sure your caller surfaces this to
-    // the client immediately and doesn't log it anywhere.
-    return { rawKey, prefix };
-  },
-});
-
-export const _insert = internalMutation({
-  args: {
-    clientId: v.id("clients"),
-    prefix: v.string(),
-    hashedKey: v.string(),
-    environment: v.union(v.literal("live"), v.literal("test")),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.insert("apiKeys", {
-      clientId: args.clientId,
-      prefix: args.prefix,
-      hashedKey: args.hashedKey,
-      environment: args.environment,
+      environment,
       revoked: false,
       createdAt: Date.now(),
     });
+    return { keyId, rawKey, prefix };
+  }
+  throw new ConvexError({ code: "internal", message: "Could not allocate a unique API key. Please try again." });
+}
+
+// rawKey is returned ONCE. Only the hash is stored, so the caller must show
+// it to the user immediately and never log it.
+export const createForClient = mutation({
+  args: { clientId: v.id("clients"), environment: v.union(v.literal("live"), v.literal("test")) },
+  handler: async (ctx, args) => {
+    // requireClientRole also rejects inactive clients for writes.
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin"]);
+    const { keyId, rawKey, prefix } = await insertUniqueApiKey(ctx, args.clientId, args.environment);
+    await recordAudit(ctx, {
+      actorId: actor.userId,
+      actorType: actorTypeForClientRole(actor.role),
+      action: "api_key.created",
+      targetType: "api_key",
+      targetId: keyId,
+      clientId: args.clientId,
+      metadata: { prefix, environment: args.environment },
+    });
+    return { rawKey, prefix };
   },
 });
 
+// Returns every key with this prefix (normally zero or one). Legacy 32-bit
+// prefixes could collide, so the caller matches on the full hash.
 export const _getByPrefix = internalQuery({
   args: { prefix: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("apiKeys")
       .withIndex("by_prefix", (q) => q.eq("prefix", args.prefix))
-      .unique();
+      .take(5);
   },
 });
 
 export const _touchLastUsed = internalMutation({
   args: { apiKeyId: v.id("apiKeys") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.apiKeyId, { lastUsedAt: Date.now() });
+    const key = await ctx.db.get(args.apiKeyId);
+    const now = Date.now();
+    if (!key || (key.lastUsedAt !== undefined && now - key.lastUsedAt < LAST_USED_WRITE_INTERVAL_MS)) {
+      return null;
+    }
+    await ctx.db.patch(args.apiKeyId, { lastUsedAt: now });
+    return null;
   },
 });
 
@@ -141,59 +194,60 @@ export type ApiKeyAuthResult =
       clientId: Id<"clients">;
       apiKeyId: Id<"apiKeys">;
       plan: "trial" | "starter" | "growth" | "enterprise";
+      environment: "live" | "test";
+      rpmCap: number;
     }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; prefix: string | null };
+
+const INVALID_KEY = "Invalid API key";
 
 // Called from httpActions. Takes the raw Authorization header value,
 // looks up by prefix (indexed, cheap), hashes the full presented key,
-// and compares against the stored hash. Never queries by hashedKey
-// directly off untrusted input in a way that would allow timing
-// enumeration of prefixes — prefix lookup is intentionally public
-// information (it's shown in dashboards), only the secret suffix
-// is sensitive.
+// and compares against the stored hash. The prefix is public information
+// (shown in dashboards); only the secret suffix is sensitive. Unknown,
+// mismatched and revoked keys all get the same response so callers can't
+// tell which prefixes exist.
 export async function authenticateApiKey(
-  ctx: { runQuery: any; runMutation: any },
+  ctx: Pick<ActionCtx, "runQuery" | "runMutation">,
   authHeader: string | null,
 ): Promise<ApiKeyAuthResult> {
   if (!authHeader?.startsWith("Bearer ")) {
-    return { ok: false, status: 401, error: "Missing or malformed Authorization header" };
+    return { ok: false, status: 401, error: "Missing or malformed Authorization header", prefix: null };
   }
 
   const rawKey = authHeader.slice("Bearer ".length).trim();
-  const parts = rawKey.split("_");
-  if (parts.length < 3 || parts[0] !== "gt") {
-    return { ok: false, status: 401, error: "Malformed API key" };
-  }
-  const prefix = `${parts[0]}_${parts[1]}_${parts[2].slice(0, 8)}`;
-
-  const keyRow = await ctx.runQuery(internal.apiKeys._getByPrefix, { prefix });
-  if (!keyRow) {
-    return { ok: false, status: 401, error: "Invalid API key" };
-  }
-  if (keyRow.revoked) {
-    return { ok: false, status: 401, error: "This API key has been revoked" };
+  const prefix = parseApiKeyPrefix(rawKey);
+  if (!prefix) {
+    return { ok: false, status: 401, error: INVALID_KEY, prefix: null };
   }
 
+  const candidates: Doc<"apiKeys">[] = await ctx.runQuery(internal.apiKeys._getByPrefix, { prefix });
   const presentedHash = await sha256Hex(rawKey);
-  if (!safeCompareHex(presentedHash, keyRow.hashedKey)) {
-    return { ok: false, status: 401, error: "Invalid API key" };
+  const keyRow = candidates.find((row) => safeCompareHex(presentedHash, row.hashedKey));
+  if (!keyRow || keyRow.revoked) {
+    return { ok: false, status: 401, error: INVALID_KEY, prefix };
   }
 
-  // Previously missing entirely: a suspended client's keys still
-  // worked. Section 4.1 lists client status as active/suspended/
-  // trial_expired specifically so it can gate access — now it does.
-  const client = await ctx.runQuery(internal.apiKeys._getClientById, {
+  // A suspended / expired client's keys must not work.
+  const client: Doc<"clients"> | null = await ctx.runQuery(internal.apiKeys._getClientById, {
     clientId: keyRow.clientId,
   });
   if (!client) {
-    return { ok: false, status: 401, error: "Invalid API key" };
+    return { ok: false, status: 401, error: INVALID_KEY, prefix };
   }
   if (client.status !== "active") {
-    return { ok: false, status: 403, error: `Account is ${client.status}` };
+    return { ok: false, status: 403, error: `Account is ${client.status}`, prefix };
   }
 
-  // Fire-and-forget last-used tracking — don't block the request on it.
-  ctx.runMutation(internal.apiKeys._touchLastUsed, { apiKeyId: keyRow._id });
+  // Awaited: an un-awaited mutation in an httpAction may never run.
+  await ctx.runMutation(internal.apiKeys._touchLastUsed, { apiKeyId: keyRow._id });
 
-  return { ok: true, clientId: keyRow.clientId, apiKeyId: keyRow._id, plan: client.plan };
+  return {
+    ok: true,
+    clientId: keyRow.clientId,
+    apiKeyId: keyRow._id,
+    plan: client.plan,
+    environment: keyRow.environment,
+    rpmCap: client.rpmCap,
+  };
 }

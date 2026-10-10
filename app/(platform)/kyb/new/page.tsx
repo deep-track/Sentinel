@@ -1,8 +1,13 @@
+export const dynamic = "force-dynamic";
+
 import { KYBWizard } from "@/modules/kyb/kyb-wizard";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
+import { requireActiveScope } from "@/app/(platform)/_lib/active-client";
 
 export default async function NewKYBPage() {
+	const { scope } = await requireActiveScope();
+
 	return (
 		<div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6">
 			<div className="max-w-3xl mx-auto">
@@ -18,12 +23,12 @@ export default async function NewKYBPage() {
 						Business Verification
 					</h1>
 					<p className="text-slate-500 dark:text-slate-400 mt-1 text-sm max-w-xl">
-						Complete the steps below to verify your business. Your data is
-						secured and processed through our verification partner.
+						Complete the steps below to verify a business for {scope.clientName}.
+						Data is secured and processed through our verification partner.
 					</p>
 				</div>
 
-				<KYBWizard />
+				<KYBWizard clientId={scope.clientId} />
 			</div>
 		</div>
 	);

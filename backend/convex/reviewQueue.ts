@@ -1,7 +1,12 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireInternalUser, requireClientRole } from "./lib/rbac";
+import { chargeVerification } from "./lib/credits";
+import { verificationTypeLabel } from "./lib/verificationTypes";
+import { recordAudit } from "./auditLog";
 
 // ─────────────────────────────────────────────────────────
 // Section 11.2 (engineering doc) — authoritative per Brian's directive
@@ -17,6 +22,20 @@ const SORT_WEIGHT: Record<string, number> = {
   internal_flag: 2,
 };
 
+// Upper bound on rows returned by the list queries. The internal queue is
+// read oldest-first per status, so the cap drops the newest items first.
+const MAX_QUEUE_ROWS = 500;
+
+const MIN_CERTAINTY_PCT = 80;
+
+function sortQueue<T extends { triggerType: string; createdAt: number }>(rows: T[]): T[] {
+  return rows.sort((a, b) => {
+    const weightDiff = SORT_WEIGHT[a.triggerType] - SORT_WEIGHT[b.triggerType];
+    if (weightDiff !== 0) return weightDiff;
+    return a.createdAt - b.createdAt;
+  });
+}
+
 // Internal Ops — Global Review Queue, sorted per Section 11.2: client
 // disputes first, then auto-escalated, then internal flags.
 export const listForInternalOps = query({
@@ -27,18 +46,19 @@ export const listForInternalOps = query({
   },
   handler: async (ctx, args) => {
     await requireInternalUser(ctx);
-    const rows = args.status
+    const status = args.status;
+    const rows = status
       ? await ctx.db
           .query("reviewQueue")
-          .filter((q) => q.eq(q.field("status"), args.status))
-          .collect()
-      : await ctx.db.query("reviewQueue").collect();
+          .withIndex("by_status_and_created_at", (q) => q.eq("status", status))
+          .take(MAX_QUEUE_ROWS)
+      : await ctx.db
+          .query("reviewQueue")
+          .withIndex("by_created_at")
+          .order("desc")
+          .take(MAX_QUEUE_ROWS);
 
-    return rows.sort((a, b) => {
-      const weightDiff = SORT_WEIGHT[a.triggerType] - SORT_WEIGHT[b.triggerType];
-      if (weightDiff !== 0) return weightDiff;
-      return a.createdAt - b.createdAt;
-    });
+    return sortQueue(rows);
   },
 });
 
@@ -53,22 +73,163 @@ export const listForClient = query({
     const rows = await ctx.db
       .query("reviewQueue")
       .withIndex("by_client_and_status", (q) => q.eq("clientId", args.clientId))
-      .collect();
+      .order("desc")
+      .take(MAX_QUEUE_ROWS);
 
-    return rows.sort((a, b) => {
-      const weightDiff = SORT_WEIGHT[a.triggerType] - SORT_WEIGHT[b.triggerType];
-      if (weightDiff !== 0) return weightDiff;
-      return a.createdAt - b.createdAt;
-    });
+    return sortQueue(rows);
   },
 });
 
-// Section 11.2's three-action resolution: Confirm / Keep verdict /
-// Escalate. See schema.ts's resolutionAction field for the semantics
-// of each — briefly: confirm = the automated flag was WRONG (outcome
-// pass, write a feedbackLabels row); keep_verdict = the flag was
-// RIGHT (outcome reject, no feedback label needed); escalate =
-// insufficient evidence, routed to an engineer, stays open.
+export type ReviewAction = "confirm" | "keep_verdict" | "escalate";
+
+// Training label for a resolved item, based on what the automation said vs.
+// what the reviewer decided. Only corrections are recorded as labels.
+function feedbackLabelFor(
+  automatedVerdict: Doc<"verifications">["verdict"],
+  finalVerdict: "pass" | "reject",
+): "false_accept" | "false_reject" | null {
+  if (finalVerdict === "reject" && automatedVerdict === "pass") return "false_accept";
+  if (finalVerdict === "pass" && (automatedVerdict === "review" || automatedVerdict === "reject")) {
+    return "false_reject";
+  }
+  return null;
+}
+
+// Shared resolution logic behind reviewQueue.resolve (the only manual-decision path).
+//
+// Section 11.2's three-action resolution: Confirm / Keep verdict / Escalate.
+// confirm = the automated flag was WRONG (outcome pass); keep_verdict = the
+// flag was RIGHT (outcome reject); escalate = insufficient evidence, routed
+// to an engineer, stays open.
+export async function resolveReviewItem(
+  ctx: MutationCtx,
+  params: {
+    reviewerId: string;
+    reviewRow: Doc<"reviewQueue">;
+    action: ReviewAction;
+    notes?: string;
+    certaintyPct?: number;
+  },
+): Promise<{ status: "escalated" } | { status: "resolved"; verdict: "pass" | "reject" }> {
+  const { reviewerId, reviewRow, action } = params;
+  const notes = params.notes?.trim() || undefined;
+
+  if (reviewRow.status === "resolved") {
+    throw new ConvexError({ code: "already_resolved", message: "This item was already resolved." });
+  }
+
+  // "Keep verdict" and "Escalate" require notes for the audit trail
+  // (carried over from the Platform Spec's Reject/Escalate rule,
+  // applied to this taxonomy's negative/uncertain outcomes).
+  if ((action === "keep_verdict" || action === "escalate") && !notes) {
+    throw new ConvexError({
+      code: "notes_required",
+      message: `${action} requires notes for the audit trail.`,
+    });
+  }
+
+  // Section 10.4 — reviewers must never confirm/keep-verdict below 80%
+  // certainty; escalate instead.
+  if (
+    (action === "confirm" || action === "keep_verdict") &&
+    (params.certaintyPct === undefined ||
+      !Number.isFinite(params.certaintyPct) ||
+      params.certaintyPct < MIN_CERTAINTY_PCT ||
+      params.certaintyPct > 100)
+  ) {
+    throw new ConvexError({
+      code: "certainty_too_low",
+      message: "Certainty below 80% cannot be used to confirm or keep a verdict — escalate instead.",
+    });
+  }
+
+  const verification = await ctx.db.get(reviewRow.verificationId);
+  if (!verification) {
+    throw new ConvexError({ code: "not_found", message: "Underlying verification not found." });
+  }
+
+  if (action === "escalate") {
+    // Still open: no resolvedBy/resolvedAt until someone actually resolves it.
+    await ctx.db.patch(reviewRow._id, {
+      status: "in_review",
+      escalated: true,
+      resolutionNotes: notes,
+    });
+    await recordAudit(ctx, {
+      actorId: reviewerId,
+      actorType: "reviewer",
+      action: "review.escalate",
+      targetType: "verification",
+      targetId: verification._id,
+      clientId: verification.clientId,
+      metadata: { reviewId: reviewRow._id, notes },
+    });
+    return { status: "escalated" };
+  }
+
+  // confirm -> automated flag was wrong -> final verdict "pass"
+  // keep_verdict -> automated flag was right -> final verdict "reject"
+  const finalVerdict = action === "confirm" ? "pass" : "reject";
+  const now = Date.now();
+
+  await ctx.db.patch(verification._id, {
+    verdict: finalVerdict,
+    updatedAt: now,
+  });
+  await ctx.db.patch(reviewRow._id, {
+    status: "resolved",
+    resolutionAction: action,
+    resolutionNotes: notes,
+    resolvedBy: reviewerId,
+    resolvedAt: now,
+  });
+
+  // Idempotent per verification: a flow that already charged (e.g. AML on
+  // completion) is not billed again here.
+  await chargeVerification(ctx, {
+    clientId: verification.clientId,
+    verificationId: verification._id,
+    amount: verification.creditsUsed,
+    reason: `${verificationTypeLabel(verification.type)} ${finalVerdict} (resolved via manual review — ${action})`,
+  });
+
+  await recordAudit(ctx, {
+    actorId: reviewerId,
+    actorType: "reviewer",
+    action: `review.${action}`,
+    targetType: "verification",
+    targetId: verification._id,
+    clientId: verification.clientId,
+    metadata: {
+      reviewId: reviewRow._id,
+      notes,
+      certaintyPct: params.certaintyPct,
+      previousVerdict: verification.verdict ?? null,
+      finalVerdict,
+    },
+  });
+
+  // Section 11.2: "Confirmed labels enter the dataset pipeline" — only
+  // corrections (the automation got it wrong) are a retraining signal.
+  const label = feedbackLabelFor(verification.verdict, finalVerdict);
+  if (label) {
+    await ctx.db.insert("feedbackLabels", {
+      verificationId: verification._id,
+      label,
+      labeledBy: reviewerId,
+      certaintyPct: params.certaintyPct!,
+      notes,
+      createdAt: now,
+    });
+  }
+
+  await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, {
+    verificationId: verification._id,
+  });
+
+  return { status: "resolved", verdict: finalVerdict };
+}
+
 export const resolve = mutation({
   args: {
     reviewId: v.id("reviewQueue"),
@@ -89,107 +250,13 @@ export const resolve = mutation({
     if (!reviewRow) {
       throw new ConvexError({ code: "not_found", message: "Review queue item not found." });
     }
-    if (reviewRow.status === "resolved") {
-      throw new ConvexError({ code: "already_resolved", message: "This item was already resolved." });
-    }
 
-    // "Keep verdict" and "Escalate" require notes for the audit trail
-    // (carried over from the Platform Spec's Reject/Escalate rule,
-    // applied to this taxonomy's negative/uncertain outcomes).
-    if ((args.action === "keep_verdict" || args.action === "escalate") && !args.notes?.trim()) {
-      throw new ConvexError({
-        code: "notes_required",
-        message: `${args.action} requires notes for the audit trail.`,
-      });
-    }
-
-    if (
-      (args.action === "confirm" || args.action === "keep_verdict") &&
-      (args.certaintyPct === undefined || args.certaintyPct < 80)
-    ) {
-      throw new ConvexError({
-        code: "certainty_too_low",
-        message: "Certainty below 80% cannot be used to confirm or keep a verdict — escalate instead.",
-      });
-    }
-
-    const verification = await ctx.db.get(reviewRow.verificationId);
-    if (!verification) {
-      throw new ConvexError({ code: "not_found", message: "Underlying verification not found." });
-    }
-
-    if (args.action === "escalate") {
-      await ctx.db.patch(args.reviewId, {
-        status: "in_review",
-        escalated: true,
-        resolutionNotes: args.notes,
-        resolvedBy: reviewerId,
-      });
-      await ctx.runMutation(internal.auditLog._log, {
-        actorId: reviewerId,
-        actorType: "reviewer",
-        action: "review.escalate",
-        targetType: "verification",
-        targetId: verification._id,
-        clientId: verification.clientId,
-        metadata: { notes: args.notes },
-      });
-      return { status: "escalated" };
-    }
-
-    // confirm -> automated flag was wrong -> final verdict "pass"
-    // keep_verdict -> automated flag was right -> final verdict "reject"
-    const finalVerdict = args.action === "confirm" ? "pass" : "reject";
-
-    await ctx.db.patch(reviewRow.verificationId, {
-      verdict: finalVerdict,
-      updatedAt: Date.now(),
+    return await resolveReviewItem(ctx, {
+      reviewerId,
+      reviewRow,
+      action: args.action,
+      notes: args.notes,
+      certaintyPct: args.certaintyPct,
     });
-    await ctx.db.patch(args.reviewId, {
-      status: "resolved",
-      resolutionAction: args.action,
-      resolutionNotes: args.notes,
-      resolvedBy: reviewerId,
-      resolvedAt: Date.now(),
-    });
-
-    await ctx.runMutation(internal.creditLedger._insertLedgerEntry, {
-      clientId: verification.clientId,
-      verificationId: reviewRow.verificationId,
-      type: "deduction",
-      amount: -verification.creditsUsed,
-      reason: `IDP verification ${finalVerdict} (resolved via manual review — ${args.action})`,
-    });
-
-    await ctx.runMutation(internal.auditLog._log, {
-      actorId: reviewerId,
-      actorType: "reviewer",
-      action: `review.${args.action}`,
-      targetType: "verification",
-      targetId: verification._id,
-      clientId: verification.clientId,
-      metadata: { notes: args.notes, certaintyPct: args.certaintyPct },
-    });
-
-    // Section 11.2: "Confirmed labels enter the dataset pipeline" —
-    // only "confirm" produces a retraining signal, since it's the case
-    // where the model got it wrong. "keep_verdict" means the model was
-    // right, which isn't itself a training signal worth logging here.
-    if (args.action === "confirm") {
-      await ctx.db.insert("feedbackLabels", {
-        verificationId: reviewRow.verificationId,
-        label: "false_reject", // the auto-flag incorrectly leaned negative
-        labeledBy: reviewerId,
-        certaintyPct: args.certaintyPct!,
-        notes: args.notes,
-        createdAt: Date.now(),
-      });
-    }
-
-    await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, {
-      verificationId: reviewRow.verificationId,
-    });
-
-    return { status: "resolved", verdict: finalVerdict };
   },
 });

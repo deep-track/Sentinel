@@ -7,6 +7,9 @@ import { anyApi } from "convex/server";
 import { AppSidebar } from "@/components/app-sidebar";
 import { redirect } from "next/navigation";
 
+// Every platform page is auth-gated; never prerender one at build time.
+export const dynamic = "force-dynamic";
+
 export default async function Layout({
   children,
 }: {

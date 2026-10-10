@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   investorProfileSchema,
   InvestorProfileData,
@@ -33,6 +34,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { parseInvestmentAmount } from "@/modules/kyi/amount";
+
+// The shared schema only requires a non-empty string; kyi.createKyi needs a
+// positive number, so validate that here before the user can continue.
+const profileSchema = investorProfileSchema.extend({
+  investmentAmount: z
+    .string()
+    .trim()
+    .min(1, "Investment amount is required")
+    .refine((value) => parseInvestmentAmount(value) !== null, "Enter a positive amount (numbers only)"),
+});
 
 interface InvestorProfileStepProps {
   defaultValues?: Partial<InvestorProfileData>;
@@ -48,7 +60,7 @@ export function InvestorProfileStep({
   const [pepDetails, setPepDetails] = useState(defaultValues?.isPEP || false);
 
   const form = useForm<InvestorProfileData>({
-    resolver: zodResolver(investorProfileSchema),
+    resolver: zodResolver(profileSchema),
     defaultValues: {
       investmentCurrency: "USD",
       isPEP: false,
@@ -302,8 +314,13 @@ export function InvestorProfileStep({
                 <FormLabel>Investment Amount *</FormLabel>
                 <FormControl>
                   <Input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="any"
                     placeholder="1000000"
                     {...field}
+                    value={field.value ?? ""}
                     disabled={isLoading}
                   />
                 </FormControl>

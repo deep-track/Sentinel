@@ -1,16 +1,33 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internalAction, internalQuery, mutation, query } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { buildVerificationReference } from "./lib/crypto";
 import { requireClientRole } from "./lib/rbac";
-
-const internalApi: any = internal;
+import {
+  assertCreditsForNewVerification,
+  assertMediaSize,
+  creditsForType,
+  verificationTypeLabel,
+} from "./lib/verificationTypes";
+import { actorTypeForClientRole, recordAudit } from "./auditLog";
 
 const investorType = v.union(v.literal("individual"), v.literal("joint"), v.literal("corporate"), v.literal("fund"), v.literal("trust"), v.literal("institutional"));
 const accreditationStatus = v.union(v.literal("accredited"), v.literal("qualified"), v.literal("institutional"), v.literal("retail"));
 const sourceOfFunds = v.union(v.literal("employment"), v.literal("business"), v.literal("investments"), v.literal("inheritance"), v.literal("property"), v.literal("savings"), v.literal("other"));
 const netWorthRange = v.union(v.literal("under_100k"), v.literal("100k_500k"), v.literal("500k_1m"), v.literal("1m_5m"), v.literal("above_5m"));
 const governmentIdType = v.union(v.literal("passport"), v.literal("national_id"), v.literal("driving_license"));
+
+// The wizard's form keeps the amount as text; accept either and store a number.
+function parseInvestmentAmount(value: number | string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "string" && !value.trim()) return undefined;
+  const amount = typeof value === "number" ? value : Number(value.replace(/[,\s]/g, ""));
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new ConvexError({ code: "invalid_argument", message: "investmentAmount must be a non-negative number." });
+  }
+  return amount;
+}
 
 export const createKyi = mutation({
   args: {
@@ -26,7 +43,7 @@ export const createKyi = mutation({
     accreditationStatus,
     sourceOfFunds,
     netWorthRange: v.optional(netWorthRange),
-    investmentAmount: v.optional(v.number()),
+    investmentAmount: v.optional(v.union(v.number(), v.string())),
     investmentCurrency: v.optional(v.string()),
     isPEP: v.boolean(),
     pepDetails: v.optional(v.string()),
@@ -45,7 +62,8 @@ export const createKyi = mutation({
     corporateDocUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    // Also rejects inactive clients (write role set).
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
 
     const required: [unknown, string][] = [
       [args.firstName, "firstName"], [args.lastName, "lastName"], [args.email, "email"],
@@ -58,11 +76,17 @@ export const createKyi = mutation({
     if (missing.length > 0) {
       throw new ConvexError({ code: "invalid_argument", message: `Missing required fields: ${missing.join(", ")}` });
     }
+    // The base64 images aren't processed yet (KYI checks the declared profile
+    // and documents); they're size-checked but neither stored nor forwarded.
+    assertMediaSize({
+      governmentIdBase64: args.governmentIdBase64,
+      governmentIdBackBase64: args.governmentIdBackBase64,
+      selfieBase64: args.selfieBase64,
+    });
+    const investmentAmount = parseInvestmentAmount(args.investmentAmount);
 
-    const client = await ctx.db.get(args.clientId);
-    if (!client || client.status !== "active") {
-      throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
-    }
+    const creditsUsed = creditsForType("kyi");
+    await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
 
     const now = Date.now();
     const reference = buildVerificationReference();
@@ -71,7 +95,7 @@ export const createKyi = mutation({
       clientId: args.clientId,
       type: "kyi",
       status: "queued",
-      creditsUsed: 1,
+      creditsUsed,
       input: {
         firstName: args.firstName,
         lastName: args.lastName,
@@ -98,7 +122,7 @@ export const createKyi = mutation({
       accreditationStatus: args.accreditationStatus,
       sourceOfFunds: args.sourceOfFunds,
       netWorthRange: args.netWorthRange,
-      investmentAmount: args.investmentAmount,
+      investmentAmount,
       investmentCurrency: args.investmentCurrency,
       isPEP: args.isPEP,
       pepDetails: args.pepDetails,
@@ -115,79 +139,109 @@ export const createKyi = mutation({
       createdAt: now,
     });
 
-    await ctx.scheduler.runAfter(0, internalApi.kyi.processKyiVerification, {
+    await ctx.scheduler.runAfter(0, internal.kyi.processKyiVerification, {
       verificationId,
       clientId: args.clientId,
-      governmentIdBase64: args.governmentIdBase64,
-      governmentIdBackBase64: args.governmentIdBackBase64,
-      selfieBase64: args.selfieBase64,
+    });
+    await recordAudit(ctx, {
+      actorId: actor.userId,
+      actorType: actorTypeForClientRole(actor.role),
+      action: "verification.created",
+      targetType: "verification",
+      targetId: verificationId,
+      clientId: args.clientId,
+      metadata: { type: "kyi", reference },
     });
 
     return { id: verificationId, reference };
   },
 });
 
+// Every terminal state notifies the client webhook (like idp.ts). A pass is
+// charged on completion; review outcomes are charged on resolution.
 export const processKyiVerification = internalAction({
   args: {
     verificationId: v.id("verifications"),
     clientId: v.id("clients"),
-    governmentIdBase64: v.string(),
+    // Accepted (unused) so jobs scheduled before media stopped being
+    // forwarded still validate.
+    governmentIdBase64: v.optional(v.string()),
     governmentIdBackBase64: v.optional(v.string()),
-    selfieBase64: v.string(),
+    selfieBase64: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.runMutation(internalApi.verifications._markProcessing, { id: args.verificationId });
+    await ctx.runMutation(internal.verifications._markProcessing, { id: args.verificationId });
 
-    const record = await ctx.runQuery(internalApi.kyi._getByVerification, { verificationId: args.verificationId });
-    if (!record) {
-      await ctx.runMutation(internalApi.verifications._fail, { id: args.verificationId, reason: "No investor profile found for this verification." });
-      return;
-    }
-
-   //checks the declared profile/documents and routes.
-    const missingDocs: string[] = [];
-    if (!record.bankStatementUrl) missingDocs.push("bank statement");
-    if (!record.proofOfAddressUrl) missingDocs.push("proof of address");
-    if (record.accreditationStatus !== "retail" && !record.accreditationLetterUrl) missingDocs.push("accreditation letter");
-
-    if (missingDocs.length > 0) {
-      await ctx.runMutation(internalApi.verifications._fail, {
-        id: args.verificationId,
-        reason: `Missing required documents: ${missingDocs.join(", ")}.`,
+    try {
+      const record: Doc<"kyiRecords"> | null = await ctx.runQuery(internal.kyi._getByVerification, {
+        verificationId: args.verificationId,
       });
-      return;
-    }
+      if (!record) {
+        await ctx.runMutation(internal.verifications._fail, {
+          id: args.verificationId,
+          reason: "No investor profile found for this verification.",
+          notifyWebhook: true,
+        });
+        return;
+      }
 
-    if (record.isPEP) {
-      await ctx.runMutation(internalApi.verifications._completeWithReview, {
+      // checks the declared profile/documents and routes.
+      const missingDocs: string[] = [];
+      if (!record.bankStatementUrl) missingDocs.push("bank statement");
+      if (!record.proofOfAddressUrl) missingDocs.push("proof of address");
+      if (record.accreditationStatus !== "retail" && !record.accreditationLetterUrl) missingDocs.push("accreditation letter");
+
+      if (missingDocs.length > 0) {
+        await ctx.runMutation(internal.verifications._fail, {
+          id: args.verificationId,
+          reason: `Missing required documents: ${missingDocs.join(", ")}.`,
+          notifyWebhook: true,
+        });
+        return;
+      }
+
+      if (record.isPEP) {
+        await ctx.runMutation(internal.verifications._completeWithReview, {
+          id: args.verificationId,
+          clientId: args.clientId,
+          result: { source: "kyi", reason: "self_declared_pep" },
+          triggerType: "internal_flag",
+          triggerReason: "Investor self-declared as a Politically Exposed Person.",
+          priority: "high",
+          notifyWebhook: true,
+        });
+        return;
+      }
+
+      if (record.accreditationStatus === "retail") {
+        await ctx.runMutation(internal.verifications._completeWithReview, {
+          id: args.verificationId,
+          clientId: args.clientId,
+          result: { source: "kyi", reason: "retail_accreditation" },
+          triggerType: "internal_flag",
+          triggerReason: "Investor is not accredited/qualified/institutional — requires manual suitability review.",
+          priority: "normal",
+          notifyWebhook: true,
+        });
+        return;
+      }
+
+      await ctx.runMutation(internal.verifications._complete, {
         id: args.verificationId,
-        clientId: args.clientId,
-        result: { source: "kyi", reason: "self_declared_pep" },
-        triggerType: "internal_flag",
-        triggerReason: "Investor self-declared as a Politically Exposed Person.",
-        priority: "high",
+        verdict: "pass",
+        confidence: 0.8,
+        result: { source: "kyi" },
+        chargeReason: `${verificationTypeLabel("kyi")} pass`,
+        notifyWebhook: true,
       });
-      return;
-    }
-
-    if (record.accreditationStatus === "retail") {
-      await ctx.runMutation(internalApi.verifications._completeWithReview, {
+    } catch (err) {
+      console.error("[kyi] processing failed", args.verificationId, err);
+      await ctx.runMutation(internal.verifications._fail, {
         id: args.verificationId,
-        clientId: args.clientId,
-        result: { source: "kyi", reason: "retail_accreditation" },
-        triggerType: "internal_flag",
-        triggerReason: "Investor is not accredited/qualified/institutional — requires manual suitability review.",
-        priority: "normal",
+        reason: "Investor verification processing failed. Please retry or contact support.",
+        notifyWebhook: true,
       });
-      return;
     }
-
-    await ctx.runMutation(internalApi.verifications._complete, {
-      id: args.verificationId,
-      verdict: "pass",
-      confidence: 0.8,
-      result: { source: "kyi" },
-    });
   },
 });
 

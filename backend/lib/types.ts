@@ -99,7 +99,7 @@ properties: {
   positionOccupancies?: PositionOccupancy[];
   associates?: Associate[];
   familyRelative?: FamilyRelative[];
-  [key: string]: any;
+  [key: string]: unknown;
 };
 datasets?: string[];
 referents?: string[];
@@ -118,7 +118,7 @@ properties: {
   holder?: string[];
   startDate?: string[];
   post?: Post[];
-  [key: string]: any;
+  [key: string]: unknown;
 };
 datasets?: string[];
 referents?: string[];
@@ -136,7 +136,7 @@ properties: {
   topics?: string[];
   country?: string[];
   name?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 };
 datasets?: string[];
 referents?: string[];
@@ -152,9 +152,9 @@ caption?: string;
 schema?: string;
 properties: {
   relationship?: string[];
-  associate?: any;
+  associate?: unknown;
   person?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 };
 datasets?: string[];
 referents?: string[];
@@ -170,12 +170,12 @@ id?: string;
 caption?: string;
 schema?: string;
 properties: {
-  person?: any;
+  person?: unknown;
   relationship?: string[];
   relative?: RelativeEntity[];
   startDate?: string[];
   sourceUrl?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 };
 datasets?: string[];
 referents?: string[];
@@ -191,7 +191,7 @@ id: string;
 caption: string;
 properties: {
   topics?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 };
 datasets: string[];
 }

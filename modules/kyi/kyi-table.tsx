@@ -12,7 +12,8 @@ import {
 } from "@tanstack/react-table";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { KYIRecord, KYIStatus } from "@/backend/lib/kyi-types";
+import { ACCREDITATION_LABELS, INVESTOR_TYPE_LABELS, type KYIRecord, type KYIStatus } from "@/backend/lib/kyi-types";
+import { ClientDate } from "@/components/client-date";
 import { KYIStatusBadge } from "@/modules/kyi/kyi-status-badge";
 import {
   Table,
@@ -32,7 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowUpDown, ChevronLeft, ChevronRight, Eye, Search, X } from "lucide-react";
-import { format } from "date-fns";
 import { cn } from "@/backend/lib/utils";
 
 interface KYITableProps {
@@ -50,15 +50,10 @@ const STATUS_OPTIONS: { value: KYIStatus | "all"; label: string }[] = [
   { value: "expired", label: "Expired" },
 ];
 
+// Mirrors the investorType union accepted by kyi.createKyi.
 const INVESTOR_TYPE_OPTIONS = [
   { value: "all", label: "All investor types" },
-  { value: "individual", label: "Individual" },
-  { value: "joint", label: "Joint" },
-  { value: "corporate", label: "Corporate" },
-  { value: "fund", label: "Fund" },
-  { value: "trust", label: "Trust" },
-  { value: "pension_fund", label: "Pension Fund" },
-  { value: "family_office", label: "Family Office" },
+  ...Object.entries(INVESTOR_TYPE_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
 export function KYITable({ records, isLoading }: KYITableProps) {
@@ -76,7 +71,6 @@ export function KYITable({ records, isLoading }: KYITableProps) {
       const query = globalFilter.toLowerCase();
       return (
         record.userName?.toLowerCase().includes(query) ||
-        record.userEmail?.toLowerCase().includes(query) ||
         record.reference?.toLowerCase().includes(query)
       );
     }
@@ -89,6 +83,7 @@ export function KYITable({ records, isLoading }: KYITableProps) {
       accessorKey: "userName",
       header: ({ column }) => (
         <button
+          type="button"
           className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
@@ -96,10 +91,7 @@ export function KYITable({ records, isLoading }: KYITableProps) {
         </button>
       ),
       cell: ({ row }) => (
-        <div>
-          <p className="font-medium text-slate-800 dark:text-slate-200 text-sm">{row.original.userName}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{row.original.userEmail}</p>
-        </div>
+        <p className="font-medium text-slate-800 dark:text-slate-200 text-sm">{row.original.userName || "Unnamed investor"}</p>
       ),
     },
     {
@@ -109,22 +101,30 @@ export function KYITable({ records, isLoading }: KYITableProps) {
           Investor Type
         </span>
       ),
-      cell: ({ getValue }) => (
-        <span className="text-sm text-slate-600 dark:text-slate-400 capitalize">{String(getValue()).replace(/_/g, " ")}</span>
-      ),
+      cell: ({ getValue }) => {
+        const value = getValue() as string | undefined;
+        return (
+          <span className="text-sm text-slate-600 dark:text-slate-400">
+            {value ? (INVESTOR_TYPE_LABELS[value] ?? value.replace(/_/g, " ")) : "—"}
+          </span>
+        );
+      },
     },
     {
-      accessorKey: "investmentAmount",
+      accessorKey: "accreditationStatus",
       header: () => (
         <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Investment
+          Accreditation
         </span>
       ),
-      cell: ({ row }) => (
-        <span className="text-sm text-slate-600 dark:text-slate-400">
-          {row.original.investmentAmount} {row.original.investmentCurrency ?? "USD"}
-        </span>
-      ),
+      cell: ({ getValue }) => {
+        const value = getValue() as string | undefined;
+        return (
+          <span className="text-sm text-slate-600 dark:text-slate-400">
+            {value ? (ACCREDITATION_LABELS[value] ?? value) : "—"}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "isPEP",
@@ -162,6 +162,7 @@ export function KYITable({ records, isLoading }: KYITableProps) {
       accessorKey: "createdAt",
       header: ({ column }) => (
         <button
+          type="button"
           className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
@@ -171,13 +172,18 @@ export function KYITable({ records, isLoading }: KYITableProps) {
       cell: ({ getValue }) => {
         const value = getValue();
         if (!value) return <span className="text-slate-400 text-xs">—</span>;
-        return <span className="text-sm text-slate-600 dark:text-slate-400">{format(new Date(String(value)), "MMM d, yyyy")}</span>;
+        return (
+          <span className="text-sm text-slate-600 dark:text-slate-400">
+            <ClientDate value={String(value)} />
+          </span>
+        );
       },
     },
     {
       id: "actions",
       cell: ({ row }) => (
         <button
+          type="button"
           onClick={() => router.push(`/kyi/${row.original.id}`)}
           className="flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 transition-colors"
         >
@@ -205,13 +211,15 @@ export function KYITable({ records, isLoading }: KYITableProps) {
         <div className="relative flex-1 xl:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search name, email, reference..."
+            placeholder="Search name, reference..."
             value={globalFilter}
             onChange={(event) => setGlobalFilter(event.target.value)}
             className="pl-9 pr-8"
           />
           {globalFilter && (
             <button
+              type="button"
+              aria-label="Clear search"
               onClick={() => setGlobalFilter("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >

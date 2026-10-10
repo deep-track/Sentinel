@@ -1,8 +1,7 @@
-import { callInternalService } from "./internalFetch";
+import { asRecord, callInternalService, readBoolean, readNumber } from "./internalFetch";
 
 export type LivenessRequest = {
- 
-  frames: string; 
+  frames: string;
   mediaType: "jpeg_frames" | "mp4";
 };
 
@@ -12,25 +11,31 @@ export type LivenessResult = {
   confidence: number; // 0-1
 };
 
+const PATH = "/internal/liveness";
+
 export function passesLivenessThreshold(result: LivenessResult): boolean {
-  return result.livenessScore >= 0.85 && result.deepfakeFlag === false;
+  return (
+    Number.isFinite(result.livenessScore) &&
+    result.livenessScore >= 0.85 &&
+    result.deepfakeFlag === false
+  );
+}
+
+export function parseLivenessResponse(raw: unknown): LivenessResult {
+  const body = asRecord(raw, PATH);
+  return {
+    livenessScore: readNumber(body, "liveness_score", PATH, { min: 0, max: 1 }),
+    deepfakeFlag: readBoolean(body, "deepfake_flag", PATH),
+    confidence: readNumber(body, "confidence", PATH, { min: 0, max: 1 }),
+  };
 }
 
 export async function checkLiveness(
   req: LivenessRequest,
 ): Promise<LivenessResult> {
-  const raw = await callInternalService<{
-    liveness_score: number;
-    deepfake_flag: boolean;
-    confidence: number;
-  }>("/internal/liveness", {
+  const raw = await callInternalService(PATH, {
     frames: req.frames,
     media_type: req.mediaType,
   });
-
-  return {
-    livenessScore: raw.liveness_score,
-    deepfakeFlag: raw.deepfake_flag,
-    confidence: raw.confidence,
-  };
+  return parseLivenessResponse(raw);
 }

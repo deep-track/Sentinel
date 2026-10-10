@@ -1,6 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireInternalAdmin } from "./lib/rbac";
+import { recordAudit } from "./auditLog";
+
+const MAX_MEMBERS_LISTED = 500;
 
 const clientRole = v.union(
   v.literal("client_admin"),
@@ -16,7 +19,7 @@ export const listForClient = query({
     return await ctx.db
       .query("clientMembers")
       .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
-      .collect();
+      .take(MAX_MEMBERS_LISTED);
   },
 });
 
@@ -49,10 +52,23 @@ export const upsert = mutation({
         isActive: true,
         invitedBy: actorId,
       });
+      await recordAudit(ctx, {
+        actorId,
+        actorType: "internal_admin",
+        action: "membership.updated",
+        targetType: "user",
+        targetId: args.userId,
+        clientId: args.clientId,
+        metadata: {
+          membershipId: existing._id,
+          before: { role: existing.role, isActive: existing.isActive },
+          after: { role: args.role, isActive: true },
+        },
+      });
       return existing._id;
     }
 
-    return await ctx.db.insert("clientMembers", {
+    const membershipId = await ctx.db.insert("clientMembers", {
       clientId: args.clientId,
       userId: args.userId,
       role: args.role,
@@ -60,6 +76,16 @@ export const upsert = mutation({
       invitedBy: actorId,
       createdAt: Date.now(),
     });
+    await recordAudit(ctx, {
+      actorId,
+      actorType: "internal_admin",
+      action: "membership.created",
+      targetType: "user",
+      targetId: args.userId,
+      clientId: args.clientId,
+      metadata: { membershipId, after: { role: args.role, isActive: true } },
+    });
+    return membershipId;
   },
 });
 
@@ -74,6 +100,19 @@ export const deactivate = mutation({
     await ctx.db.patch(args.membershipId, {
       isActive: false,
       invitedBy: actorId,
+    });
+    await recordAudit(ctx, {
+      actorId,
+      actorType: "internal_admin",
+      action: "membership.deactivated",
+      targetType: "user",
+      targetId: membership.userId,
+      clientId: membership.clientId,
+      metadata: {
+        membershipId: args.membershipId,
+        before: { role: membership.role, isActive: membership.isActive },
+        after: { role: membership.role, isActive: false },
+      },
     });
     return { deactivated: true };
   },

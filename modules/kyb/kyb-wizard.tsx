@@ -1,13 +1,12 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { KYBStepData } from "@/backend/lib/kyb-types";
-import { createInitialKYBData } from "@/backend/lib/kyb-types";
 import { cn } from "@/backend/lib/utils";
 import { BusinessInfoStep } from "@/modules/kyb/steps/business-info-step";
 import { DocumentsStep } from "@/modules/kyb/steps/documents-step";
 import { ReviewStep } from "@/modules/kyb/steps/review-step";
 import { UBODirectorsStep } from "@/modules/kyb/steps/ubo-directors-step";
+import { type KYBWizardData, createInitialWizardData } from "@/modules/kyb/types";
 import {
 	Building2,
 	CheckCircle,
@@ -16,7 +15,8 @@ import {
 	Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const STEPS = [
 	{ id: 1, title: "Business Info", icon: Building2 },
@@ -26,55 +26,49 @@ const STEPS = [
 ];
 
 interface KYBWizardProps {
+	clientId: string;
 	onComplete?: (reference: string) => void;
 }
 
-export function KYBWizard({ onComplete }: KYBWizardProps) {
+export function KYBWizard({ clientId, onComplete }: KYBWizardProps) {
 	const [currentStep, setCurrentStep] = useState(1);
-	const [data, setData] = useState<KYBStepData>(createInitialKYBData());
-	const [isSubmitted, setIsSubmitted] = useState(false);
-	const [submittedReference, setSubmittedReference] = useState<string | null>(
-		null,
-	);
+	const [data, setData] = useState<KYBWizardData>(createInitialWizardData);
+	const [submitted, setSubmitted] = useState<{ id: string; reference: string } | null>(null);
 
-	function updateData(updates: Partial<KYBStepData>) {
+	function updateData(updates: Partial<KYBWizardData>) {
 		setData((prev) => ({ ...prev, ...updates }));
 	}
 
-	function handleBusinessInfoSubmit(values: KYBStepData["businessInfo"]) {
+	function goTo(step: number) {
+		setCurrentStep(step);
+		window.scrollTo({ top: 0, behavior: "smooth" });
+	}
+
+	function handleBusinessInfoSubmit(values: KYBWizardData["businessInfo"]) {
 		updateData({ businessInfo: values });
-		setCurrentStep(2);
-		window.scrollTo({ top: 0, behavior: "smooth" });
+		goTo(2);
 	}
 
-	function handleDocumentsSubmit(values: KYBStepData["documents"]) {
+	function handleDocumentsSubmit(values: KYBWizardData["documents"]) {
 		updateData({ documents: values });
-		setCurrentStep(3);
-		window.scrollTo({ top: 0, behavior: "smooth" });
+		goTo(3);
 	}
 
-	function handleUBOSubmit(values: KYBStepData["ubos"]) {
+	function handleUBOSubmit(values: KYBWizardData["ubos"]) {
 		updateData({ ubos: values });
-		setCurrentStep(4);
-		window.scrollTo({ top: 0, behavior: "smooth" });
+		goTo(4);
 	}
 
-	function handleSubmitSuccess(reference: string) {
-		setIsSubmitted(true);
-		setSubmittedReference(reference);
-		if (onComplete) {
-			onComplete(reference);
-		}
+	function handleSubmitSuccess(result: { id: string; reference: string }) {
+		setSubmitted(result);
+		onComplete?.(result.reference);
 	}
 
 	function goBack() {
-		if (currentStep > 1) {
-			setCurrentStep(currentStep - 1);
-			window.scrollTo({ top: 0, behavior: "smooth" });
-		}
+		if (currentStep > 1) goTo(currentStep - 1);
 	}
 
-	if (isSubmitted) {
+	if (submitted) {
 		return (
 			<div className="max-w-3xl mx-auto">
 				<div className="bg-white rounded-2xl shadow-sm border p-8 text-center">
@@ -85,30 +79,30 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 						Submission Received
 					</h2>
 					<p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
-						Your KYB submission has been received. All listed UBOs and directors
-						will receive an email to complete their identity verification. You will be notified once the review is complete.
+						The KYB submission has been received and routed to our compliance
+						team for document and UBO review. You can track its status on the
+						verification page.
 					</p>
-					{submittedReference && (
-						<p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-							Reference:{" "}
-							<span className="font-mono font-medium">
-								{submittedReference}
-							</span>
-						</p>
-					)}
-					<div className="flex justify-center">
+					<p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+						Reference:{" "}
+						<span className="font-mono font-medium">{submitted.reference}</span>
+					</p>
+					<div className="flex flex-wrap justify-center gap-2">
 						<Button
 							asChild
 							className="bg-violet-600 hover:bg-violet-700 text-white"
 						>
-							<Link href="/kyb">Back to Dashboard</Link>
+							<Link href={`/kyb/${submitted.id}`}>View verification</Link>
+						</Button>
+						<Button asChild variant="outline">
+							<Link href="/kyb">Back to KYB</Link>
 						</Button>
 					</div>
 					<p className="text-sm text-slate-500 dark:text-slate-400 mt-4">
-						Redirecting to dashboard in 5 seconds...
+						Redirecting to the verification in 5 seconds...
 					</p>
 				</div>
-				<AutoRedirect />
+				<AutoRedirect href={`/kyb/${submitted.id}`} />
 			</div>
 		);
 	}
@@ -170,7 +164,7 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 				</div>
 			</div>
 
-			<div className="bg-white rounded-2xl shadow-sm border p-6 sm:p-8">
+			<div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border p-6 sm:p-8">
 				{currentStep === 1 && (
 					<BusinessInfoStep
 						initialData={data.businessInfo}
@@ -181,20 +175,28 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 					<DocumentsStep
 						initialData={data.documents}
 						onSubmit={handleDocumentsSubmit}
-						onBack={goBack}
+						onBack={(documents) => {
+							updateData({ documents });
+							goBack();
+						}}
 					/>
 				)}
 				{currentStep === 3 && (
 					<UBODirectorsStep
 						initialData={data.ubos}
 						onSubmit={handleUBOSubmit}
-						onBack={goBack}
+						onBack={(ubos) => {
+							updateData({ ubos });
+							goBack();
+						}}
 					/>
 				)}
 				{currentStep === 4 && (
 					<ReviewStep
+						clientId={clientId}
 						data={data}
 						onBack={goBack}
+						onEdit={goTo}
 						onSubmitSuccess={handleSubmitSuccess}
 					/>
 				)}
@@ -203,11 +205,11 @@ export function KYBWizard({ onComplete }: KYBWizardProps) {
 	);
 }
 
-function AutoRedirect() {
-	if (typeof window !== "undefined") {
-		setTimeout(() => {
-			window.location.href = "/kyb";
-		}, 5000);
-	}
+function AutoRedirect({ href, delayMs = 5000 }: { href: string; delayMs?: number }) {
+	const router = useRouter();
+	useEffect(() => {
+		const timer = setTimeout(() => router.push(href), delayMs);
+		return () => clearTimeout(timer);
+	}, [router, href, delayMs]);
 	return null;
 }

@@ -1,175 +1,80 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { documentTypeLabels } from "@/backend/lib/kyb-types";
 import {
-	type DocumentType,
-	type UploadedDocument,
-	documentTypeLabels,
-	documentTypes,
-	mandatoryKYBDocuments,
-} from "@/backend/lib/kyb-types";
-import { cn } from "@/backend/lib/utils";
-import {
-	CheckCircle,
-	FileText,
-	Image as ImageIcon,
-	Upload,
-	X,
-} from "lucide-react";
-import { useCallback, useState } from "react";
-import { toast } from "sonner";
+	KYB_DOCUMENT_FIELDS,
+	type KYBSubmittedDocumentType,
+	type KYBUploadedDocument,
+} from "@/modules/kyb/types";
+import { DocumentUploadField } from "@/modules/shared/upload-fields";
 
 interface DocumentsStepProps {
-	initialData: UploadedDocument[];
-	onSubmit: (values: UploadedDocument[]) => void;
-	onBack: () => void;
+	initialData: KYBUploadedDocument[];
+	onSubmit: (values: KYBUploadedDocument[]) => void;
+	/** Saves the current uploads before going back so they aren't lost. */
+	onBack: (values: KYBUploadedDocument[]) => void;
 }
 
-const MAX_FILE_SIZE = 16 * 1024 * 1024;
+const DOCUMENT_DESCRIPTIONS: Record<KYBSubmittedDocumentType, string> = {
+	incorporation_certificate: "Certificate of incorporation or business registration.",
+	utility_bill: "Recent utility bill or bank statement showing the business address.",
+};
 
-export function DocumentsStep({
-	initialData,
-	onSubmit,
-	onBack,
-}: DocumentsStepProps) {
-	const [documents, setDocuments] = useState<UploadedDocument[]>(initialData);
+// Only the documents kyb.createKyb accepts are collected; files the backend
+// can't store aren't requested.
+const REQUIRED_DOCUMENTS = Object.keys(KYB_DOCUMENT_FIELDS) as KYBSubmittedDocumentType[];
+
+export function DocumentsStep({ initialData, onSubmit, onBack }: DocumentsStepProps) {
+	const [documents, setDocuments] = useState<KYBUploadedDocument[]>(initialData);
+	const [uploadingCount, setUploadingCount] = useState(0);
 	const [error, setError] = useState<string | null>(null);
 
-	const handleFileSelect = useCallback(
-		(documentType: DocumentType, file: File) => {
-			if (file.size > MAX_FILE_SIZE) {
-				toast.error(
-					`${documentTypeLabels[documentType]}: File size exceeds 16MB`,
-				);
-				return;
-			}
+	function setDocument(type: KYBSubmittedDocumentType, document: KYBUploadedDocument | null) {
+		setDocuments((prev) => {
+			const others = prev.filter((doc) => doc.type !== type);
+			return document ? [...others, document] : others;
+		});
+	}
 
-			const reader = new FileReader();
-			reader.onload = (e) => {
-				const base64 = e.target?.result as string;
-				const newDoc: UploadedDocument = {
-					type: documentType,
-					fileName: file.name,
-					mimeType: file.type,
-					base64,
-					preview: file.type.startsWith("image/") ? base64 : undefined,
-				};
-
-				setDocuments((prev) => {
-					const filtered = prev.filter((d) => d.type !== documentType);
-					return [...filtered, newDoc];
-				});
-			};
-			reader.readAsDataURL(file);
-		},
-		[],
-	);
-
-	const handleRemove = (documentType: DocumentType) => {
-		setDocuments((prev) => prev.filter((d) => d.type !== documentType));
-	};
-
-	const handleSubmit = () => {
-		const missingDocs = mandatoryKYBDocuments.filter(
-			(type) => !documents.find((d) => d.type === type),
-		);
-
-		if (missingDocs.length > 0) {
-			setError("Incorporation certificate and utility bill are required.");
+	function handleSubmit() {
+		const missing = REQUIRED_DOCUMENTS.filter((type) => !documents.some((doc) => doc.type === type));
+		if (missing.length > 0) {
+			setError(`Upload the ${missing.map((type) => documentTypeLabels[type].toLowerCase()).join(" and ")}.`);
 			return;
 		}
-
 		setError(null);
 		onSubmit(documents);
-	};
+	}
 
 	return (
 		<div>
 			<div className="mb-6">
-				<h2 className="text-xl font-semibold text-gray-900">
-					Business Documents
-				</h2>
+				<h2 className="text-xl font-semibold text-gray-900 dark:text-white">Business Documents</h2>
 				<p className="text-gray-500 text-sm mt-1">
-					Upload incorporation certificate and utility bill (required). Business license and financial documents are optional.
+					Upload the incorporation certificate and a proof of business address.
 				</p>
 			</div>
 
 			<div className="space-y-4">
-				{documentTypes.map((docType) => {
-					const uploadedDoc = documents.find((d) => d.type === docType);
-					const isImage = uploadedDoc?.mimeType?.startsWith("image/");
-					const isPDF = uploadedDoc?.mimeType === "application/pdf";
-
-					const isMandatory = mandatoryKYBDocuments.includes(docType as typeof mandatoryKYBDocuments[number]);
-
+				{REQUIRED_DOCUMENTS.map((type) => {
+					const uploaded = documents.find((doc) => doc.type === type);
 					return (
-						<div key={docType} className="border rounded-lg p-4">
-							<Label className="text-sm font-medium">
-								{documentTypeLabels[docType]}{" "}
-								{isMandatory && <span className="text-red-500">*</span>}
-								{!isMandatory && <span className="text-gray-400 text-xs ml-1">(Optional)</span>}
-							</Label>
-							<p className="text-xs text-gray-500 mb-3">
-								Accepted formats: JPG, JPEG, PNG, PDF — Maximum 16MB
-							</p>
-
-							{uploadedDoc ? (
-								<div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-200">
-									{isImage && uploadedDoc.preview ? (
-										<img
-											src={uploadedDoc.preview}
-											alt={uploadedDoc.fileName}
-											className="w-12 h-12 object-cover rounded"
-										/>
-									) : (
-										<div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center">
-											<FileText className="w-6 h-6 text-blue-600" />
-										</div>
-									)}
-									<div className="flex-1 min-w-0">
-										<p className="text-sm font-medium text-gray-900 truncate">
-											{uploadedDoc.fileName}
-										</p>
-										<p className="text-xs text-gray-500">
-											{isImage ? "Image" : isPDF ? "PDF" : "Document"}
-										</p>
-									</div>
-									<div className="flex items-center gap-2">
-										<CheckCircle className="w-5 h-5 text-green-600" />
-										<button
-											type="button"
-											onClick={() => handleRemove(docType)}
-											className="p-1 hover:bg-red-100 rounded"
-										>
-											<X className="w-5 h-5 text-red-500" />
-										</button>
-									</div>
-								</div>
-							) : (
-								<label
-									className={cn(
-										"flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition-colors",
-										"border-gray-300",
-									)}
-								>
-									<div className="flex flex-col items-center justify-center pt-5 pb-6">
-										<Upload className="w-8 h-8 text-gray-400 mb-2" />
-										<p className="text-sm text-gray-500">
-											Click to upload or drag and drop
-										</p>
-									</div>
-									<input
-										type="file"
-										className="hidden"
-										accept=".jpg,.jpeg,.png,.pdf"
-										onChange={(e) => {
-											const file = e.target.files?.[0];
-											if (file) handleFileSelect(docType, file);
-										}}
-									/>
-								</label>
-							)}
+						<div key={type} className="border rounded-lg p-4">
+							<DocumentUploadField
+								label={documentTypeLabels[type]}
+								description={DOCUMENT_DESCRIPTIONS[type]}
+								required
+								url={uploaded?.url}
+								fileName={uploaded?.fileName}
+								onUploaded={(url, file) => {
+									setDocument(type, { type, url, fileName: file.name, mimeType: file.type });
+									setError(null);
+								}}
+								onClear={() => setDocument(type, null)}
+								onUploadingChange={(busy) => setUploadingCount((count) => Math.max(0, count + (busy ? 1 : -1)))}
+							/>
 						</div>
 					);
 				})}
@@ -178,11 +83,13 @@ export function DocumentsStep({
 			{error && <p className="text-sm text-red-500 mt-4">{error}</p>}
 
 			<div className="flex justify-between pt-6">
-				<Button type="button" variant="outline" onClick={onBack}>
+				<Button type="button" variant="outline" onClick={() => onBack(documents)} disabled={uploadingCount > 0}>
 					Back
 				</Button>
 				<Button
+					type="button"
 					onClick={handleSubmit}
+					disabled={uploadingCount > 0}
 					className="bg-violet-600 hover:bg-violet-700 text-white"
 				>
 					Continue

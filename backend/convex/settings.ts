@@ -10,7 +10,7 @@ export const getCurrentUser = query({
     const memberships = await ctx.db
       .query("clientMembers")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .collect();
+      .take(50);
 
     const organizations = [];
     for (const membership of memberships) {

@@ -7,6 +7,14 @@
 
 const OPENSANCTIONS_BASE = "https://api.opensanctions.org";
 
+/** Upstream failure with a safe, generic message (no provider response body). */
+export class OpenSanctionsError extends Error {
+  constructor(readonly status: number) {
+    super(`Sanctions screening service is unavailable (status ${status})`);
+    this.name = "OpenSanctionsError";
+  }
+}
+
 // ─────────────────────────────────────────────────────────
 // TOPIC LABELS MAPPING
 // ─────────────────────────────────────────────────────────
@@ -228,13 +236,15 @@ const RISK_ASSESSMENTS: Record<RiskLevel, RiskAssessment> = {
   },
 };
 
-export function getRiskLevelStyles(level: RiskLevel): {
+type RiskLevelStyles = {
   bgColor: string;
   textColor: string;
   borderColor: string;
   badgeColor: string;
-} {
-  const styles: Record<RiskLevel, any> = {
+};
+
+export function getRiskLevelStyles(level: RiskLevel): RiskLevelStyles {
+  const styles: Record<RiskLevel, RiskLevelStyles> = {
     clear: {
       bgColor: "bg-emerald-50 dark:bg-emerald-900/10",
       textColor: "text-emerald-800 dark:text-emerald-200",
@@ -297,7 +307,11 @@ export async function searchSanctions(params: {
     url.searchParams.set("countries", params.country.toLowerCase());
   }
 
-  console.log("[OpenSanctions] Searching:", url.toString());
+  // Never log the query URL: it contains the screened person's name (PII).
+  console.info("[OpenSanctions] Searching", {
+    schema: params.schema ?? "Person",
+    hasCountryFilter: Boolean(params.country && params.country !== "all"),
+  });
 
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -310,19 +324,14 @@ export async function searchSanctions(params: {
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    console.error("[OpenSanctions] API error:", res.status, text);
-    throw new Error(
-      `OpenSanctions API returned ${res.status}: ${text}`
-    );
+    // Do not log or propagate the upstream body: it can echo the query (PII)
+    // and leaks provider internals to callers.
+    console.error("[OpenSanctions] API error", { status: res.status });
+    throw new OpenSanctionsError(res.status);
   }
 
   const data = await res.json();
-  console.log(
-    "[OpenSanctions] Results:",
-    data.total?.value,
-    "matches"
-  );
+  console.info("[OpenSanctions] Results", { matches: data.total?.value });
   return data;
 }
 
@@ -339,6 +348,7 @@ export async function searchAML(
     const results = await searchSanctions({
       query: fullName.trim(),
       schema: "Person",
+      country,
       limit: 10,
     });
 
@@ -356,10 +366,16 @@ export async function searchAML(
       },
     };
   } catch (err) {
-    console.error("[searchAML] Exception:", err);
+    console.error(
+      "[searchAML] Search failed",
+      err instanceof OpenSanctionsError ? { status: err.status } : undefined
+    );
     return {
       success: false,
-      error: err instanceof Error ? err.message : "AML search failed",
+      error:
+        err instanceof OpenSanctionsError
+          ? err.message
+          : "AML search failed",
     };
   }
 }
@@ -383,10 +399,11 @@ export async function batchMatchEntities(
 
     try {
       for (const entity of batch) {
-        const name =
-          (entity.data.properties.name as string[] | undefined)?.[0] ??
-          ((entity.data.properties as any).firstName as string | undefined) ??
-          "";
+        const properties = entity.data.properties as {
+          name?: string[];
+          firstName?: string[];
+        };
+        const name = properties.name?.[0] ?? properties.firstName?.[0] ?? "";
 
         if (!name) {
           allResults[entity.id] = [];
@@ -407,8 +424,8 @@ export async function batchMatchEntities(
       }
     } catch (error) {
       console.error(
-        `[OpenSanctions] Batch failed for entities ${i}-${i + BATCH_SIZE}:`,
-        error
+        `[OpenSanctions] Batch failed for entities ${i}-${i + BATCH_SIZE}`,
+        error instanceof OpenSanctionsError ? { status: error.status } : undefined
       );
       batch.forEach((entity) => {
         allResults[entity.id] = [];
@@ -459,28 +476,23 @@ export async function getEntityById(
   if (!apiKey) throw new Error("OPENSANCTIONS_API_KEY not set");
 
   // OpenSanctions entity lookup endpoint
-  const url = `https://api.opensanctions.org/entities/${encodeURIComponent(id)}`;
+  const url = `${OPENSANCTIONS_BASE}/entities/${encodeURIComponent(id)}`;
 
-  try {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `ApiKey ${apiKey}`,
-        Accept: "application/json",
-      },
-      cache: "no-store",
-    });
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `ApiKey ${apiKey}`,
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
 
-    if (res.status === 404) return null;
+  if (res.status === 404) return null;
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`OpenSanctions API ${res.status}: ${text}`);
-    }
-
-    return res.json();
-  } catch (error) {
-    console.error("[OpenSanctions] Failed to fetch entity:", error);
-    throw error;
+  if (!res.ok) {
+    console.error("[OpenSanctions] Failed to fetch entity", { status: res.status });
+    throw new OpenSanctionsError(res.status);
   }
+
+  return res.json();
 }
 

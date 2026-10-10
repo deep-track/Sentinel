@@ -3,13 +3,22 @@ import { internalAction, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireClientRole } from "./lib/rbac";
+import { assertCreditsForNewVerification, creditsForType } from "./lib/verificationTypes";
+import {
+  SOURCE_LABELS,
+  STRONG_MATCH_THRESHOLD,
+  compareCandidates,
+  decide,
+  joinList,
+  scoreCandidate,
+  type Candidate,
+  type SourceKey,
+} from "./lib/amlMatching";
 
 const internalApi: any = internal;
 
 const MATCH_LIMIT = 25;
-const FUZZY_REVIEW_THRESHOLD = 70;
-const FUZZY_REJECT_THRESHOLD = 94;
-const AML_CREDIT_COST = 1;
+const ENTRY_PAGE_SIZE = 500;
 
 export const submit = mutation({
   args: {
@@ -22,15 +31,20 @@ export const submit = mutation({
     await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
     const subjectName = args.subjectName.trim();
     if (!subjectName) throw new ConvexError({ code: "invalid_argument", message: "Subject name is required." });
+    if (subjectName.length > 300) throw new ConvexError({ code: "invalid_argument", message: "Subject name is too long." });
+    const country = args.country?.trim() || undefined;
     const client = await ctx.db.get(args.clientId);
     if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
+    const creditsUsed = creditsForType("aml");
+    // Balance check in the same transaction as the insert.
+    await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
     const now = Date.now();
     const verificationId = await ctx.db.insert("verifications", {
       clientId: args.clientId,
       type: "aml",
       status: "queued",
-      creditsUsed: AML_CREDIT_COST,
-      input: { subjectName, entityType: args.entityType, country: args.country ?? null },
+      creditsUsed,
+      input: { subjectName, entityType: args.entityType, country: country ?? null },
       reference: `aml_${now}_${Math.random().toString(36).slice(2, 8)}`,
       createdAt: now,
       updatedAt: now,
@@ -40,7 +54,7 @@ export const submit = mutation({
       clientId: args.clientId,
       subjectName,
       entityType: args.entityType,
-      country: args.country,
+      country,
     });
     return { verificationId };
   },
@@ -49,7 +63,7 @@ export const submit = mutation({
 type Entry = {
   _id: Id<"watchlistEntries">;
   versionId: Id<"watchlistVersions">;
-  sourceKey: "OFAC_SDN" | "UN_CONSOLIDATED";
+  sourceKey: SourceKey;
   sourceRecordId: string;
   entityType: "individual" | "entity" | "unknown";
   primaryName: string;
@@ -60,58 +74,60 @@ type Entry = {
   isActive: boolean;
 };
 
-type Candidate = Entry & { nameScore: number; method: "exact" | "normalized" | "alias" | "fuzzy" };
+type Coverage = {
+  versions: Array<{
+    _id: Id<"watchlistVersions">;
+    sourceKey: SourceKey;
+    fetchedAt: number;
+    recordCount: number;
+    stale: boolean;
+  }>;
+  missing: SourceKey[];
+  stale: SourceKey[];
+};
 
-function normalize(value: string): string {
-  return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+function describeCoverageGaps(coverage: Coverage): string {
+  const gaps = [
+    ...coverage.missing.map((key) => `${SOURCE_LABELS[key]} unavailable`),
+    ...coverage.versions
+      .filter((version) => version.stale)
+      .map((version) => `${SOURCE_LABELS[version.sourceKey]} stale (last fetched ${new Date(version.fetchedAt).toISOString().slice(0, 10)})`),
+  ];
+  return gaps.join("; ");
 }
 
-function bigrams(value: string): Set<string> {
-  const compact = value.replace(/\s+/g, " ");
-  const result = new Set<string>();
-  for (let index = 0; index < compact.length - 1; index += 1) result.add(compact.slice(index, index + 2));
-  return result;
-}
+// Builds the final verdict and reason. The reason only names lists that were
+// actually screened, and incomplete coverage can never produce "pass".
+function finalDecision(candidates: Array<Candidate<Entry>>, coverage: Coverage) {
+  const decision = decide(candidates);
+  const fresh = coverage.versions.filter((version) => !version.stale).map((version) => SOURCE_LABELS[version.sourceKey]);
+  const staleChecked = coverage.versions.filter((version) => version.stale).map((version) => `${SOURCE_LABELS[version.sourceKey]} (stale)`);
+  const checked = [...fresh, ...staleChecked];
+  const complete = coverage.missing.length === 0 && coverage.stale.length === 0;
 
-function diceSimilarity(left: string, right: string): number {
-  if (left === right) return 1;
-  if (!left || !right) return 0;
-  const leftBigrams = bigrams(left);
-  const rightBigrams = bigrams(right);
-  let overlap = 0;
-  for (const value of leftBigrams) if (rightBigrams.has(value)) overlap += 1;
-  return (2 * overlap) / (leftBigrams.size + rightBigrams.size || 1);
-}
-
-function scoreCandidate(subject: string, entry: Entry): Candidate | null {
-  const normalizedSubject = normalize(subject);
-  if (!normalizedSubject || !entry.isActive) return null;
-  const names = [entry.primaryName, ...entry.aliases, ...entry.normalizedNames].map(normalize).filter(Boolean);
-  let bestScore = 0;
-  let method: Candidate["method"] = "fuzzy";
-  for (const candidate of names) {
-    if (candidate === normalizedSubject) {
-      bestScore = 1;
-      method = candidate === normalize(entry.primaryName) ? "normalized" : "alias";
-      break;
-    }
-    const score = diceSimilarity(normalizedSubject, candidate);
-    if (score > bestScore) bestScore = score;
+  if (complete) {
+    return {
+      verdict: decision.verdict,
+      reason: decision.verdict === "pass" ? `No match found on the ${joinList(checked, "or")} watchlists.` : decision.reason,
+      complete,
+    };
   }
-  const nameScore = Math.round(bestScore * 100);
-  return nameScore < FUZZY_REVIEW_THRESHOLD ? null : { ...entry, nameScore, method };
-}
 
-function decide(matches: Candidate[]): { verdict: "pass" | "review" | "reject"; reason: string } {
-  if (matches.length === 0) return { verdict: "pass", reason: "No OFAC or UN watchlist match found." };
-  const strongest = matches[0];
-  if (strongest.method !== "fuzzy" && strongest.nameScore >= FUZZY_REJECT_THRESHOLD) {
-    return { verdict: "reject", reason: "Exact or normalized sanctions-list match requires compliance escalation." };
+  const gaps = describeCoverageGaps(coverage);
+  if (decision.verdict === "reject") {
+    return { verdict: "reject" as const, reason: `${decision.reason} Watchlist coverage incomplete: ${gaps}.`, complete };
   }
-  if (strongest.nameScore >= FUZZY_REJECT_THRESHOLD) {
-    return { verdict: "review", reason: "High-confidence fuzzy match requires human identity resolution." };
-  }
-  return { verdict: "review", reason: "Potential sanctions-list match requires human review." };
+  const screened =
+    decision.verdict === "pass"
+      ? checked.length > 0
+        ? `No match found on ${joinList(checked, "or")}, but screening is incomplete.`
+        : "No watchlist could be screened."
+      : decision.reason;
+  return {
+    verdict: "review" as const,
+    reason: `Watchlist unavailable or stale (${gaps}) — held for manual review. ${screened}`,
+    complete,
+  };
 }
 
 export const runScreening = internalAction({
@@ -125,34 +141,47 @@ export const runScreening = internalAction({
   handler: async (ctx, args) => {
     await ctx.runMutation(internalApi.verifications._markProcessing, { id: args.verificationId });
     try {
-      const activeVersions = await ctx.runQuery(internalApi.amlPersistence.getActiveVersions, {});
-      const candidates: Candidate[] = [];
-      for (const version of activeVersions) {
+      const coverage: Coverage = await ctx.runQuery(internalApi.amlPersistence.getActiveVersions, { now: Date.now() });
+      const candidates: Array<Candidate<Entry>> = [];
+      for (const version of coverage.versions) {
         let cursor: string | undefined;
         while (true) {
           const page = await ctx.runQuery(internalApi.amlPersistence.getEntryPage, {
             versionId: version._id,
             cursor,
-            numItems: 150,
+            numItems: ENTRY_PAGE_SIZE,
           });
           for (const entry of page.page as Entry[]) {
-            const candidate = scoreCandidate(args.subjectName, entry);
+            const candidate = scoreCandidate(args.subjectName, args.entityType, args.country, entry);
             if (candidate) candidates.push(candidate);
           }
           if (page.isDone) break;
           cursor = page.continueCursor;
         }
       }
-      candidates.sort((left: Candidate, right: Candidate) => right.nameScore - left.nameScore);
-      candidates.splice(MATCH_LIMIT);
-      const decision = decide(candidates);
+      candidates.sort(compareCandidates);
+      // Decide on ALL candidates, then keep only the strongest for storage.
+      const decision = finalDecision(candidates, coverage);
+      const stored = candidates.slice(0, MATCH_LIMIT);
       await ctx.runMutation(internalApi.amlPersistence.complete, {
         verificationId: args.verificationId,
         clientId: args.clientId,
         subjectName: args.subjectName,
         verdict: decision.verdict,
         reason: decision.reason,
-        matches: candidates.map((match: Candidate) => ({
+        confidence: !decision.complete && stored.length === 0 ? 0 : undefined,
+        chargeCredits: decision.complete,
+        coverage: {
+          checked: coverage.versions.map((version) => ({
+            versionId: version._id,
+            sourceKey: version.sourceKey,
+            fetchedAt: version.fetchedAt,
+            stale: version.stale,
+          })),
+          missing: coverage.missing,
+          stale: coverage.stale,
+        },
+        matches: stored.map((match) => ({
           entryId: match._id,
           versionId: match.versionId,
           source: match.sourceKey,
@@ -162,15 +191,9 @@ export const runScreening = internalAction({
           matchScore: match.nameScore,
           matchMethod: match.method,
           matchedCountry: match.countries[0],
-          riskLevel: match.nameScore >= FUZZY_REJECT_THRESHOLD ? "critical" as const : "high" as const,
+          countryMatch: match.countryMatch,
+          riskLevel: match.nameScore >= STRONG_MATCH_THRESHOLD ? ("critical" as const) : ("high" as const),
         })),
-      });
-      await ctx.runMutation(internalApi.creditLedger._insertLedgerEntry, {
-        clientId: args.clientId,
-        verificationId: args.verificationId,
-        type: "deduction",
-        amount: -AML_CREDIT_COST,
-        reason: `AML sanctions screening: ${decision.verdict}`,
       });
       return { verdict: decision.verdict, matches: candidates.length };
     } catch (error) {
@@ -184,6 +207,9 @@ export const runScreening = internalAction({
         targetId: args.verificationId,
         clientId: args.clientId,
         metadata: { reason: reason.slice(0, 500) },
+      });
+      await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, {
+        verificationId: args.verificationId,
       });
       throw error;
     }

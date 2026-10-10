@@ -1,94 +1,109 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Copy, Eye, EyeOff, Key, Plus } from "lucide-react";
+import { Copy, Eye, EyeOff, Key, Loader2, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { anyApi } from "convex/server";
-import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
 
-import type { APIKey } from "@/backend/lib/types/api-keys";
-import SubmitButton from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-	Form,
-	FormControl,
-	FormDescription,
-	FormField,
-	FormItem,
-	FormLabel,
-	FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { TypographyInlineCode } from "@/components/ui/typography";
+import { cn } from "@/backend/lib/utils";
+import { getErrorMessage } from "@/modules/shared/errors";
 
-const formSchema = z.object({
-	name: z.string().min(1),
-});
+type Environment = "live" | "test";
+
+const ENVIRONMENTS: { value: Environment; label: string; description: string }[] = [
+	{
+		value: "test",
+		label: "Test",
+		description: "For development and integration testing.",
+	},
+	{
+		value: "live",
+		label: "Live",
+		description: "For production traffic. Checks are billed.",
+	},
+];
 
 type Props = {
-	userId: string;
-	companyId: string;
+	clientId: string;
 };
 
-function CreateApiKeyForm({ userId, companyId }: Props) {
+function CreateApiKeyForm({ clientId }: Props) {
 	const [open, setOpen] = useState(false);
+	const [environment, setEnvironment] = useState<Environment>("test");
+	const [submitting, setSubmitting] = useState(false);
 	const [showKey, setShowKey] = useState(false);
-	const [apiKey, setApiKey] = useState<APIKey | null>(null);
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
-	});
+	const [rawKey, setRawKey] = useState<string | null>(null);
+	const [acknowledged, setAcknowledged] = useState(false);
 	const router = useRouter();
 	const createKey = useMutation(anyApi.apiKeys.createForClient);
 
-	async function onSubmit(values: z.infer<typeof formSchema>) {
+	async function handleCreate() {
+		setSubmitting(true);
 		try {
-			if (!companyId) throw new Error("No client organization is assigned to this account.");
-			const generated = await createKey({ clientId: companyId as any, environment: "live" });
-			const newKey: APIKey = { id: generated.prefix, name: values.name, apiKey: generated.rawKey, status: "Active", createdAt: new Date() };
-			setApiKey(newKey);
-
-			toast.success("Key successfully created");
+			const generated: { rawKey: string; prefix: string } = await createKey({
+				clientId,
+				environment,
+			});
+			setRawKey(generated.rawKey);
+			toast.success("Key created");
 			router.refresh();
 		} catch (error) {
-			console.error("Form submission error", error);
-			toast.error(
-				error instanceof Error ? error.message : "Failed to create key"
-			);
+			console.error("[api-keys] create failed", error);
+			toast.error(getErrorMessage(error, "Failed to create key"));
 		} finally {
-			form.reset();
+			setSubmitting(false);
 		}
 	}
 
-	const copyToClipboard = (text: string) => {
-		navigator.clipboard.writeText(text);
-		toast.success("Copied to clipboard");
-	};
-
-	const handleDialogClose = (isOpen: boolean) => {
-		setOpen(isOpen);
-		if (!isOpen) {
-			setApiKey(null);
-			setShowKey(false);
-			form.reset();
+	async function copyToClipboard(text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			toast.success("Copied to clipboard");
+		} catch {
+			toast.error("Couldn't copy — select the key and copy it manually.");
 		}
-	};
+	}
+
+	function reset() {
+		setRawKey(null);
+		setShowKey(false);
+		setAcknowledged(false);
+		setEnvironment("test");
+	}
+
+	function handleOpenChange(next: boolean) {
+		if (next) {
+			setOpen(true);
+			return;
+		}
+		// The raw key is only returned once; don't let Esc / outside clicks
+		// throw it away before the user confirms they've stored it.
+		if (rawKey && !acknowledged) {
+			toast.warning("Copy the key and confirm you've stored it before closing.");
+			return;
+		}
+		setOpen(false);
+		reset();
+	}
 
 	return (
-		<Dialog open={open} onOpenChange={handleDialogClose}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogTrigger asChild>
-				<Button onClick={() => setOpen(true)}>
+				<Button type="button">
 					<Plus className="mr-2 h-4 w-4" />
 					Create New Key
 				</Button>
@@ -96,84 +111,105 @@ function CreateApiKeyForm({ userId, companyId }: Props) {
 
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Create New API Key</DialogTitle>
+					<DialogTitle>{rawKey ? "Your new API key" : "Create New API Key"}</DialogTitle>
 					<DialogDescription>
-						API keys authenticate your requests to our API services.
+						API keys authenticate your requests to the Sentinel API.
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-6">
-					<Form {...form}>
-						<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-							<FormField
-								control={form.control}
-								name="name"
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>API Key Name</FormLabel>
-										<FormControl>
-											<Input placeholder="KYC Team" {...field} />
-										</FormControl>
-										<FormDescription>The name of the API Key</FormDescription>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-							{apiKey && (
-								<div className="space-y-2">
-									<div className="flex items-center space-x-2">
-										<Key className="h-4 w-4 text-primary" />
-										<h3 className="text-lg font-semibold">Your New API Key</h3>
-									</div>
-									<div className="flex items-center justify-between rounded-lg border bg-gradient-to-br from-muted/50 to-muted/95 p-2">
-										<TypographyInlineCode className="flex-1 text-sm w-fit">
-											{showKey
-												? (apiKey.apiKey ?? "")
-												: `${(apiKey.apiKey ?? "").slice(0, 8)}*****${(apiKey.apiKey ?? "").slice(-4)}`}
-										</TypographyInlineCode>
-										<div className="ml-auto flex flex-shrink-0 gap-2">
-											<Button
-												variant="outline"
-												size="icon"
-												onClick={() => setShowKey(!showKey)}
-												className="rounded-full"
-											>
-												{showKey ? (
-													<EyeOff className="h-4 w-4" />
-												) : (
-													<Eye className="h-4 w-4" />
-												)}
-											</Button>
-											<Button
-												variant="outline"
-												size="icon"
-												onClick={() => copyToClipboard(apiKey.apiKey ?? "")}
-												className="rounded-full"
-											>
-												<Copy className="h-4 w-4" />
-											</Button>
-										</div>
-									</div>
-									<p className="mt-3 text-sm text-destructive">
-										⚠️ This key will only be shown once. Store it securely!
-									</p>
-								</div>
-							)}
-							<div className="flex items-center justify-end gap-x-2">
+				{rawKey ? (
+					<div className="space-y-3">
+						<div className="flex items-center space-x-2">
+							<Key className="h-4 w-4 text-primary" />
+							<h3 className="text-sm font-semibold capitalize">{environment} key</h3>
+						</div>
+						<div className="flex items-center justify-between gap-2 rounded-lg border bg-gradient-to-br from-muted/50 to-muted/95 p-2">
+							<TypographyInlineCode className="flex-1 text-sm w-fit break-all">
+								{showKey ? rawKey : `${rawKey.slice(0, 12)}*****${rawKey.slice(-4)}`}
+							</TypographyInlineCode>
+							<div className="ml-auto flex flex-shrink-0 gap-2">
 								<Button
+									type="button"
 									variant="outline"
-									onClick={() => handleDialogClose(false)}
+									size="icon"
+									onClick={() => setShowKey((value) => !value)}
+									className="rounded-full"
+									aria-label={showKey ? "Hide key" : "Show key"}
 								>
-									{apiKey ? "Close" : "Cancel"}
+									{showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
 								</Button>
-								<SubmitButton
-									isSubmitting={form.formState.isSubmitting}
-									text="Create Key"
-								/>
+								<Button
+									type="button"
+									variant="outline"
+									size="icon"
+									onClick={() => void copyToClipboard(rawKey)}
+									className="rounded-full"
+									aria-label="Copy key"
+								>
+									<Copy className="h-4 w-4" />
+								</Button>
 							</div>
-						</form>
-					</Form>
-				</div>
+						</div>
+						<p className="text-sm text-destructive">
+							This key will only be shown once. Store it securely.
+						</p>
+						<label className="flex items-start gap-2 text-sm">
+							<input
+								type="checkbox"
+								className="mt-0.5 h-4 w-4"
+								checked={acknowledged}
+								onChange={(event) => setAcknowledged(event.target.checked)}
+							/>
+							<span>I&apos;ve copied and stored this key.</span>
+						</label>
+					</div>
+				) : (
+					<div className="space-y-2">
+						<Label>Environment</Label>
+						<div className="grid grid-cols-2 gap-3">
+							{ENVIRONMENTS.map((option) => (
+								<button
+									key={option.value}
+									type="button"
+									onClick={() => setEnvironment(option.value)}
+									aria-pressed={environment === option.value}
+									className={cn(
+										"rounded-lg border-2 p-3 text-left transition-colors",
+										environment === option.value
+											? "border-primary bg-primary/5"
+											: "border-border hover:border-primary/40",
+									)}
+								>
+									<p className="text-sm font-medium">{option.label}</p>
+									<p className="mt-1 text-xs text-muted-foreground">{option.description}</p>
+								</button>
+							))}
+						</div>
+					</div>
+				)}
+
+				<DialogFooter className="gap-2">
+					{rawKey ? (
+						<Button type="button" disabled={!acknowledged} onClick={() => handleOpenChange(false)}>
+							Done
+						</Button>
+					) : (
+						<>
+							<Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+								Cancel
+							</Button>
+							<Button type="button" onClick={() => void handleCreate()} disabled={submitting}>
+								{submitting ? (
+									<>
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating…
+									</>
+								) : (
+									"Create key"
+								)}
+							</Button>
+						</>
+					)}
+				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);

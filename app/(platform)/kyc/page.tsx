@@ -13,7 +13,6 @@ type VerificationRow = {
   reference: string;
   status: string;
   verdict?: "pass" | "review" | "reject" | null;
-  confidence?: number | null;
   input: unknown;
   createdAt: number;
   updatedAt: number;
@@ -52,6 +51,14 @@ function subjectNameFromInput(input: unknown): string {
   return "";
 }
 
+function documentTypeFromInput(input: unknown): string {
+  if (typeof input === "object" && input !== null && "documentType" in input) {
+    const value = (input as Record<string, unknown>).documentType;
+    if (typeof value === "string" && value) return value;
+  }
+  return "identity document";
+}
+
 async function getKYCView(): Promise<KYCView> {
   try {
     const client = await getAuthenticatedConvexClient();
@@ -84,11 +91,10 @@ async function getKYCView(): Promise<KYCView> {
         userName: subjectNameFromInput(row.input),
         companyId: "",
         status,
-        documentType: "identity document",
+        documentType: documentTypeFromInput(row.input),
         createdAt,
         updatedAt: new Date(row.updatedAt).toISOString(),
         submittedAt: createdAt,
-        riskScore: row.confidence != null ? row.confidence * 100 : undefined,
       } satisfies KYCRecord;
     });
 

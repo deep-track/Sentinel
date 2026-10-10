@@ -1,10 +1,10 @@
 "use client";
 
 import type { APIKey } from "@/backend/lib/types/api-keys";
+import { ClientDate } from "@/components/client-date";
 import { Badge } from "@/components/ui/badge";
 import { TypographyInlineCode } from "@/components/ui/typography";
-import { ColumnDef } from "@tanstack/react-table";
-import { formatDistanceToNow } from "date-fns";
+import type { ColumnDef } from "@tanstack/react-table";
 import RevokeApiKey from "./revoke-api-key";
 
 export const apiColumns: ColumnDef<APIKey>[] = [
@@ -14,10 +14,10 @@ export const apiColumns: ColumnDef<APIKey>[] = [
 	},
 	{
 		accessorKey: "apiKey",
-		header: "API Key",
+		header: "Key prefix",
 		cell: ({ row }) => (
 			<Badge variant="secondary" className="font-mono py-1">
-				{`${(row.original.apiKey ?? "").slice(0, 4)}****`}
+				{`${row.original.apiKey ?? ""}…`}
 			</Badge>
 		),
 	},
@@ -28,7 +28,7 @@ export const apiColumns: ColumnDef<APIKey>[] = [
 			<Badge
 				variant={row.original.status === "Active" ? "success" : "destructive"}
 			>
-				{row.original.status}
+				{row.original.status === "Active" ? "Active" : "Revoked"}
 			</Badge>
 		),
 	},
@@ -36,10 +36,8 @@ export const apiColumns: ColumnDef<APIKey>[] = [
 		accessorKey: "createdAt",
 		header: "Created",
 		cell: ({ row }) => (
-			<TypographyInlineCode className="text-muted-foreground capitalize  font-sans w-fit">
-				{row.original.createdAt ? formatDistanceToNow(new Date(row.original.createdAt), {
-					addSuffix: true,
-				}) : "N/A"}
+			<TypographyInlineCode className="text-muted-foreground font-sans w-fit">
+				<ClientDate value={row.original.createdAt} format="relative" fallback="N/A" />
 			</TypographyInlineCode>
 		),
 	},
@@ -48,14 +46,7 @@ export const apiColumns: ColumnDef<APIKey>[] = [
 		header: "Revoke",
 		cell: ({ row }) => {
 			if (row.original.status === "Suspended") return null;
-
-			return (
-				<RevokeApiKey
-					keyId={row.original.id}
-					userId=""
-					companyId=""
-				/>
-			);
+			return <RevokeApiKey keyId={row.original.id} />;
 		},
 	},
 ];

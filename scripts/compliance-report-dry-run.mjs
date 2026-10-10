@@ -41,7 +41,16 @@ const exportData = {
       action: "aml.screened",
       targetId: "verification_fixture_001",
       clientId: "client_fixture_001",
-      metadata: { matchCount: 1, source: "OFAC_SDN", fixture: true },
+      // Mirrors amlPersistence.complete's "aml.screened" audit metadata.
+      metadata: {
+        verdict: "review",
+        matchCount: 1,
+        sourceVersions: ["watchlist_version_fixture_ofac"],
+        checkedVersions: ["watchlist_version_fixture_ofac", "watchlist_version_fixture_un"],
+        missingSources: [],
+        staleSources: [],
+        fixture: true,
+      },
       timestamp: periodStart + 4200000,
     },
   ],

@@ -1,24 +1,30 @@
 import { v } from "convex/values";
-import { internalAction, internalMutation, query } from "./_generated/server";
+import { internalAction, internalMutation, query, type ActionCtx, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { isInternalAdmin } from "./lib/rbac";
-
-const SOURCE_KEYS = ["OFAC_SDN", "UN_CONSOLIDATED"] as const;
-type SourceKey = (typeof SOURCE_KEYS)[number];
-type NormalizedEntry = {
-  sourceRecordId: string;
-  entityType: "individual" | "entity" | "unknown";
-  primaryName: string;
-  aliases: string[];
-  normalizedNames: string[];
-  countries: string[];
-  programs: string[];
-  identifiers?: unknown;
-};
+import { currentAccessResult, loadCurrentAccess } from "./lib/access";
+import type { SourceKey } from "./lib/amlMatching";
+import { parseSource } from "./lib/watchlistParsers";
 
 const DEFAULT_OFAC_URL = "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML";
 const BATCH_SIZE = 250;
+// Abort a source download (headers + body) after this long.
+const FETCH_TIMEOUT_MS = 120_000;
+// Refuse to activate a version whose record count fell by more than this
+// fraction versus the active version (truncated/partial download guard).
+const MAX_RECORD_DROP_RATIO = 0.3;
+
+// Garbage collection of superseded/failed versions.
+const GC_ENTRY_BATCH = 250;
+const GC_MAX_CHAIN_RUNS = 200;
+// Superseded versions are kept this long so in-flight screenings that
+// started on them can finish paging through their entries.
+const SUPERSEDED_RETENTION_MS = 24 * 60 * 60 * 1000;
+// A "pending" version older than this belongs to a crashed ingestion run.
+const PENDING_ABANDON_MS = 6 * 60 * 60 * 1000;
+
+const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"));
 
 const entryValidator = v.object({
   sourceRecordId: v.string(),
@@ -48,133 +54,56 @@ function requireUrl(name: string, fallback?: string): string {
   }
 }
 
-function decodeXml(value: string): string {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .trim();
-}
-
-function tagValue(block: string, tag: string): string | undefined {
-  const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
-  return match ? decodeXml(match[1].replace(/<[^>]+>/g, " ")) : undefined;
-}
-
-function tagValues(block: string, tag: string): string[] {
-  return Array.from(block.matchAll(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "gi")))
-    .map((match) => decodeXml(match[1].replace(/<[^>]+>/g, " ")))
-    .filter(Boolean);
-}
-
-function normalizeName(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-}
-
-function nameFromParts(parts: Array<string | undefined>): string {
-  return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-}
-
-function parseOfac(xml: string): NormalizedEntry[] {
-  const blocks = Array.from(xml.matchAll(/<sdnEntry\b[\s\S]*?<\/sdnEntry>/gi)).map((m) => m[0]);
-  if (blocks.length === 0) throw new Error("OFAC response did not contain sdnEntry records");
-  return blocks.map((block, index) => {
-    const first = tagValue(block, "firstName");
-    const last = tagValue(block, "lastName");
-    const primaryName = nameFromParts([first, last]);
-    const aliases = Array.from(block.matchAll(/<aka\b[\s\S]*?<\/aka>/gi))
-      .map((match) => nameFromParts([tagValue(match[0], "firstName"), tagValue(match[0], "lastName")]))
-      .filter(Boolean);
-    const programs = tagValues(block, "program");
-    const countries = unique([...tagValues(block, "country"), ...tagValues(block, "nationality")]);
-    const sourceRecordId = tagValue(block, "uid") ?? `ofac-${index + 1}`;
-    const names = unique([primaryName, ...aliases]);
-    return {
-      sourceRecordId,
-      entityType: tagValue(block, "sdnType")?.toLowerCase() === "individual" ? "individual" : "entity",
-      primaryName: primaryName || sourceRecordId,
-      aliases,
-      normalizedNames: names.map(normalizeName),
-      countries,
-      programs,
-      identifiers: { uid: sourceRecordId },
-    };
-  });
-}
-
-function parseUn(xml: string): NormalizedEntry[] {
-  const blocks = Array.from(xml.matchAll(/<(INDIVIDUAL|ENTITY)\b[\s\S]*?<\/\1>/gi)).map((m) => ({ block: m[0], type: m[1].toUpperCase() }));
-  if (blocks.length === 0) throw new Error("UN response did not contain INDIVIDUAL or ENTITY records");
-  return blocks.map(({ block, type }, index) => {
-    const primaryName = nameFromParts([
-      tagValue(block, "FIRST_NAME"),
-      tagValue(block, "SECOND_NAME"),
-      tagValue(block, "THIRD_NAME"),
-      tagValue(block, "FOURTH_NAME"),
-      tagValue(block, "NAME"),
-    ]);
-    const aliases = Array.from(block.matchAll(/<INDIVIDUAL_ALIAS\b[\s\S]*?<\/INDIVIDUAL_ALIAS>/gi))
-      .map((match) => nameFromParts([tagValue(match[0], "ALIAS_NAME"), tagValue(match[0], "QUALITY")]))
-      .filter(Boolean);
-    const sourceRecordId = tagValue(block, "DATAID") ?? tagValue(block, "ENTITY_ID") ?? `un-${index + 1}`;
-    const unListType = tagValue(block, "UN_LIST_TYPE");
-    const programs = unique([...(unListType ? [unListType] : []), ...tagValues(block, "REFERENCE_NUMBER")]);
-    const countries = unique([...tagValues(block, "NATIONALITY"), ...tagValues(block, "COUNTRY"), ...tagValues(block, "LOCATION")]);
-    const names = unique([primaryName, ...aliases]);
-    return {
-      sourceRecordId,
-      entityType: type === "INDIVIDUAL" ? "individual" : "entity",
-      primaryName: primaryName || sourceRecordId,
-      aliases,
-      normalizedNames: names.map(normalizeName),
-      countries,
-      programs,
-      identifiers: { dataId: sourceRecordId },
-    };
-  });
-}
-
 async function sha256(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function parseSource(sourceKey: SourceKey, body: string): NormalizedEntry[] {
-  return sourceKey === "OFAC_SDN" ? parseOfac(body) : parseUn(body);
-}
-
-async function runIngestion(ctx: any, sourceKey: SourceKey, sourceUrl: string) {
-  const startedAt = Date.now();
-  const version = (await ctx.runMutation(internal.watchlists._startVersion, {
-    sourceKey,
-    sourceUrl,
-    startedAt,
-  })) as { versionId: Id<"watchlistVersions"> };
+async function fetchSource(sourceKey: SourceKey, sourceUrl: string): Promise<{ body: string; lastModified: string | null }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(sourceUrl, {
       headers: { "User-Agent": "Deeptrack-Sentinel-Watchlist-Ingestion/1.0" },
+      signal: controller.signal,
     });
     if (!response.ok) throw new Error(`${sourceKey} source returned HTTP ${response.status}`);
     const body = await response.text();
+    return { body, lastModified: response.headers.get("last-modified") };
+  } catch (error) {
+    if (typeof error === "object" && error !== null && (error as { name?: unknown }).name === "AbortError") {
+      throw new Error(`${sourceKey} source timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function minimumAcceptedCount(previousRecordCount: number | null): number {
+  return previousRecordCount ? Math.ceil(previousRecordCount * (1 - MAX_RECORD_DROP_RATIO)) : 1;
+}
+
+async function runIngestion(ctx: ActionCtx, sourceKey: SourceKey, sourceUrl: string, allowRecordDrop: boolean) {
+  const startedAt = Date.now();
+  const version: { versionId: Id<"watchlistVersions">; previousRecordCount: number | null } = await ctx.runMutation(
+    internal.watchlists._startVersion,
+    { sourceKey, sourceUrl, startedAt },
+  );
+  try {
+    const { body, lastModified } = await fetchSource(sourceKey, sourceUrl);
     if (body.length < 256) throw new Error(`${sourceKey} source response was unexpectedly small`);
     const entries = parseSource(sourceKey, body);
     if (entries.length === 0) throw new Error(`${sourceKey} source produced zero records`);
+    const minimum = minimumAcceptedCount(version.previousRecordCount);
+    if (!allowRecordDrop && entries.length < minimum) {
+      throw new Error(
+        `${sourceKey} record count dropped from ${version.previousRecordCount} to ${entries.length} (more than ${MAX_RECORD_DROP_RATIO * 100}%); refusing to activate. Re-run with allowRecordDrop if the shrink is genuine.`,
+      );
+    }
     const contentHash = await sha256(body);
-    const sourceVersion = response.headers.get("last-modified") ?? contentHash.slice(0, 16);
+    const sourceVersion = lastModified ?? contentHash.slice(0, 16);
     for (let offset = 0; offset < entries.length; offset += BATCH_SIZE) {
       await ctx.runMutation(internal.watchlists._appendEntries, {
         versionId: version.versionId,
@@ -183,7 +112,7 @@ async function runIngestion(ctx: any, sourceKey: SourceKey, sourceUrl: string) {
         now: Date.now(),
       });
     }
-    await ctx.runMutation(internal.watchlists._activateVersion, {
+    const activation: { activated: boolean; reason?: string } = await ctx.runMutation(internal.watchlists._activateVersion, {
       versionId: version.versionId,
       sourceKey,
       sourceUrl,
@@ -191,7 +120,9 @@ async function runIngestion(ctx: any, sourceKey: SourceKey, sourceUrl: string) {
       contentHash,
       recordCount: entries.length,
       completedAt: Date.now(),
+      allowRecordDrop,
     });
+    if (!activation.activated) throw new Error(activation.reason ?? `${sourceKey} version was not activated`);
     return { sourceKey, recordCount: entries.length, contentHash, durationMs: Date.now() - startedAt };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown ingestion failure";
@@ -205,19 +136,31 @@ async function runIngestion(ctx: any, sourceKey: SourceKey, sourceUrl: string) {
   }
 }
 
+// `allowRecordDrop` is an operator override for a genuine large delisting:
+// `npx convex run watchlists:ingestOfac '{"allowRecordDrop": true}'`.
 export const ingestOfac = internalAction({
-  args: {},
-  handler: async (ctx) => runIngestion(ctx, "OFAC_SDN", requireUrl("WATCHLIST_OFAC_SDN_URL", DEFAULT_OFAC_URL)),
+  args: { allowRecordDrop: v.optional(v.boolean()) },
+  handler: async (ctx, args) =>
+    runIngestion(ctx, "OFAC_SDN", requireUrl("WATCHLIST_OFAC_SDN_URL", DEFAULT_OFAC_URL), args.allowRecordDrop ?? false),
 });
 
 export const ingestUn = internalAction({
-  args: {},
-  handler: async (ctx) => runIngestion(ctx, "UN_CONSOLIDATED", requireUrl("WATCHLIST_UN_CONSOLIDATED_URL")),
+  args: { allowRecordDrop: v.optional(v.boolean()) },
+  handler: async (ctx, args) =>
+    runIngestion(ctx, "UN_CONSOLIDATED", requireUrl("WATCHLIST_UN_CONSOLIDATED_URL"), args.allowRecordDrop ?? false),
 });
+
+async function activeVersionFor(ctx: MutationCtx, sourceKey: SourceKey) {
+  return await ctx.db
+    .query("watchlistVersions")
+    .withIndex("by_source_and_status", (q) => q.eq("sourceKey", sourceKey).eq("status", "active"))
+    .order("desc")
+    .first();
+}
 
 export const _startVersion = internalMutation({
   args: {
-    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceKey: sourceKeyValidator,
     sourceUrl: v.string(),
     startedAt: v.number(),
   },
@@ -241,13 +184,17 @@ export const _startVersion = internalMutation({
       recordCount: 0,
       fetchedAt: args.startedAt,
     });
-    return { versionId };
+    const active = await activeVersionFor(ctx, args.sourceKey);
+    return { versionId, previousRecordCount: active && active.recordCount > 0 ? active.recordCount : null };
   },
 });
 
 export const _appendEntries = internalMutation({
-  args: { sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")), versionId: v.id("watchlistVersions"), entries: v.array(entryValidator), now: v.number() },
+  args: { sourceKey: sourceKeyValidator, versionId: v.id("watchlistVersions"), entries: v.array(entryValidator), now: v.number() },
   handler: async (ctx, args) => {
+    const version = await ctx.db.get(args.versionId);
+    // Never write into a version that was already failed or garbage-collected.
+    if (!version || version.status !== "pending") throw new Error("Watchlist version is no longer pending");
     for (const entry of args.entries) {
       await ctx.db.insert("watchlistEntries", {
         versionId: args.versionId,
@@ -264,120 +211,139 @@ export const _appendEntries = internalMutation({
 export const _activateVersion = internalMutation({
   args: {
     versionId: v.id("watchlistVersions"),
-    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceKey: sourceKeyValidator,
     sourceUrl: v.string(),
     sourceVersion: v.string(),
     contentHash: v.string(),
     recordCount: v.number(),
     completedAt: v.number(),
+    allowRecordDrop: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const active = await ctx.db.query("watchlistVersions").withIndex("by_source_and_status", (q) => q.eq("sourceKey", args.sourceKey).eq("status", "active")).collect();
-    for (const version of active) await ctx.db.patch(version._id, { status: "superseded" });
+    const version = await ctx.db.get(args.versionId);
+    if (!version || version.status !== "pending") {
+      return { activated: false, reason: `${args.sourceKey} version is no longer pending` };
+    }
+    const active = await ctx.db
+      .query("watchlistVersions")
+      .withIndex("by_source_and_status", (q) => q.eq("sourceKey", args.sourceKey).eq("status", "active"))
+      .collect();
+    // Re-checked here, transactionally, against the version actually active now.
+    const previous = active.reduce((max, row) => Math.max(max, row.recordCount), 0);
+    if (!args.allowRecordDrop && args.recordCount < minimumAcceptedCount(previous || null)) {
+      return {
+        activated: false,
+        reason: `${args.sourceKey} record count dropped from ${previous} to ${args.recordCount} (more than ${MAX_RECORD_DROP_RATIO * 100}%); refusing to activate.`,
+      };
+    }
+    for (const row of active) await ctx.db.patch(row._id, { status: "superseded", supersededAt: args.completedAt });
     await ctx.db.patch(args.versionId, { status: "active", sourceVersion: args.sourceVersion, contentHash: args.contentHash, recordCount: args.recordCount, activatedAt: args.completedAt });
     const source = await ctx.db.query("watchlistSources").withIndex("by_source_key", (q) => q.eq("sourceKey", args.sourceKey)).unique();
     if (source) await ctx.db.patch(source._id, { currentVersionId: args.versionId, sourceUrl: args.sourceUrl, lastSuccessfulAt: args.completedAt, lastError: undefined, updatedAt: args.completedAt });
+    return { activated: true };
   },
 });
 
 export const _failVersion = internalMutation({
-  args: { versionId: v.id("watchlistVersions"), sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")), error: v.string(), failedAt: v.number() },
+  args: { versionId: v.id("watchlistVersions"), sourceKey: sourceKeyValidator, error: v.string(), failedAt: v.number() },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.versionId, { status: "failed", failureReason: args.error });
+    const version = await ctx.db.get(args.versionId);
+    // Never demote a version that made it to active (or was already purged).
+    if (version && version.status === "pending") {
+      await ctx.db.patch(args.versionId, { status: "failed", failureReason: args.error });
+    }
     const source = await ctx.db.query("watchlistSources").withIndex("by_source_key", (q) => q.eq("sourceKey", args.sourceKey)).unique();
     if (source) await ctx.db.patch(source._id, { lastAttemptedAt: args.failedAt, lastError: args.error, updatedAt: args.failedAt });
   },
 });
 
-const customerMembership = v.object({
-  clientId: v.id("clients"),
-  clientName: v.string(),
-  clientStatus: v.union(
-    v.literal("active"),
-    v.literal("suspended"),
-    v.literal("trial_expired"),
-  ),
-  role: v.union(
-    v.literal("client_admin"),
-    v.literal("compliance_analyst"),
-    v.literal("developer"),
-    v.literal("viewer"),
-  ),
-});
-
-type ClientRole =
-  | "client_admin"
-  | "compliance_analyst"
-  | "developer"
-  | "viewer";
-
-function normalizeClientRole(value: unknown): ClientRole | null {
-  switch (String(value)) {
-    case "client_admin":
-    case "compliance_analyst":
-    case "developer":
-    case "viewer":
-      return value as ClientRole;
-    case "admin":
-    case "administrator":
-      return "client_admin";
-    case "analyst":
-      return "compliance_analyst";
-    case "member":
-      return "viewer";
-    default:
-      return null;
-  }
+// Oldest purgeable version: failed ones immediately, superseded ones after
+// the retention window.
+async function nextPurgeableVersion(ctx: MutationCtx, now: number): Promise<Doc<"watchlistVersions"> | null> {
+  const failed = await ctx.db
+    .query("watchlistVersions")
+    .withIndex("by_status_and_purgedAt", (q) => q.eq("status", "failed").eq("purgedAt", undefined))
+    .first();
+  if (failed) return failed;
+  const superseded = await ctx.db
+    .query("watchlistVersions")
+    .withIndex("by_status_and_purgedAt", (q) => q.eq("status", "superseded").eq("purgedAt", undefined))
+    .take(50);
+  return (
+    superseded.find((row) => now - (row.supersededAt ?? row.activatedAt ?? row.fetchedAt) >= SUPERSEDED_RETENTION_MS) ??
+    null
+  );
 }
+
+// Deletes the entries of superseded/failed watchlist versions in bounded
+// batches, rescheduling itself until nothing is left (or the per-firing run
+// budget is spent; the hourly cron picks up from there). Entries referenced by
+// a flaggedEntities row are kept as audit evidence. The version document
+// itself is kept (marked purgedAt) for the ingestion history.
+export const purgeWatchlistVersions = internalMutation({
+  args: {
+    versionId: v.optional(v.id("watchlistVersions")),
+    cursor: v.optional(v.string()),
+    remainingRuns: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const remainingRuns = args.remainingRuns ?? GC_MAX_CHAIN_RUNS;
+    if (remainingRuns <= 0) return { done: false };
+
+    if (!args.versionId) {
+      // Crashed ingestion runs leave versions stuck in "pending".
+      const pending = await ctx.db
+        .query("watchlistVersions")
+        .withIndex("by_status_and_purgedAt", (q) => q.eq("status", "pending").eq("purgedAt", undefined))
+        .take(20);
+      for (const row of pending) {
+        if (now - row.fetchedAt > PENDING_ABANDON_MS) {
+          await ctx.db.patch(row._id, { status: "failed", failureReason: "Ingestion abandoned before activation." });
+        }
+      }
+    }
+
+    let target = args.versionId ? await ctx.db.get(args.versionId) : null;
+    let cursor = args.cursor ?? null;
+    if (!target || (target.status !== "superseded" && target.status !== "failed") || target.purgedAt !== undefined) {
+      target = await nextPurgeableVersion(ctx, now);
+      cursor = null;
+    }
+    if (!target) return { done: true };
+
+    const page = await ctx.db
+      .query("watchlistEntries")
+      .withIndex("by_version", (q) => q.eq("versionId", target._id))
+      .paginate({ numItems: GC_ENTRY_BATCH, cursor });
+    let deleted = 0;
+    for (const entry of page.page) {
+      const referenced = await ctx.db
+        .query("flaggedEntities")
+        .withIndex("by_watchlist_entry", (q) => q.eq("watchlistEntryId", entry._id))
+        .first();
+      if (referenced) continue;
+      await ctx.db.delete(entry._id);
+      deleted += 1;
+    }
+
+    if (page.isDone) {
+      await ctx.db.patch(target._id, { purgedAt: now });
+      await ctx.scheduler.runAfter(0, internal.watchlists.purgeWatchlistVersions, { remainingRuns: remainingRuns - 1 });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.watchlists.purgeWatchlistVersions, {
+        versionId: target._id,
+        cursor: page.continueCursor,
+        remainingRuns: remainingRuns - 1,
+      });
+    }
+    return { done: false, versionId: target._id, deleted };
+  },
+});
 
 /** Stable customer authorization boundary. */
 export const currentAccess = query({
   args: {},
-  returns: v.object({
-    authorized: v.boolean(),
-    memberships: v.array(customerMembership),
-  }),
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { authorized: false, memberships: [] };
-
-    // Internal administrators have product-wide access and do not need a
-    // customer membership. Regular users remain fail-closed below.
-    if (await isInternalAdmin(ctx)) {
-      return { authorized: true, memberships: [] };
-    }
-
-    try {
-      const rows = await ctx.db
-        .query("clientMembers")
-        .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-        .collect();
-
-      const memberships = (
-        await Promise.all(
-          rows
-            .filter((row) => row.isActive)
-            .map(async (row) => {
-              const role = normalizeClientRole(row.role);
-              if (!role) return null;
-
-              const client = await ctx.db.get(row.clientId);
-              if (!client || client.status !== "active") return null;
-
-              return {
-                clientId: client._id,
-                clientName: client.name,
-                clientStatus: client.status,
-                role,
-              };
-            }),
-        )
-      ).filter((row): row is NonNullable<typeof row> => row !== null);
-
-      return { authorized: memberships.length > 0, memberships };
-    } catch (error) {
-      console.error("[watchlists.currentAccess] denied due to read failure", error);
-      return { authorized: false, memberships: [] };
-    }
-  },
+  returns: currentAccessResult,
+  handler: async (ctx) => loadCurrentAccess(ctx),
 });

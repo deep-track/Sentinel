@@ -4,6 +4,7 @@ import Link from "next/link";
 import { anyApi } from "convex/server";
 import { ChevronLeft, Clock } from "lucide-react";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
+import { ClientDate } from "@/components/client-date";
 
 // Manual review is resolved by internal reviewers only (see
 // backend/convex/reviewQueue.ts). This is the client-facing, read-only
@@ -83,7 +84,11 @@ export default async function KYIReviewPage({ params }: KYIReviewPageProps) {
             {entry.status === "resolved" ? (
               <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-4 text-sm text-slate-600 dark:text-slate-300">
                 Resolved{" "}
-                {entry.resolvedAt ? `on ${new Date(entry.resolvedAt).toLocaleString()}` : ""}
+                {entry.resolvedAt ? (
+                  <>
+                    on <ClientDate value={entry.resolvedAt} format="PPp" />
+                  </>
+                ) : null}
                 {entry.resolutionNotes ? ` — ${entry.resolutionNotes}` : ""}
               </div>
             ) : (

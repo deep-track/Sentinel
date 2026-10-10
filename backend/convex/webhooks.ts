@@ -1,6 +1,7 @@
 import { v, ConvexError } from "convex/values";
 import { internalAction, internalMutation, internalQuery, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { requireClientRole } from "./lib/rbac";
 import {
   buildWebhookPayload,
@@ -46,13 +47,16 @@ export const dispatchWebhook = internalAction({
             result: verification.result,
           });
 
-    const deliveryId: any = await ctx.runMutation(internal.webhooks._createDelivery, {
-      clientId: verification.clientId,
-      verificationId: args.verificationId,
-      payload,
-    });
+    const deliveryId: Id<"webhookDeliveries"> = await ctx.runMutation(
+      internal.webhooks._createDelivery,
+      {
+        clientId: verification.clientId,
+        verificationId: args.verificationId,
+        payload,
+      },
+    );
 
-    await ctx.runAction(internal.webhooks.attemptDelivery, { deliveryId });
+    await ctx.scheduler.runAfter(0, internal.webhooks.attemptDelivery, { deliveryId });
   },
 });
 
@@ -66,7 +70,8 @@ export const attemptDelivery = internalAction({
     const delivery = await ctx.runQuery(internal.webhooks._getDelivery, {
       deliveryId: args.deliveryId,
     });
-    if (!delivery || delivery.status === "delivered") return;
+    // "failed" is terminal until a manual resend flips it back to "pending".
+    if (!delivery || delivery.status === "delivered" || delivery.status === "failed") return;
 
     const client = await ctx.runQuery(internal.webhooks._getClientForWebhook, {
       clientId: delivery.clientId,
@@ -91,7 +96,7 @@ export const attemptDelivery = internalAction({
     }
 
     const nextAttemptCount = delivery.attemptCount + 1;
-    if (nextAttemptCount >= MAX_WEBHOOK_ATTEMPTS) {
+    if (result.permanent || nextAttemptCount >= MAX_WEBHOOK_ATTEMPTS) {
       await ctx.runMutation(internal.webhooks._markFailed, {
         deliveryId: args.deliveryId,
         responseStatus: result.statusCode,
@@ -125,6 +130,14 @@ export const resendWebhook = mutation({
       throw new ConvexError({ code: "not_found", message: "Delivery not found." });
     }
     await requireClientRole(ctx, delivery.clientId, ["client_admin", "compliance_analyst"]);
+    // Only a delivery whose retry schedule is exhausted can be resent;
+    // resending a pending/retrying one would start a second retry chain.
+    if (delivery.status !== "failed") {
+      throw new ConvexError({
+        code: "invalid_state",
+        message: "Only failed deliveries can be resent.",
+      });
+    }
     await ctx.db.patch(args.deliveryId, {
       status: "pending",
       attemptCount: 0,

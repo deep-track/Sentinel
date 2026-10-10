@@ -1,50 +1,53 @@
 export const runtime = "nodejs";
 
-import { getAuth0 } from "@/backend/lib/auth0";
+import { getAuth0, getConfiguredOrganizationId } from "@/backend/lib/auth0";
+import { isRecoverableSessionError } from "@/backend/lib/auth-errors";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-const PUBLIC_ROUTES = [
-	"/api/auth",
-	"/sign-in",
-	"/logged-out",
-	"/kyc/new",      // invitation flow
-];
+// Routes that skip the Auth0 SDK middleware entirely (no rolling-session
+// cookie refresh). This middleware never enforces authentication itself:
+// protected pages and API routes check the session server-side. Matching is
+// exact or on a path-segment boundary, so "/sign-in-foo" is not public.
+const PUBLIC_ROUTES = ["/sign-in", "/logged-out"];
 
 function isPublicRoute(pathname: string): boolean {
-	return PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
-}
-
-function isRecoverableMiddlewareError(error: unknown) {
-	if (!(error instanceof Error)) return false;
-	const message = error.message.toLowerCase();
-	return (
-		message.includes("jweinvalid") ||
-		message.includes("invalid compact jwe") ||
-		message.includes("decrypt") ||
-		message.includes("invalid url")
+	return PUBLIC_ROUTES.some(
+		(route) => pathname === route || pathname.startsWith(`${route}/`),
 	);
 }
 
-export function middleware(request: NextRequest) {
+function clearSessionCookies(request: NextRequest, response: NextResponse) {
+	for (const cookie of request.cookies.getAll()) {
+		const isSessionCookie =
+			cookie.name === "__session" ||
+			cookie.name.startsWith("__session__") ||
+			cookie.name === "appSession" ||
+			cookie.name.startsWith("appSession.");
+		if (isSessionCookie) {
+			response.cookies.set(cookie.name, "", { path: "/", maxAge: 0 });
+		}
+	}
+	return response;
+}
+
+export async function middleware(request: NextRequest) {
 	const { auth0, isAuth0Configured } = getAuth0();
 	if (!isAuth0Configured || !auth0) {
 		return NextResponse.next();
 	}
 
-	// Allow public routes without auth check
 	if (isPublicRoute(request.nextUrl.pathname)) {
 		return NextResponse.next();
 	}
 
 	try {
 		// Auth0 Business Users applications require an organization on login.
-		// Inject it before the SDK middleware dispatches /auth/login.
-		if (
-			request.nextUrl.pathname === "/auth/login" &&
-			!request.nextUrl.searchParams.has("organization")
-		) {
-			const organizationId = process.env.AUTH0_ORGANIZATION_ID?.trim();
+		// Always pin it to the configured organization so a caller cannot pick
+		// a different one via ?organization=.
+		const pathname = request.nextUrl.pathname.replace(/\/+$/, "") || "/";
+		if (pathname === "/auth/login") {
+			const organizationId = getConfiguredOrganizationId();
 			if (!organizationId) {
 				return NextResponse.json(
 					{ error: "B2B organization login is not configured" },
@@ -54,22 +57,16 @@ export function middleware(request: NextRequest) {
 			request.nextUrl.searchParams.set("organization", organizationId);
 		}
 
-		return auth0.middleware(request);
+		// Awaited so that errors from the SDK are caught below.
+		return await auth0.middleware(request);
 	} catch (error) {
-		if (!isRecoverableMiddlewareError(error)) {
+		if (!isRecoverableSessionError(error)) {
 			throw error;
 		}
 
-		const response = NextResponse.next();
-		const cookies = request.cookies.getAll();
-
-		for (const cookie of cookies) {
-			if (cookie.name === "appSession" || cookie.name.startsWith("appSession.")) {
-				response.cookies.set(cookie.name, "", { path: "/", maxAge: 0 });
-			}
-		}
-
-		return response;
+		// The session cookie cannot be decrypted or has expired: drop it and
+		// continue as a logged-out request instead of failing every page.
+		return clearSessionCookies(request, NextResponse.next());
 	}
 }
 

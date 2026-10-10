@@ -7,7 +7,6 @@ import {
   Shield,
   AlertTriangle,
   XCircle,
-  CheckCircle,
   ArrowLeft,
   User,
   Globe,
@@ -44,7 +43,6 @@ export default async function AMLProfilePage({
   };
 
   const risk = RISK_STYLES[riskLevel];
-  const score = Math.round((entity.score ?? 0) * 100);
 
   const p = entity.properties ?? {};
 

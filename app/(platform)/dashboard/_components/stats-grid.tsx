@@ -20,10 +20,10 @@ export function StatsGrid({
   activeApiKeys,
 }: StatsGridProps) {
   const items = [
-    { label: "Scans this month", value: total.toLocaleString() },
+    { label: "Scans (30 days)", value: total.toLocaleString("en-US") },
     { label: "Avg. verification", value: formatMs(avgCompletionTimeMs) },
-    { label: "Flagged / review", value: pendingReview.toLocaleString() },
-    { label: "Active API keys", value: activeApiKeys.toLocaleString() },
+    { label: "Flagged / review", value: pendingReview.toLocaleString("en-US") },
+    { label: "Active API keys", value: activeApiKeys.toLocaleString("en-US") },
   ];
 
   return (

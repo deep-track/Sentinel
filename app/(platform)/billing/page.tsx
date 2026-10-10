@@ -88,7 +88,7 @@ export default async function BillingPage() {
             </p>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-3xl font-semibold text-foreground">
-                {billing.balance.toLocaleString()}
+                {billing.balance.toLocaleString("en-US")}
               </span>
               <span className="text-sm text-muted-foreground">credits</span>
             </div>
