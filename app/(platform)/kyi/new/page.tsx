@@ -1,23 +1,12 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { anyApi } from "convex/server";
-import { redirect } from "next/navigation";
-import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import { KYIWizard } from "@/modules/kyi/kyi-wizard";
+import { requireActiveScope } from "@/app/(platform)/_lib/active-client";
 
-interface NewKYIPageProps {
-  searchParams: Promise<{ token?: string }>;
-}
-
-export default async function NewKYIPage({ searchParams }: NewKYIPageProps) {
-  const params = await searchParams;
-  void params;
-
-  const client = await getAuthenticatedConvexClient();
-  if (!client) redirect("/access-pending?reason=authorization-unavailable");
-  const access = await client.query(anyApi.dashboard.currentAccess, {});
-  const scope = access.memberships[0];
-  if (!access.authorized || !scope) redirect("/access-pending");
+export default async function NewKYIPage() {
+  const { scope } = await requireActiveScope();
 
   return (
     <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6">
@@ -32,7 +21,8 @@ export default async function NewKYIPage({ searchParams }: NewKYIPageProps) {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Investor Verification</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm max-w-xl">
-            Complete investor due diligence including identity, accreditation, and source of funds verification.
+            Complete investor due diligence for {scope.clientName}, including identity, accreditation, and
+            source of funds verification.
           </p>
         </div>
 

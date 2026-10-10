@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/backend/lib/auth";
+import { type AppUser, getCurrentUser, isInternalAdminRole } from "@/backend/lib/auth";
 
 const REQUIRED_ENV = [
   "AUTH0_DOMAIN",
@@ -77,6 +77,13 @@ async function getManagementToken(config: Auth0ManagementConfig) {
   return payload.access_token;
 }
 
+class Auth0ManagementError extends Error {
+  constructor(readonly status: number) {
+    super(`Auth0 management request failed with status ${status}`);
+    this.name = "Auth0ManagementError";
+  }
+}
+
 async function managementRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const config = getConfig();
   const token = await getManagementToken(config);
@@ -91,52 +98,103 @@ async function managementRequest<T>(path: string, init: RequestInit = {}): Promi
   });
 
   if (!response.ok) {
-    throw new Error(`Auth0 management request failed with status ${response.status}`);
+    throw new Auth0ManagementError(response.status);
   }
 
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
-async function requireInvitationAdministrator() {
+// Invitation administrators are internal admins (internal_admin / head /
+// admin, matching backend/convex/lib/rbac.ts) without the view_only role.
+async function requireInvitationAdministrator(): Promise<AppUser> {
   const user = await getCurrentUser();
-  if (!user || (user.role !== "admin" && user.role !== "head")) {
+  if (!user || !isInternalAdminRole(user.role) || user.viewOnly) {
     throw new Error("Invitation administration requires an administrator session");
   }
   return user;
 }
 
-export async function createOrganizationInvitation(email: string, redirectUrl: string) {
+// Only `internal_admin` (Auth0 internal_admin / administrator) may manage
+// invitations for any company. `head` / `admin` sessions are limited to the
+// company in their own companyId claim.
+function canManageCompany(user: AppUser, companyId: string | undefined) {
+  if (user.role === "internal_admin") return true;
+  return Boolean(companyId) && Boolean(user.companyId) && user.companyId === companyId;
+}
+
+type OrganizationInvitation = {
+  id: string;
+  invitation_url?: string;
+  app_metadata?: Record<string, unknown>;
+};
+
+function invitationsPath(config: Auth0ManagementConfig, invitationId?: string) {
+  const base = `/api/v2/organizations/${encodeURIComponent(config.organizationId)}/invitations`;
+  return invitationId ? `${base}/${encodeURIComponent(invitationId)}` : base;
+}
+
+export async function createOrganizationInvitation(params: {
+  email: string;
+  redirectUrl: string;
+  companyId: string;
+}) {
   const user = await requireInvitationAdministrator();
+  const companyId = params.companyId.trim();
+  if (!companyId) throw new Error("Company context is required");
+  if (!canManageCompany(user, companyId)) {
+    throw new Error("You can only invite users to your own company");
+  }
+
   const config = getConfig();
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = params.email.trim().toLowerCase();
   if (!normalizedEmail || !normalizedEmail.includes("@")) {
     throw new Error("A valid invitee email is required");
   }
 
-  return managementRequest<{ id: string; invitation_url?: string }>(
-    `/api/v2/organizations/${encodeURIComponent(config.organizationId)}/invitations`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        inviter: { name: user.fullName, email: user.email },
-        invitee: { email: normalizedEmail },
-        client_id: config.invitationClientId,
-        connection_id: config.invitationConnectionId,
-        ttl_sec: 7 * 24 * 60 * 60,
-        send_invitation_email: true,
-        app_metadata: { redirectUrl },
-      }),
-    },
-  );
+  return managementRequest<OrganizationInvitation>(invitationsPath(config), {
+    method: "POST",
+    body: JSON.stringify({
+      inviter: { name: user.fullName, email: user.email },
+      invitee: { email: normalizedEmail },
+      client_id: config.invitationClientId,
+      connection_id: config.invitationConnectionId,
+      ttl_sec: 7 * 24 * 60 * 60,
+      send_invitation_email: true,
+      // app_metadata is copied onto the user when the invitation is accepted;
+      // the Post-Login Action emits companyId from it as a namespaced claim.
+      app_metadata: { redirectUrl: params.redirectUrl, companyId, invitedBy: user.id },
+    }),
+  });
 }
 
 export async function revokeOrganizationInvitation(invitationId: string) {
-  await requireInvitationAdministrator();
+  const user = await requireInvitationAdministrator();
   const config = getConfig();
-  if (!invitationId.trim()) throw new Error("Invitation ID is required");
-  await managementRequest<void>(
-    `/api/v2/organizations/${encodeURIComponent(config.organizationId)}/invitations/${encodeURIComponent(invitationId)}`,
-    { method: "DELETE" },
-  );
+  const id = invitationId.trim();
+  if (!id) throw new Error("Invitation ID is required");
+
+  let invitation: OrganizationInvitation;
+  try {
+    invitation = await managementRequest<OrganizationInvitation>(invitationsPath(config, id));
+  } catch (error) {
+    if (error instanceof Auth0ManagementError && error.status === 404) {
+      throw new Error("Invitation not found");
+    }
+    throw error;
+  }
+
+  const invitationCompanyId = invitation.app_metadata?.companyId;
+  if (
+    !canManageCompany(
+      user,
+      typeof invitationCompanyId === "string" ? invitationCompanyId : undefined,
+    )
+  ) {
+    // Same message as a missing invitation so other companies' invitation IDs
+    // cannot be probed.
+    throw new Error("Invitation not found");
+  }
+
+  await managementRequest<void>(invitationsPath(config, id), { method: "DELETE" });
 }

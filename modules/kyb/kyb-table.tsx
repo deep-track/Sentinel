@@ -18,15 +18,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { ClientDate } from "@/components/client-date";
 import { type KYBStatus, KYBStatusBadge } from "@/modules/kyb/kyb-status-badge";
-import { format } from "date-fns";
-import {
-	ArrowUpDown,
-	ChevronLeft,
-	ChevronRight,
-	Eye,
-	Search,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Search } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -37,6 +31,7 @@ interface KYBTableProps {
 
 const STATUS_OPTIONS: { value: KYBStatus | "all"; label: string }[] = [
 	{ value: "all", label: "All statuses" },
+	{ value: "pending", label: "Pending" },
 	{ value: "processing", label: "Processing" },
 	{ value: "approved", label: "Approved" },
 	{ value: "declined", label: "Declined" },
@@ -92,21 +87,11 @@ export function KYBTable({ records, isLoading }: KYBTableProps) {
 					<TableHeader>
 						<TableRow>
 							<TableHead className="w-[40px]">#</TableHead>
-							<TableHead>
-								<button className="flex items-center gap-1 hover:text-foreground">
-									Business Name
-									<ArrowUpDown className="h-3 w-3" />
-								</button>
-							</TableHead>
+							<TableHead>Business Name</TableHead>
 							<TableHead>Reference</TableHead>
 							<TableHead>Country</TableHead>
 							<TableHead>Status</TableHead>
-							<TableHead>
-								<button className="flex items-center gap-1 hover:text-foreground">
-									Date
-									<ArrowUpDown className="h-3 w-3" />
-								</button>
-							</TableHead>
+							<TableHead>Date</TableHead>
 							<TableHead className="w-[80px]">Action</TableHead>
 						</TableRow>
 					</TableHeader>
@@ -147,13 +132,12 @@ export function KYBTable({ records, isLoading }: KYBTableProps) {
 										/>
 									</TableCell>
 									<TableCell className="text-sm text-slate-500">
-										{record.createdAt
-											? format(new Date(record.createdAt), "MMM d, yyyy")
-											: "-"}
+										<ClientDate value={record.createdAt} fallback="-" />
 									</TableCell>
 									<TableCell>
 										<Link
 											href={`/kyb/${record.id}`}
+											aria-label={`View ${record.businessName}`}
 											className="text-violet-600 dark:text-violet-400 hover:text-violet-800"
 										>
 											<Eye className="h-4 w-4" />

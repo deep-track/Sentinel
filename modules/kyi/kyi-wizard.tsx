@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle, ChevronRight } from "lucide-react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { anyApi } from "convex/server";
 import type { KYIStatus, InvestorProfileData, KYIIdentityData, FinancialDocsData } from "@/backend/lib/kyi-types";
 import { InvestorProfileStep } from "@/modules/kyi/steps/investor-profile-step";
@@ -13,6 +13,15 @@ import { KYIStatusBadge } from "@/modules/kyi/kyi-status-badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
+import { useAuthedQuery } from "@/hooks/use-authed-query";
+import { parseInvestmentAmount } from "@/modules/kyi/amount";
+import { getErrorMessage } from "@/modules/shared/errors";
+
+type VerificationRow = {
+  status: string;
+  verdict?: string | null;
+  failureReason?: string | null;
+};
 
 interface KYIWizardProps {
   clientId: string;
@@ -47,10 +56,10 @@ export function KYIWizard({ clientId }: KYIWizardProps) {
   const [elapsedTime, setElapsedTime] = useState(0);
 
   const createKyi = useMutation(anyApi.kyi.createKyi);
-  const liveRecord = useQuery(
+  const liveRecord = useAuthedQuery(
     anyApi.verifications.get,
     submittedKyiId ? { id: submittedKyiId } : "skip",
-  );
+  ) as VerificationRow | null | undefined;
   const liveStatus = normalizeStatus(liveRecord);
 
   const progressPercent = ((currentStep) / 3) * 100;
@@ -72,8 +81,19 @@ export function KYIWizard({ clientId }: KYIWizardProps) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function goBack(step: number) {
+    setCurrentStep(step);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleFinancialSubmit(data: FinancialDocsData) {
     setFinancialData(data);
+    const investmentAmount = parseInvestmentAmount(profileData.investmentAmount);
+    if (investmentAmount === null) {
+      toast.error("Enter a positive investment amount.");
+      goBack(0);
+      return;
+    }
     if (
       !profileData.firstName || !profileData.lastName || !profileData.email ||
       !profileData.dateOfBirth || !profileData.investorType || !profileData.accreditationStatus ||
@@ -102,7 +122,7 @@ export function KYIWizard({ clientId }: KYIWizardProps) {
         accreditationStatus: profileData.accreditationStatus,
         sourceOfFunds: profileData.sourceOfFunds,
         netWorthRange: profileData.netWorthRange,
-        investmentAmount: profileData.investmentAmount,
+        investmentAmount,
         investmentCurrency: profileData.investmentCurrency,
         isPEP: profileData.isPEP,
         pepDetails: profileData.pepDetails,
@@ -127,7 +147,7 @@ export function KYIWizard({ clientId }: KYIWizardProps) {
       setElapsedTime(0);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Submission failed. Please try again.");
+      toast.error(getErrorMessage(error, "Submission failed. Please try again."));
       console.error("[KYI submit] failed", error);
     } finally {
       setIsSubmitting(false);
@@ -222,10 +242,16 @@ export function KYIWizard({ clientId }: KYIWizardProps) {
           />
         )}
 
+        {/* Back buttons live inside each step so the step can hand back its
+            in-progress values (uploads included) before navigating. */}
         {currentStep === 1 && (
           <KYIDocumentStep
             defaultValues={identityData}
             onSubmit={handleIdentitySubmit}
+            onBack={(values) => {
+              setIdentityData(values);
+              goBack(0);
+            }}
             isLoading={isSubmitting}
           />
         )}
@@ -234,24 +260,16 @@ export function KYIWizard({ clientId }: KYIWizardProps) {
           <FinancialDocsStep
             defaultValues={financialData}
             onSubmit={handleFinancialSubmit}
+            onBack={(values) => {
+              setFinancialData(values);
+              goBack(1);
+            }}
             isLoading={isSubmitting}
             investorType={profileData.investorType}
+            accreditationStatus={profileData.accreditationStatus}
           />
         )}
       </div>
-
-      {/* Back Button */}
-      {currentStep > 0 && !completed && (
-        <div className="mt-6 flex justify-start">
-          <Button
-            variant="outline"
-            onClick={() => setCurrentStep(currentStep - 1)}
-            disabled={isSubmitting}
-          >
-            Back
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { ChevronLeft } from "lucide-react";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import type { KYIStatus } from "@/backend/lib/kyi-types";
 import { KYIStatusBadge } from "@/modules/kyi/kyi-status-badge";
+import { ClientDate } from "@/components/client-date";
 
 interface KYIDetailPageProps {
   params: Promise<{ id: string }>;
@@ -107,10 +108,10 @@ export default async function KYIDetailPage({ params }: KYIDetailPageProps) {
             </div>
 
             <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
-              <InfoRow label="Submitted" value={new Date(verification.createdAt).toLocaleString()} />
-              <InfoRow label="Last updated" value={new Date(verification.updatedAt).toLocaleString()} />
+              <InfoRow label="Submitted" value={<ClientDate value={verification.createdAt} format="PPp" />} />
+              <InfoRow label="Last updated" value={<ClientDate value={verification.updatedAt} format="PPp" />} />
               {verification.completedAt ? (
-                <InfoRow label="Completed" value={new Date(verification.completedAt).toLocaleString()} />
+                <InfoRow label="Completed" value={<ClientDate value={verification.completedAt} format="PPp" />} />
               ) : null}
               {profile ? (
                 <>
@@ -121,7 +122,7 @@ export default async function KYIDetailPage({ params }: KYIDetailPageProps) {
                   {profile.investmentAmount ? (
                     <InfoRow
                       label="Investment amount"
-                      value={`${profile.investmentCurrency ?? ""} ${profile.investmentAmount.toLocaleString()}`}
+                      value={`${profile.investmentCurrency ?? ""} ${profile.investmentAmount.toLocaleString("en-US")}`}
                     />
                   ) : null}
                   <InfoRow label="PEP" value={profile.isPEP ? "Yes" : "No"} />

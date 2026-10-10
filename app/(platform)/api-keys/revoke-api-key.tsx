@@ -20,14 +20,13 @@ import {
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/modules/shared/errors";
 
 type Props = {
 	keyId: string;
-	userId: string;
-	companyId: string;
 };
 
-export default function RevokeApiKey({ keyId, userId, companyId }: Props) {
+export default function RevokeApiKey({ keyId }: Props) {
 	const router = useRouter();
 	const [loading, setLoading] = useState(false);
 	const [open, setOpen] = useState(false);
@@ -36,13 +35,11 @@ export default function RevokeApiKey({ keyId, userId, companyId }: Props) {
 	const handleRevoke = async () => {
 		setLoading(true);
 		try {
-			await revoke({ keyId: keyId as any });
+			await revoke({ keyId });
 			toast.success("API key revoked successfully");
 			router.refresh();
 		} catch (error) {
-			toast.error(
-				error instanceof Error ? error.message : "Failed to revoke API key"
-			);
+			toast.error(getErrorMessage(error, "Failed to revoke API key"));
 		} finally {
 			setLoading(false);
 			setOpen(false);
@@ -52,7 +49,13 @@ export default function RevokeApiKey({ keyId, userId, companyId }: Props) {
 	return (
 		<AlertDialog open={open} onOpenChange={setOpen}>
 			<AlertDialogTrigger asChild>
-				<Button size="icon" variant="destructive" className="rounded-full">
+				<Button
+					type="button"
+					size="icon"
+					variant="destructive"
+					className="rounded-full"
+					aria-label="Revoke API key"
+				>
 					<HiMiniArchiveBoxArrowDown className="h-4 w-4" />
 				</Button>
 			</AlertDialogTrigger>
@@ -68,8 +71,13 @@ export default function RevokeApiKey({ keyId, userId, companyId }: Props) {
 					<AlertDialogCancel>Cancel</AlertDialogCancel>
 					<AlertDialogAction asChild>
 						<Button
+							type="button"
 							variant="destructive"
-							onClick={() => handleRevoke()}
+							onClick={(event) => {
+								// Keep the dialog open until the mutation settles.
+								event.preventDefault();
+								void handleRevoke();
+							}}
 							disabled={loading}
 						>
 							{loading ? (

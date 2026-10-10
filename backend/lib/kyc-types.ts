@@ -15,8 +15,9 @@ export const kycSubmissionSchema = z.object({
   documentBackBase64: z.string().optional(),
   selfieUrl: z.string().min(1, "Selfie is required"),
   selfieBase64: z.string().min(1, "Selfie image data required"),
-  livenessFramesBase64: z.string().min(1, "Liveness data is required"),
-  livenessMediaType: z.enum(["jpeg_frames", "mp4"]),
+  // Optional: live capture isn't implemented; never substitute the selfie.
+  livenessFramesBase64: z.string().min(1).optional(),
+  livenessMediaType: z.enum(["jpeg_frames", "mp4"]).optional(),
 });
 
 export type KYCSubmissionData = z.infer<typeof kycSubmissionSchema>;

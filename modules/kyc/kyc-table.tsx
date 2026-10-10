@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import type { KYCRecord, KYCStatus } from "@/backend/lib/kyc-types";
 import { cn } from "@/backend/lib/utils";
+import { ClientDate } from "@/components/client-date";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 import {
 	type ColumnDef,
@@ -30,7 +31,6 @@ import {
 	getSortedRowModel,
 	useReactTable,
 } from "@tanstack/react-table";
-import { format } from "date-fns";
 import {
 	ArrowUpDown,
 	ChevronLeft,
@@ -81,6 +81,7 @@ export function KYCTable({ records, isLoading }: KYCTableProps) {
 			accessorKey: "userName",
 			header: ({ column }) => (
 				<button
+					type="button"
 					className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
 					onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
 				>
@@ -148,6 +149,7 @@ export function KYCTable({ records, isLoading }: KYCTableProps) {
 			accessorKey: "createdAt",
 			header: ({ column }) => (
 				<button
+					type="button"
 					className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
 					onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
 				>
@@ -159,7 +161,7 @@ export function KYCTable({ records, isLoading }: KYCTableProps) {
 				if (!val) return <span className="text-slate-400 text-xs">—</span>;
 				return (
 					<span className="text-sm text-slate-600 dark:text-slate-400">
-						{format(new Date(String(val)), "MMM d, yyyy")}
+						<ClientDate value={String(val)} />
 					</span>
 				);
 			},
@@ -168,6 +170,7 @@ export function KYCTable({ records, isLoading }: KYCTableProps) {
 			id: "actions",
 			cell: ({ row }) => (
 				<button
+					type="button"
 					onClick={() => router.push(`/kyc/${row.original.id}`)}
 					className="flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 transition-colors"
 				>
@@ -195,13 +198,15 @@ export function KYCTable({ records, isLoading }: KYCTableProps) {
 				<div className="relative flex-1 max-w-sm">
 					<Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
 					<Input
-						placeholder="Search name, email, reference…"
+						placeholder="Search name, reference…"
 						value={globalFilter}
 						onChange={(e) => setGlobalFilter(e.target.value)}
 						className="pl-9 pr-8"
 					/>
 					{globalFilter && (
 						<button
+							type="button"
+							aria-label="Clear search"
 							onClick={() => setGlobalFilter("")}
 							className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
 						>

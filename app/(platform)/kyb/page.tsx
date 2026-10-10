@@ -6,9 +6,24 @@ import { Button } from "@/components/ui/button";
 import { KYBTable } from "@/modules/kyb/kyb-table";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import type { KYBRecord } from "@/backend/lib/types/kyb";
-import { Building2, CheckCircle, FileCheck, ShieldAlert } from "lucide-react";
+import { countries } from "@/backend/lib/kyb-types";
+import { Building2, CheckCircle, FileCheck, ShieldAlert, XCircle } from "lucide-react";
 
-function toStatus(row: any): KYBRecord["status"] {
+type VerificationRow = {
+  _id: string;
+  reference: string;
+  status: string;
+  verdict?: string | null;
+  input: unknown;
+  createdAt: number;
+};
+
+function countryName(code: unknown): string {
+  if (typeof code !== "string" || !code) return "—";
+  return countries.find((country) => country.code === code)?.name ?? code;
+}
+
+function toStatus(row: VerificationRow): KYBRecord["status"] {
   if (row.verdict === "pass") return "approved";
   if (row.verdict === "reject") return "declined";
   if (row.verdict === "review") return "requires_review";
@@ -35,9 +50,17 @@ export default async function KYBPage() {
     const client = await getAuthenticatedConvexClient();
     if (!client) throw new Error("Authentication or Convex is not configured.");
     const response = await client.query(anyApi.verifications.list, { type: "kyb", limit: 100 });
-    records = response.records.map((row: any) => {
-      const input = row.input && typeof row.input === "object" ? row.input : {};
-      return { id: row._id, businessName: input.businessName ?? input.companyName ?? "Unnamed business", reference: row.reference, country: input.country ?? input.countryOfIncorporation ?? "—", status: toStatus(row), createdAt: new Date(row.createdAt).toISOString() };
+    records = (response.records as VerificationRow[]).map((row) => {
+      const input = row.input && typeof row.input === "object" ? (row.input as Record<string, unknown>) : {};
+      return {
+        id: row._id,
+        businessName: typeof input.businessName === "string" && input.businessName ? input.businessName : "Unnamed business",
+        reference: row.reference,
+        // kyb.createKyb stores the ISO code as `incorporationCountry`.
+        country: countryName(input.incorporationCountry),
+        status: toStatus(row),
+        createdAt: new Date(row.createdAt).toISOString(),
+      };
     });
   } catch (cause) {
     console.error("[kyb] Convex query failed", cause);
@@ -51,5 +74,5 @@ export default async function KYBPage() {
     processing: records.filter((row) => row.status === "processing").length,
     requires_review: records.filter((row) => row.status === "requires_review").length,
   };
-  return <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6"><div className="max-w-7xl mx-auto space-y-6"><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"><div><h1 className="text-2xl font-bold text-slate-900 dark:text-white">Know Your Business</h1><p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage your business verification records</p></div><Button asChild className="bg-violet-600 hover:bg-violet-700 text-white"><Link href="/kyb/new"><FileCheck className="mr-2 h-4 w-4" />New Verification</Link></Button></div>{error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div> : null}<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4"><StatCard label="Total" value={stats.total} icon={FileCheck} tone="slate" /><StatCard label="Approved" value={stats.approved} icon={CheckCircle} tone="green" /><StatCard label="Processing" value={stats.pending + stats.processing} icon={Building2} tone="violet" /><StatCard label="Review" value={stats.requires_review} icon={ShieldAlert} tone="orange" /><StatCard label="Declined" value={stats.declined} icon={CheckCircle} tone="red" /></div><div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 sm:p-6"><KYBTable records={records} /></div></div></div>;
+  return <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6"><div className="max-w-7xl mx-auto space-y-6"><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"><div><h1 className="text-2xl font-bold text-slate-900 dark:text-white">Know Your Business</h1><p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage your business verification records</p></div><Button asChild className="bg-violet-600 hover:bg-violet-700 text-white"><Link href="/kyb/new"><FileCheck className="mr-2 h-4 w-4" />New Verification</Link></Button></div>{error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div> : null}<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4"><StatCard label="Total" value={stats.total} icon={FileCheck} tone="slate" /><StatCard label="Approved" value={stats.approved} icon={CheckCircle} tone="green" /><StatCard label="Processing" value={stats.pending + stats.processing} icon={Building2} tone="violet" /><StatCard label="Review" value={stats.requires_review} icon={ShieldAlert} tone="orange" /><StatCard label="Declined" value={stats.declined} icon={XCircle} tone="red" /></div><div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 sm:p-6"><KYBTable records={records} /></div></div></div>;
 }

@@ -1,19 +1,74 @@
 export const dynamic = "force-dynamic";
 
-import { CreditUsageCard } from "./_components/credit-usage-card";
+import { anyApi } from "convex/server";
+import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
+import { getActiveMembership } from "@/app/(platform)/_lib/active-client";
+import type { CurrentAccess } from "@/app/(platform)/_lib/active-client-constants";
+import { CreditUsageCard, type CreditSummary } from "./_components/credit-usage-card";
 import { StatsGrid } from "./_components/stats-grid";
-import { RecentVerificationsTable } from "./_components/recent-verifications-table";
+import { RecentVerificationsTable, type RecentVerification } from "./_components/recent-verifications-table";
 import { VerificationBreakdown } from "./_components/verification-breakdown";
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+type Overview = {
+  total: number;
+  avgCompletionTimeMs: number | null;
+  pendingReview: number;
+  activeApiKeys: number;
+  breakdown: { type: string; count: number; percentage: number }[];
+  recent: RecentVerification[];
+};
+
+type DashboardData = {
+  overview: Overview | null;
+  overviewError?: string;
+  credits: CreditSummary | null;
+  creditsError?: string;
+};
+
+// Queries Convex directly with the signed-in user's token. (Previously this
+// fetched its own /api routes server-side, which carry no session cookies
+// and always came back empty.)
+async function getDashboardData(): Promise<DashboardData> {
+  const client = await getAuthenticatedConvexClient();
+  if (!client) {
+    return {
+      overview: null,
+      overviewError: "Your session couldn't be verified. Sign in again to load the dashboard.",
+      credits: null,
+    };
+  }
+
+  const overviewPromise = client
+    .query(anyApi.dashboard.overview, { timeRangeMs: THIRTY_DAYS_MS, recentLimit: 10 })
+    .then((overview: Overview) => ({ overview }))
+    .catch((error: unknown) => {
+      console.error("[dashboard] overview query failed", error);
+      return { overview: null, overviewError: "Verification statistics are temporarily unavailable." };
+    });
+
+  const creditsPromise = (async () => {
+    try {
+      const access: CurrentAccess = await client.query(anyApi.dashboard.currentAccess, {});
+      const scope = access.authorized ? await getActiveMembership(access.memberships) : null;
+      if (!scope) return { credits: null, creditsError: "No organization is selected." };
+      const balance: number = await client.query(anyApi.creditLedger.getBalanceForClient, {
+        clientId: scope.clientId,
+      });
+      return { credits: { balance, clientName: scope.clientName } };
+    } catch (error) {
+      console.error("[dashboard] credit balance query failed", error);
+      return { credits: null, creditsError: "Credit balance is temporarily unavailable." };
+    }
+  })();
+
+  const [overviewResult, creditsResult] = await Promise.all([overviewPromise, creditsPromise]);
+  return { ...overviewResult, ...creditsResult };
+}
+
 export default async function DashboardPage() {
-  const [statsRes, verificationsRes] = await Promise.all([
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/client/verifications/stats?timeRange=30d`, {
-      cache: "no-store",
-    }).then((r) => r.json()).catch(() => null),
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/client/verifications?limit=10`, {
-      cache: "no-store",
-    }).then((r) => r.json()).catch(() => null),
-  ]);
+  const { overview, overviewError, credits, creditsError } = await getDashboardData();
 
   return (
     <div className="flex flex-col gap-8 p-6 lg:p-8 max-w-7xl mx-auto">
@@ -22,23 +77,33 @@ export default async function DashboardPage() {
           Dashboard
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Overview of all verification activity
+          Overview of verification activity across your organizations (last 30 days)
         </p>
       </div>
 
-      <CreditUsageCard />
+      <CreditUsageCard credits={credits} error={creditsError} />
 
-      <StatsGrid
-        total={statsRes?.total ?? 0}
-        avgCompletionTimeMs={statsRes?.avgCompletionTimeMs ?? null}
-        pendingReview={statsRes?.pendingReview ?? 0}
-        activeApiKeys={statsRes?.activeApiKeys ?? 0}
-      />
+      {overviewError ? (
+        <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-800 dark:text-red-300">
+          {overviewError}
+        </div>
+      ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <VerificationBreakdown data={statsRes?.breakdown ?? []} />
-        <RecentVerificationsTable data={verificationsRes?.verifications ?? []} />
-      </div>
+      {overview ? (
+        <>
+          <StatsGrid
+            total={overview.total}
+            avgCompletionTimeMs={overview.avgCompletionTimeMs}
+            pendingReview={overview.pendingReview}
+            activeApiKeys={overview.activeApiKeys}
+          />
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <VerificationBreakdown data={overview.breakdown} />
+            <RecentVerificationsTable data={overview.recent} />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

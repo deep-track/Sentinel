@@ -1,7 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { anyApi } from "convex/server";
-import { redirect } from "next/navigation";
-import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
+import { requireActiveScope } from "@/app/(platform)/_lib/active-client";
 import { WebhookCreateDialog } from "./webhook-create-dialog";
 
 // There's currently no public Convex query that returns a client's
@@ -13,12 +11,11 @@ import { WebhookCreateDialog } from "./webhook-create-dialog";
 // { webhookUrl, recentDeliveries }) before this page can show real status
 // instead of just the set/rotate action.
 
+export const dynamic = "force-dynamic";
+
 export default async function WebhooksPage() {
-  const client = await getAuthenticatedConvexClient();
-  if (!client) redirect("/access-pending?reason=authorization-unavailable");
-  const access = await client.query(anyApi.dashboard.currentAccess, {});
-  const scope = access.memberships[0];
-  if (!access.authorized || !scope) redirect("/access-pending");
+  const { scope } = await requireActiveScope();
+  const canManage = scope.role === "client_admin";
 
   return (
     <div className="flex flex-col gap-6 p-6 lg:p-8 max-w-5xl mx-auto">
@@ -28,11 +25,17 @@ export default async function WebhooksPage() {
             Webhooks
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Get notified when a verification completes
+            Get notified when a verification for {scope.clientName} completes
           </p>
         </div>
-        <WebhookCreateDialog clientId={scope.clientId} />
+        {canManage ? <WebhookCreateDialog clientId={scope.clientId} /> : null}
       </div>
+
+      {!canManage ? (
+        <p className="text-sm text-muted-foreground">
+          Only organization admins can set or rotate the webhook endpoint.
+        </p>
+      ) : null}
 
       <Card className="p-6 border-dashed">
         <p className="text-sm text-muted-foreground">

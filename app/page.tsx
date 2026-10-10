@@ -5,7 +5,6 @@ import Link from "next/link";
 
 export default async function KYCHero() {
 	const user = await getCurrentUser();
-	const userRole = user?.role;
 
 	return (
 		<section className="w-full overflow-x-hidden min-h-screen">
@@ -25,15 +24,9 @@ export default async function KYCHero() {
 								asChild
 								className="rounded-lg bg-black px-8 py-6 text-lg font-medium text-white hover:bg-gray-900 transition-colors w-full"
 							>
-								<Link
-									href={
-										user
-											? userRole === "head"
-												? "/new-org"
-												: "/new-user"
-											: "/auth/login"
-									}
-								>
+								{/* Signed-in users (any role) go straight to the dashboard; the
+								    platform layout handles access checks. /new-org is a stub. */}
+								<Link href={user ? "/dashboard" : "/auth/login"}>
 									{user ? "Go to Dashboard" : "Get Started"}
 								</Link>
 							</Button>

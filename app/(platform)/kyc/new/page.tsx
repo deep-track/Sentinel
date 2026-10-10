@@ -1,22 +1,12 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { KYCWizard } from "@/modules/kyc/kyc-wizard";
-import { anyApi } from "convex/server";
-import { redirect } from "next/navigation";
-import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
+import { requireActiveScope } from "@/app/(platform)/_lib/active-client";
 
-interface NewKYCPageProps {
-  searchParams: Promise<{ token?: string; email?: string }>;
-}
-
-export default async function NewKYCPage({ searchParams }: NewKYCPageProps) {
-  const params = await searchParams;
-  const prefillEmail = params.email;
-  const client = await getAuthenticatedConvexClient();
-  if (!client) redirect("/access-pending?reason=authorization-unavailable");
-  const access = await client.query(anyApi.dashboard.currentAccess, {});
-  const scope = access.memberships[0];
-  if (!access.authorized || !scope) redirect("/access-pending");
+export default async function NewKYCPage() {
+  const { scope } = await requireActiveScope();
 
   return (
     <div className="min-h-full bg-slate-50 dark:bg-slate-950 py-8 px-4 sm:px-6">
@@ -31,11 +21,12 @@ export default async function NewKYCPage({ searchParams }: NewKYCPageProps) {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Identity Verification</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm max-w-xl">
-            Complete the steps below to verify your identity. Your data is secured and processed through our verification partner.
+            Complete the steps below to verify an identity for {scope.clientName}. Data is secured and
+            processed through our verification partner.
           </p>
         </div>
 
-        <KYCWizard prefillEmail={prefillEmail} clientId={scope.clientId} />
+        <KYCWizard clientId={scope.clientId} />
       </div>
     </div>
   );

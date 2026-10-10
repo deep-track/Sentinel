@@ -1,334 +1,165 @@
 "use client";
 
-
-import { Button } from "@/components/ui/button";
-import type { KYCStatus, KYCSubmissionData } from "@/backend/lib/kyc-types";
-import { cn } from "@/backend/lib/utils";
+import { useState } from "react";
+import Link from "next/link";
+import { useMutation } from "convex/react";
 import { anyApi } from "convex/server";
-import { useMutation, useQuery } from "convex/react";
-
-// The wizard now uses the authenticated Convex verification contract.
-// removed as part of the Convex backend migration. No public Convex
-// mutation/query exists yet to replace them. Typed as discriminated
-// unions so TypeScript narrows result.data correctly after a success
-// check, matching how the rest of this file already uses them.
-
-
-// NOTE: @/lib/shufti-decline-codes is missing from the repo entirely
-// (pre-existing, not something removed by the Convex migration) -
-// flag this to the backend team. Stubbed locally so this file compiles;
-// real decline-reason text should replace this once the module is
-// restored.
-type DeclineIssue = {
-  code: string;
-  service: "document" | "face" | "address";
-  title: string;
-  userAction: string;
-};
-
-type DeclineBreakdown = {
-  primary?: { title?: string; userAction?: string };
-  humanReason?: string;
-  byService?: {
-    document?: DeclineIssue[];
-    face?: DeclineIssue[];
-    address?: DeclineIssue[];
-  };
-  allCodes: string[];
-};
-
-function getDeclineBreakdown(
-  declinedCodes: string[] | undefined,
-  servicesDeclinedCodes: { document?: string[]; face?: string[]; address?: string[] } | null,
-  declineReason: string | undefined
-): DeclineBreakdown {
-  const toIssues = (
-    codes: string[] | undefined,
-    service: DeclineIssue["service"]
-  ): DeclineIssue[] =>
-    (codes ?? []).map((code) => ({
-      code,
-      service,
-      title: "Verification issue",
-      userAction: declineReason ?? "Please try again.",
-    }));
-
-  return {
-    primary: { title: "Verification declined", userAction: declineReason },
-    humanReason: declineReason ?? "See details below.",
-    byService: {
-      document: toIssues(servicesDeclinedCodes?.document, "document"),
-      face: toIssues(servicesDeclinedCodes?.face, "face"),
-      address: toIssues(servicesDeclinedCodes?.address, "address"),
-    },
-    allCodes: declinedCodes ?? [],
-  };
-}
+import { Camera, CheckCircle, ClipboardCheck, FileText, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import type { KYCStatus } from "@/backend/lib/kyc-types";
+import { cn } from "@/backend/lib/utils";
+import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 import { DocumentCaptureStep } from "@/modules/kyc/steps/document-capture-step";
 import { SelfieCaptureStep } from "@/modules/kyc/steps/selfie-capture-step";
 import { SubmitStep } from "@/modules/kyc/steps/submit-step";
-import {
-	Camera,
-	CheckCircle,
-	ClipboardCheck,
-	FileText,
-	XCircle,
-} from "lucide-react";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import type {
+	KYCDocumentData,
+	KYCIdentityData,
+	KYCSelfieData,
+	KYCWizardData,
+} from "@/modules/kyc/types";
+import { getErrorMessage } from "@/modules/shared/errors";
 
 interface KYCWizardProps {
-  prefillEmail?: string;
-  clientId: string;
+	clientId: string;
 }
+
+type VerificationRow = {
+	status: "queued" | "processing" | "completed" | "failed";
+	verdict?: "pass" | "review" | "reject" | null;
+	failureReason?: string | null;
+};
 
 const STEPS = [
 	{ id: 0, title: "Document Capture", icon: FileText, shortTitle: "Document" },
 	{ id: 1, title: "Selfie Capture", icon: Camera, shortTitle: "Selfie" },
-	{
-		id: 2,
-		title: "Review & Submit",
-		icon: ClipboardCheck,
-		shortTitle: "Submit",
-	},
+	{ id: 2, title: "Review & Submit", icon: ClipboardCheck, shortTitle: "Submit" },
 ];
 
+function toKycStatus(row: VerificationRow | null | undefined): KYCStatus {
+	if (!row) return "processing";
+	if (row.status === "completed") {
+		if (row.verdict === "pass") return "approved";
+		if (row.verdict === "reject") return "declined";
+		return "requires_review";
+	}
+	if (row.status === "failed") return "declined";
+	if (row.status === "queued") return "pending";
+	return "processing";
+}
+
 export function KYCWizard({ clientId }: KYCWizardProps) {
-  const createKyc = useMutation(anyApi.verifications.createKyc);
-  const [currentStep, setCurrentStep] = useState(0);
-	const [data, setData] = useState<Partial<KYCSubmissionData>>({});
-	const [submittedKycId, setSubmittedKycId] = useState<string | null>(null);
-	const [submittedRef, setSubmittedRef] = useState<string | null>(null);
-	const [completed, setCompleted] = useState(false);
-	const [liveStatus, setLiveStatus] = useState<KYCStatus>("processing");
-		const [declineBreakdown, setDeclineBreakdown] = useState<ReturnType<typeof getDeclineBreakdown> | null>(null);
-		const liveRecord = useQuery(anyApi.verifications.get, submittedKycId ? { id: submittedKycId as any } : "skip");
+	const createKyc = useMutation(anyApi.verifications.createKyc);
+	const [currentStep, setCurrentStep] = useState(0);
+	const [data, setData] = useState<KYCWizardData>({});
+	const [submitted, setSubmitted] = useState<{ id: string; reference: string } | null>(null);
 
-	function handleDocument(
-		values: Pick<
-			KYCSubmissionData,
-			| "documentType"
-			| "documentFrontUrl"
-			| "documentBackUrl"
-			| "documentFrontBase64"
-			| "documentBackBase64"
-		>,
-	) {
-		setData((d) => ({ ...d, ...values }));
-		setCurrentStep(1);
+	// Live status of the submitted verification; updates reactively.
+	const liveRecord = useAuthedQuery(
+		anyApi.verifications.get,
+		submitted ? { id: submitted.id } : "skip",
+	) as VerificationRow | null | undefined;
+	const liveStatus = toKycStatus(liveRecord);
+
+	function goTo(step: number) {
+		setCurrentStep(step);
 		window.scrollTo({ top: 0, behavior: "smooth" });
 	}
 
-	function handleSelfie(
-		values: Pick<KYCSubmissionData, "selfieUrl" | "selfieBase64" | "livenessFramesBase64" | "livenessMediaType">,
-	) {
-		setData((d) => ({ ...d, ...values }));
-		setCurrentStep(2);
-		window.scrollTo({ top: 0, behavior: "smooth" });
+	function handleDocument(values: KYCDocumentData) {
+		// Overwrite the back-side fields explicitly so switching to a passport
+		// clears a previously captured back image.
+		setData((d) => ({
+			...d,
+			...values,
+			documentBackUrl: values.documentBackUrl,
+			documentBackBase64: values.documentBackBase64,
+		}));
+		goTo(1);
 	}
 
-	async function handleSubmit() {
-			if (
-				!data.firstName || !data.lastName || !data.idNumber || !data.dateOfBirth || !data.gender ||
-				!data.documentType || !data.documentFrontUrl || !data.documentFrontBase64 ||
-				!data.selfieUrl || !data.selfieBase64 || !data.livenessFramesBase64 || !data.livenessMediaType
-			) {
-			toast.error("Please complete all steps before submitting.");
+	function handleSelfie(values: KYCSelfieData) {
+		setData((d) => ({ ...d, ...values }));
+		goTo(2);
+	}
+
+	async function handleSubmit(identity: KYCIdentityData) {
+		if (
+			!data.documentType || !data.documentFrontUrl || !data.documentFrontBase64 ||
+			!data.selfieUrl || !data.selfieBase64
+		) {
+			toast.error("Please complete the document and selfie steps before submitting.");
+			return;
+		}
+		const twoSided = data.documentType !== "passport";
+		if (twoSided && (!data.documentBackUrl || !data.documentBackBase64)) {
+			toast.error("Upload the back of the document before submitting.");
+			goTo(0);
 			return;
 		}
 
-			try {
-				const result = await createKyc({
-					clientId: clientId as any,
-					firstName: data.firstName,
-					lastName: data.lastName,
-					idNumber: data.idNumber,
-					dateOfBirth: data.dateOfBirth,
-					gender: data.gender,
-					documentType: data.documentType,
-					documentFrontUrl: data.documentFrontUrl,
-					documentBackUrl: data.documentBackUrl,
-					documentFrontBase64: data.documentFrontBase64,
-					documentBackBase64: data.documentBackBase64,
-					selfieUrl: data.selfieUrl,
-					selfieBase64: data.selfieBase64,
-					livenessFramesBase64: data.livenessFramesBase64,
-					livenessMediaType: data.livenessMediaType,
-				});
-				setSubmittedKycId(result.id);
-				setSubmittedRef(result.reference);
-			} catch (error) {
-				toast.error(error instanceof Error ? error.message : "Submission failed. Please try again.");
-				return;
-			}
-		setLiveStatus("processing");
-		setCompleted(true);
-		window.scrollTo({ top: 0, behavior: "smooth" });
+		try {
+			const result: { id: string; reference: string } = await createKyc({
+				clientId,
+				firstName: identity.firstName,
+				lastName: identity.lastName,
+				idNumber: identity.idNumber,
+				dateOfBirth: identity.dateOfBirth,
+				gender: identity.gender,
+				documentType: data.documentType,
+				documentFrontUrl: data.documentFrontUrl,
+				documentFrontBase64: data.documentFrontBase64,
+				documentBackUrl: twoSided ? data.documentBackUrl : undefined,
+				documentBackBase64: twoSided ? data.documentBackBase64 : undefined,
+				selfieUrl: data.selfieUrl,
+				selfieBase64: data.selfieBase64,
+				// No livenessFramesBase64: a still selfie is not liveness evidence.
+			});
+			setSubmitted(result);
+			window.scrollTo({ top: 0, behavior: "smooth" });
+		} catch (error) {
+			toast.error(getErrorMessage(error, "Submission failed. Please try again."));
+		}
 	}
 
-	useEffect(() => {
-		if (!completed || !submittedKycId) return;
-
-        let stopped = false;
-
-        async function poll() {
-        	if (stopped) return;
-
-        	try {
-				if (!liveRecord) return;
-				const status = liveRecord.status === "completed" ? (liveRecord.verdict === "reject" ? "declined" : liveRecord.verdict === "pass" ? "approved" : "requires_review") : liveRecord.status === "failed" ? "declined" : liveRecord.status === "queued" ? "pending" : "processing";
-				const declinedCodes = liveRecord.result?.declinedCodes as string[] | undefined;
-				const servicesDeclinedCodes = liveRecord.result?.servicesDeclinedCodes as Record<string, string[]> | undefined;
-				const declineReason = liveRecord.failureReason;
-
-        		console.log("[Wizard Poll] status:", status);
-        		console.log("[Wizard Poll] declinedCodes:", declinedCodes);
-
-        		setLiveStatus(status);
-
-        		if (status === "declined") {
-        			// Build human-readable breakdown from codes
-        			const breakdown = getDeclineBreakdown(
-        				declinedCodes,
-        				servicesDeclinedCodes as {
-        					document?: string[];
-        					face?: string[];
-        					address?: string[];
-        				} | null,
-        				declineReason
-        			);
-        			console.log("[Wizard Poll] breakdown primary:", breakdown.primary);
-        			setDeclineBreakdown(breakdown);
-        			stopped = true;
-        		}
-
-                if (status === "approved") {
-                    stopped = true;
-                }
-        	} catch (err) {
-        		console.error("[Wizard Poll] error:", err);
-        	}
-        }
-
-        // Poll immediately then every 3 seconds
-        poll();
-        const pollInterval = setInterval(poll, 3000);
-
-        return () => {
-        	stopped = true;
-        	clearInterval(pollInterval);
-        };
-	}, [completed, submittedKycId, liveRecord]);
-
-if (completed) {
-	// Declined verification screen
-	if (liveStatus === "declined" && declineBreakdown) {
-		return (
-			<div className="flex flex-col items-center space-y-6 max-w-md mx-auto">
-				{/* Red icon */}
-				<div className="h-24 w-24 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-					<XCircle className="h-12 w-12 text-red-600" />
-				</div>
-
-				{/* Title */}
-				<div className="text-center space-y-2">
-					<h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-						{declineBreakdown.primary?.title ??
-						 "Verification Unsuccessful"}
-					</h2>
-					<p className="text-sm text-slate-500 dark:text-slate-400">
-						{declineBreakdown.humanReason ??
-						 "We could not verify your identity."}
-					</p>
-				</div>
-
-				{/* Fix guidance box */}
-				{declineBreakdown.primary?.userAction && (
-					<div className="w-full rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-4">
-						<p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-2">
-						 <span>tip</span>
-						 How to fix this:
-						</p>
-						<p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
-						 {declineBreakdown.primary.userAction}
-						</p>
-					</div>
-				)}
-
-				{/* Per-service breakdown */}
-				{(() => {
-					const allIssues = [
-						...(declineBreakdown.byService?.document ?? []),
-						...(declineBreakdown.byService?.face ?? []),
-					];
-					if (allIssues.length <= 1) return null;
-					return (
-						<div className="w-full space-y-2">
-						 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-						 All issues detected:
-						 </p>
-						 {allIssues.map((d) => (
-						 <div key={d.code} className="flex items-start gap-2 text-left">
-						 <span className="text-xs font-mono text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
-						 {d.code}
-						 </span>
-						 <div>
-						 <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
-						 {d.service === "face" ? "Selfie" : "Document"}: {d.title}
-						 </p>
-						 <p className="text-xs text-slate-500 dark:text-slate-400">
-						 {d.userAction}
-						 </p>
-						 </div>
-						 </div>
-						 ))}
-						</div>
-					);
-				})()}
-
-				{/* All codes raw (for reference) */}
-				{(declineBreakdown.allCodes?.length ?? 0) > 0 && (
-					<div className="w-full">
-						<p className="text-xs text-slate-400 mb-1">Decline codes:</p>
-						<div className="flex flex-wrap gap-1">
-						 {(declineBreakdown.allCodes ?? []).map((c) => (
-						 <span
-						 key={c}
-						 className="text-xs font-mono bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded"
-						 >
-						 {c}
-						 </span>
-						 ))}
-						</div>
-					</div>
-				)}
-
-				{/* Try again */}
-				<Button
-					onClick={() => {
-						setCompleted(false);
-						setCurrentStep(0);
-						setData({});
-						setLiveStatus("processing");
-						setDeclineBreakdown(null);
-					}}
-					className="w-full bg-black hover:bg-black/80 text-white"
-				>
-					Try Again
-				</Button>
-
-				{/* Reference */}
-				{submittedRef && (
-					<p className="text-xs text-slate-400 font-mono">{submittedRef}</p>
-				)}
-			</div>
-		);
+	function startOver() {
+		setSubmitted(null);
+		setCurrentStep(0);
+		setData({});
 	}
 
-		// Default completed screen (processing/approved)
-		// Don't show declined badge until we have the reason
+	if (submitted) {
+		if (liveStatus === "declined") {
+			const reason = liveRecord?.failureReason;
+			const failed = liveRecord?.status === "failed";
+			return (
+				<div className="flex flex-col items-center space-y-6 max-w-md mx-auto">
+					<div className="h-24 w-24 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+						<XCircle className="h-12 w-12 text-red-600" />
+					</div>
+					<div className="text-center space-y-2">
+						<h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+							{failed ? "Verification could not be completed" : "Verification declined"}
+						</h2>
+						<p className="text-sm text-slate-500 dark:text-slate-400">
+							{reason ?? "We could not verify this identity."}
+						</p>
+					</div>
+					<div className="flex w-full flex-col gap-2">
+						<Button onClick={startOver} className="w-full bg-black hover:bg-black/80 text-white">
+							Start a new verification
+						</Button>
+						<Button asChild variant="outline" className="w-full">
+							<Link href={`/kyc/${submitted.id}`}>View report</Link>
+						</Button>
+					</div>
+					<p className="text-xs text-slate-400 font-mono">{submitted.reference}</p>
+				</div>
+			);
+		}
+
 		return (
 			<div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center space-y-4">
 				<div className="mx-auto h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
@@ -338,21 +169,21 @@ if (completed) {
 					Verification Submitted
 				</h2>
 				<p className="text-sm text-slate-500 dark:text-slate-400">
-					Reference: <code className="font-mono">{submittedRef}</code>
+					Reference: <code className="font-mono">{submitted.reference}</code>
 				</p>
 				<p className="text-sm text-slate-500 dark:text-slate-400">
-					We are verifying your documents. This page updates automatically.
+					{liveStatus === "approved" || liveStatus === "requires_review"
+						? "Processing is complete."
+						: "We are verifying the documents. This page updates automatically."}
 				</p>
-				{liveStatus !== "declined" && (
-					<div className="flex justify-center">
-						<KYCStatusBadge status={liveStatus} />
-					</div>
-				)}
-				<div className="pt-2">
-					<Button
-						asChild
-						className="bg-violet-600 hover:bg-violet-700 text-white"
-					>
+				<div className="flex justify-center">
+					<KYCStatusBadge status={liveStatus} />
+				</div>
+				<div className="flex flex-wrap justify-center gap-2 pt-2">
+					<Button asChild className="bg-violet-600 hover:bg-violet-700 text-white">
+						<Link href={`/kyc/${submitted.id}`}>View report</Link>
+					</Button>
+					<Button asChild variant="outline">
 						<Link href="/kyc">Back to KYC Dashboard</Link>
 					</Button>
 				</div>
@@ -365,98 +196,70 @@ if (completed) {
 			<div className="mb-8">
 				<div className="flex items-center">
 					{STEPS.map((step, idx) => (
-						<div
-						 key={step.id}
-						 className="flex items-center flex-1 last:flex-none"
-						>
-						 <div className="flex flex-col items-center">
-						 <div
-						 className={cn(
-						 "h-9 w-9 rounded-full flex items-center justify-center border-2 transition-all duration-200",
-						 idx < currentStep
-						 ? "bg-violet-600 border-violet-600 text-white"
-						 : idx === currentStep
-						 ? "border-violet-600 text-violet-600 bg-white dark:bg-slate-900"
-						 : "border-slate-300 dark:border-slate-600 text-slate-400 bg-white dark:bg-slate-900",
-						 )}
-						 >
-						 {idx < currentStep ? (
-						 <CheckCircle className="h-5 w-5" />
-						 ) : (
-						 <step.icon className="h-4 w-4" />
-						 )}
-						 </div>
-						 <span
-						 className={cn(
-						 "mt-1.5 text-xs font-medium hidden sm:block",
-						 idx === currentStep
-						 ? "text-violet-600 dark:text-violet-400"
-						 : idx < currentStep
-						 ? "text-violet-500"
-						 : "text-slate-400 dark:text-slate-500",
-						 )}
-						 >
-						 {step.shortTitle}
-						 </span>
-						 </div>
+						<div key={step.id} className="flex items-center flex-1 last:flex-none">
+							<div className="flex flex-col items-center">
+								<div
+									className={cn(
+										"h-9 w-9 rounded-full flex items-center justify-center border-2 transition-all duration-200",
+										idx < currentStep
+											? "bg-violet-600 border-violet-600 text-white"
+											: idx === currentStep
+												? "border-violet-600 text-violet-600 bg-white dark:bg-slate-900"
+												: "border-slate-300 dark:border-slate-600 text-slate-400 bg-white dark:bg-slate-900",
+									)}
+								>
+									{idx < currentStep ? <CheckCircle className="h-5 w-5" /> : <step.icon className="h-4 w-4" />}
+								</div>
+								<span
+									className={cn(
+										"mt-1.5 text-xs font-medium hidden sm:block",
+										idx === currentStep
+											? "text-violet-600 dark:text-violet-400"
+											: idx < currentStep
+												? "text-violet-500"
+												: "text-slate-400 dark:text-slate-500",
+									)}
+								>
+									{step.shortTitle}
+								</span>
+							</div>
 
-						 {idx < STEPS.length - 1 && (
-						 <div className="flex-1 mx-2 sm:mx-3 mb-4">
-						 <div
-						 className={cn(
-						 "h-0.5 w-full transition-all duration-300",
-						 idx < currentStep
-						 ? "bg-violet-500"
-						 : "bg-slate-200 dark:bg-slate-700",
-						 )}
-						 />
-						 </div>
-						 )}
+							{idx < STEPS.length - 1 && (
+								<div className="flex-1 mx-2 sm:mx-3 mb-4">
+									<div
+										className={cn(
+											"h-0.5 w-full transition-all duration-300",
+											idx < currentStep ? "bg-violet-500" : "bg-slate-200 dark:bg-slate-700",
+										)}
+									/>
+								</div>
+							)}
 						</div>
 					))}
 				</div>
 			</div>
 
 			<div className="mb-6">
-				<h2 className="text-xl font-bold text-slate-900 dark:text-white">
-					{STEPS[currentStep].title}
-				</h2>
+				<h2 className="text-xl font-bold text-slate-900 dark:text-white">{STEPS[currentStep].title}</h2>
 				<p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
 					Step {currentStep + 1} of {STEPS.length}
 				</p>
 			</div>
 
 			<div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 sm:p-8">
-				{currentStep === 0 && (
-					<DocumentCaptureStep defaultValues={data} onNext={handleDocument} />
-				)}
+				{currentStep === 0 && <DocumentCaptureStep defaultValues={data} onNext={handleDocument} />}
 				{currentStep === 1 && (
-					<SelfieCaptureStep
-						defaultValues={data}
-						onNext={handleSelfie}
-						onBack={() => setCurrentStep(0)}
+					<SelfieCaptureStep defaultValues={data} onNext={handleSelfie} onBack={() => goTo(0)} />
+				)}
+				{currentStep === 2 && (
+					<SubmitStep
+						data={data}
+						onIdentityChange={(values) => setData((d) => ({ ...d, ...values }))}
+						onSubmit={handleSubmit}
+						onBack={() => goTo(1)}
+						onEdit={(step: number) => goTo(step)}
 					/>
 				)}
-					{currentStep === 2 && (
-						<>
-							<div className="mb-6 grid gap-4 sm:grid-cols-2">
-								{([['firstName', 'First name'], ['lastName', 'Last name'], ['idNumber', 'ID number'], ['dateOfBirth', 'Date of birth']] as const).map(([key, label]) => (
-									<label key={key} className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}
-										<input value={(data[key] as string) ?? ""} onChange={(event) => setData((d) => ({ ...d, [key]: event.target.value }))} className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-950" />
-									</label>
-								))}
-								<label className="text-sm font-medium text-slate-700 dark:text-slate-300">Gender
-									<select value={(data.gender as string) ?? ""} onChange={(event) => setData((d) => ({ ...d, gender: event.target.value }))} className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-950"><option value="">Select gender</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
-								</label>
-							</div>
-						<SubmitStep
-						data={data}
-						onSubmit={handleSubmit}
-						onBack={() => setCurrentStep(1)}
-							onEdit={(step: number) => setCurrentStep(step)}
-						/>
-						</>
-					)}
 			</div>
 		</div>
 	);

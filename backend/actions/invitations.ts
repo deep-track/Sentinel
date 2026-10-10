@@ -17,7 +17,11 @@ function validateRedirectUrl(redirectUrl: string) {
   return target.toString();
 }
 
+// Company scoping is enforced in backend/lib/auth0-management.ts: the caller
+// must be an invitation administrator for `companyId` (internal_admin may act
+// for any company), and revocation verifies the invitation's stored companyId.
 export async function revokeInvitation(invitationId: string) {
+  if (typeof invitationId !== "string") throw new Error("Invitation ID is required");
   await revokeOrganizationInvitation(invitationId);
   return { success: true };
 }
@@ -31,9 +35,16 @@ export async function createInvitation(
   if (role !== "user") {
     throw new Error("Only standard user invitations are enabled");
   }
-  if (!companyId.trim()) {
+  if (typeof companyId !== "string" || !companyId.trim()) {
     throw new Error("Company context is required");
   }
+  if (typeof email !== "string" || typeof redirectUrl !== "string") {
+    throw new Error("A valid invitee email and redirect URL are required");
+  }
 
-  return createOrganizationInvitation(email, validateRedirectUrl(redirectUrl));
+  return createOrganizationInvitation({
+    email,
+    redirectUrl: validateRedirectUrl(redirectUrl),
+    companyId,
+  });
 }

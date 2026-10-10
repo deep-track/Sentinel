@@ -6,29 +6,32 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
-test("KYC review workflow is wired end to end", () => {
-  const verification = read("backend/convex/verifications.ts");
+// Manual review is resolved by internal reviewers only (reviewQueue.resolve).
+// The client-facing review page is a read-only status view.
+test("KYC review page is a read-only status view", () => {
   const reviewPage = read("app/(platform)/kyc/[id]/review/page.tsx");
-  const actions = read("app/(platform)/kyc/[id]/review/kyc-review-actions.tsx");
   const detailPage = read("app/(platform)/kyc/[id]/page.tsx");
+  const verification = read("backend/convex/verifications.ts");
 
   assert.match(verification, /export const get = query/);
-  assert.match(verification, /export const review = mutation/);
-  assert.match(verification, /requireInternalUser\(ctx\)/);
-  assert.match(verification, /accessibleClientIds\(ctx\)/);
   assert.match(reviewPage, /anyApi\.verifications\.get/);
-  assert.match(reviewPage, /KYCReviewActions/);
-  assert.match(actions, /anyApi\.verifications\.review/);
-  assert.match(actions, /verdict/);
+  assert.match(reviewPage, /anyApi\.reviewQueue\.listForClient/);
+  // No decision controls on the client side.
+  assert.doesNotMatch(reviewPage, /KYCReviewActions|kyc-review-actions/);
+  assert.doesNotMatch(reviewPage, /verifications\.review\b/);
+  assert.doesNotMatch(reviewPage, /reviewQueue\.resolve\b/);
+  assert.doesNotMatch(reviewPage, /useMutation/);
   assert.match(detailPage, /anyApi\.verifications\.get/);
   assert.match(detailPage, /record\.type !== "idp"/);
 });
 
-test("KYC review decisions expose the three supported outcomes", () => {
-  const actions = read("app/(platform)/kyc/[id]/review/kyc-review-actions.tsx");
-  for (const verdict of ["pass", "review", "reject"]) {
-    assert.match(actions, new RegExp(`submit\\(\\"${verdict}\\"\\)`));
-  }
+test("review resolution is restricted to internal reviewers", () => {
+  const reviewQueue = read("backend/convex/reviewQueue.ts");
+  const resolve = reviewQueue.slice(reviewQueue.indexOf("export const resolve = mutation"));
+  assert.ok(resolve.length > 0, "reviewQueue.resolve exists");
+  assert.match(resolve, /requireInternalUser\(ctx\)/);
+  assert.match(reviewQueue, /export const listForClient = query/);
+  assert.match(reviewQueue, /requireClientRole\(ctx/);
 });
 
 test("new admin backend contracts are present and authorization-bound", () => {
@@ -47,4 +50,16 @@ test("new admin backend contracts are present and authorization-bound", () => {
   assert.match(apiKeys, /requireClientRole\(ctx/);
   assert.match(memberships, /export const listForClient = query/);
   assert.match(memberships, /export const upsert = mutation/);
+});
+
+test("AML and liveness submissions check credits before creating work", () => {
+  const aml = read("backend/convex/aml.ts");
+  const liveness = read("backend/convex/liveness.ts");
+  for (const source of [aml, liveness]) {
+    const submit = source.slice(source.indexOf("export const submit = mutation"));
+    const creditCheck = submit.search(/assertCredits\w*\(ctx/);
+    const insert = submit.indexOf('ctx.db.insert("verifications"');
+    assert.ok(creditCheck > 0, "submit checks the credit balance");
+    assert.ok(insert > creditCheck, "credit check happens before the verification is created");
+  }
 });

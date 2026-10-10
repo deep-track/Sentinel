@@ -89,14 +89,18 @@ export default defineSchema({
     .index("by_reference", ["reference"])
     .index("by_client_and_status", ["clientId", "status"])
     .index("by_client_and_type", ["clientId", "type"])
-    .index("by_created_at", ["createdAt"]),
+    .index("by_created_at", ["createdAt"])
+    .index("by_client_and_created_at", ["clientId", "createdAt"])
+    .index("by_client_and_type_and_created_at", ["clientId", "type", "createdAt"])
+    .index("by_type_and_created_at", ["type", "createdAt"]),
 
   livenessRequests: defineTable({
     clientId: v.id("clients"),
     contact: v.string(),
     method: v.union(v.literal("sms"), v.literal("whatsapp"), v.literal("email")),
     status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
-    deliveryStatus: v.union(v.literal("pending"), v.literal("sent"), v.literal("failed")),
+    // sent -> delivered | failed | undelivered (Twilio status callbacks).
+    deliveryStatus: v.union(v.literal("pending"), v.literal("sent"), v.literal("delivered"), v.literal("failed"), v.literal("undelivered")),
     providerMessageId: v.optional(v.string()),
     verificationId: v.optional(v.id("verifications")),
     createdAt: v.number(),
@@ -152,9 +156,13 @@ export default defineSchema({
     fetchedAt: v.number(),
     activatedAt: v.optional(v.number()),
     failureReason: v.optional(v.string()),
+    supersededAt: v.optional(v.number()),
+    // Set once watchlists.purgeWatchlistVersions has deleted the entries.
+    purgedAt: v.optional(v.number()),
   })
     .index("by_source_and_status", ["sourceKey", "status"])
-    .index("by_source_and_version", ["sourceKey", "sourceVersion"]),
+    .index("by_source_and_version", ["sourceKey", "sourceVersion"])
+    .index("by_status_and_purgedAt", ["status", "purgedAt"]),
 
   watchlistEntries: defineTable({
     versionId: v.id("watchlistVersions"),
@@ -194,7 +202,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_client", ["clientId"])
-    .index("by_verification", ["verificationId"]),
+    .index("by_verification", ["verificationId"])
+    .index("by_watchlist_entry", ["watchlistEntryId"]),
 
   reviewQueue: defineTable({
     verificationId: v.id("verifications"),
@@ -227,7 +236,8 @@ export default defineSchema({
   })
     .index("by_client_and_status", ["clientId", "status"])
     .index("by_verification", ["verificationId"])
-    .index("by_created_at", ["createdAt"]),
+    .index("by_created_at", ["createdAt"])
+    .index("by_status_and_created_at", ["status", "createdAt"]),
 
   feedbackLabels: defineTable({
     verificationId: v.id("verifications"),
@@ -245,7 +255,7 @@ export default defineSchema({
 
   auditLog: defineTable({
     actorId: v.string(),      // Convex Auth userId, or api_key_id for client-driven events
-    actorType: v.union(v.literal("internal_admin"), v.literal("reviewer"), v.literal("client_api_key"), v.literal("system")),
+    actorType: v.union(v.literal("internal_admin"), v.literal("reviewer"), v.literal("client_api_key"), v.literal("client_user"), v.literal("system")),
     action: v.string(),       // e.g. "verification.created", "client.suspended", "review.confirmed"
     targetType: v.string(),   // e.g. "verification", "client", "apiKey"
     targetId: v.string(),
@@ -256,7 +266,9 @@ export default defineSchema({
   })
     .index("by_client", ["clientId"])
     .index("by_target", ["targetType", "targetId"])
-    .index("by_timestamp", ["timestamp"]),
+    .index("by_timestamp", ["timestamp"])
+    .index("by_client_and_timestamp", ["clientId", "timestamp"])
+    .index("by_action_and_timestamp", ["action", "timestamp"]),
 
   complianceReports: defineTable({
     reportType: v.literal("weekly_compliance"),
@@ -276,6 +288,10 @@ export default defineSchema({
     screeningFailureCount: v.number(),
     exportData: v.any(),
     exportHash: v.string(),
+    // Full export JSON in file storage; exportData then holds a small manifest.
+    exportStorageId: v.optional(v.id("_storage")),
+    // True when a source hit the export row cap, so counts are lower bounds.
+    truncated: v.optional(v.boolean()),
     failureReason: v.optional(v.string()),
   })
     .index("by_generated_at", ["generatedAt"])

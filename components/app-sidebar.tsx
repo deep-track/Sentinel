@@ -8,12 +8,19 @@ import {
 	SidebarFooter,
 	SidebarGroup,
 	SidebarGroupLabel,
+	SidebarHeader,
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { TypographyP, TypographySmall } from "@/components/ui/typography";
+import { TeamSwitcher } from "@/components/team-switcher";
+import {
+	type AppRole,
+	isInternalAdminRole,
+	isInternalOpsRole,
+} from "@/backend/lib/roles";
 import {
 	Building2,
 	CreditCard,
@@ -35,8 +42,9 @@ import { useRouter } from "next/navigation";
 import React from "react";
 import { Toaster } from "react-hot-toast";
 
+// Member management is only available to Sentinel internal administrators
+// (memberships.listForClient requires requireInternalAdmin).
 const ADMIN_ROUTES = ["/members"];
-const HEAD_ROLES = ["admin", "head"];
 
 const getMainItems = () => [
 	{ title: "Overview", url: "/dashboard", icon: Home },
@@ -57,12 +65,9 @@ const accountItems = [
 	{ title: "Settings", url: "/settings", icon: Settings },
 ];
 
-// Kept in sync with AppRole in lib/auth.ts.
 type Props = {
-	role: "user" | "admin" | "head" | "internal_admin" | "reviewer";
+	role: AppRole;
 };
-
-const INTERNAL_OPS_ROLES = ["internal_admin", "reviewer"];
 
 function NavSection({
 	label,
@@ -109,29 +114,24 @@ export function AppSidebar({ role }: Props) {
 	const pathname = usePathname();
 	const router = useRouter();
 
+	const canManageMembers = isInternalAdminRole(role);
 	const mainItems = getMainItems();
-	if (role === "admin" || role === "head") {
+	if (canManageMembers) {
 		mainItems.splice(1, 0, { title: "Members", url: "/members", icon: User2 });
 	}
 
-	// Per the build plan (Section 8), Internal Ops is restricted to
-	// internal_admin/reviewer roles and must never be visible to client
-	// users. Backend enforcement lives in app/internal-ops/layout.tsx;
-	// this hides the link entirely for anyone without the role, same
-	// pattern as the Members link above.
-	const canSeeInternalOps = INTERNAL_OPS_ROLES.includes(role);
-	if (canSeeInternalOps) {
+	// Internal Ops is restricted to internal (DeepTrack staff) roles and must
+	// never be visible to client users. Backend enforcement lives in
+	// app/internal-ops/layout.tsx; this only hides the link.
+	if (isInternalOpsRole(role)) {
 		mainItems.push({ title: "Internal Ops", url: "/internal-ops", icon: Lock });
 	}
 
 	React.useEffect(() => {
-		if (
-			!HEAD_ROLES.includes(role) &&
-			ADMIN_ROUTES.some((route) => pathname.startsWith(route))
-		) {
+		if (!canManageMembers && ADMIN_ROUTES.some((route) => pathname.startsWith(route))) {
 			router.push("/dashboard");
 		}
-	}, [pathname, role, router]);
+	}, [canManageMembers, pathname, router]);
 
 	return (
 		<>
@@ -150,6 +150,9 @@ export function AppSidebar({ role }: Props) {
 							/>
 						</SidebarGroupLabel>
 					</SidebarGroup>
+					<SidebarHeader className="px-4">
+						<TeamSwitcher />
+					</SidebarHeader>
 					<SidebarSeparator />
 
 					<NavSection label="Sentinel" items={mainItems} pathname={pathname} />

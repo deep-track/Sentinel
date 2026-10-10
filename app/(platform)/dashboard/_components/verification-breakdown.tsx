@@ -12,6 +12,8 @@ function labelForType(type: string) {
       return "KYC / Identity";
     case "kyb":
       return "KYB";
+    case "kyi":
+      return "KYI";
     case "aml":
       return "AML";
     case "liveness":
@@ -29,7 +31,6 @@ export function VerificationBreakdown({ data }: { data: BreakdownItem[] }) {
           <h2 className="text-sm font-semibold text-foreground">Verification mix</h2>
           <p className="mt-1 text-xs text-muted-foreground">Last 30 days</p>
         </div>
-        <span className="text-xs text-muted-foreground">KYC / KYI activity</span>
       </div>
       {data.length === 0 ? (
         <p className="mt-6 text-sm text-muted-foreground">No verification activity in this period.</p>
@@ -40,7 +41,7 @@ export function VerificationBreakdown({ data }: { data: BreakdownItem[] }) {
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-foreground">{labelForType(item.type)}</span>
                 <span className="text-muted-foreground">
-                  {item.count.toLocaleString()} ({item.percentage.toFixed(1)}%)
+                  {item.count.toLocaleString("en-US")} ({item.percentage.toFixed(1)}%)
                 </span>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">

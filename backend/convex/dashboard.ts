@@ -1,7 +1,15 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 import { isInternalAdmin } from "./lib/rbac";
+import { currentAccessResult, loadCurrentAccess } from "./lib/access";
+
+// Read caps so the dashboard stays within Convex query limits as data grows.
+// When a cap is hit the figures cover the newest rows only (`truncated`).
+const MAX_VERIFICATION_ROWS = 1000;
+const MAX_API_KEY_ROWS = 2000;
+const MAX_MEMBERSHIPS = 50;
 
 const dashboardResult = v.object({
   total: v.number(),
@@ -15,6 +23,7 @@ const dashboardResult = v.object({
       percentage: v.number(),
     }),
   ),
+  truncated: v.optional(v.boolean()),
   recent: v.array(
     v.object({
       id: v.string(),
@@ -38,37 +47,45 @@ export const overview = query({
       throw new ConvexError({ code: "unauthenticated", message: "Sign in required." });
     }
 
-    const clientIds = await (async () => {
-      if (await isInternalAdmin(ctx)) {
-        const clients = await ctx.db.query("clients").collect();
-        return clients
-          .filter((client: any) => client.status === "active")
-          .map((client: any) => client._id);
-      }
+    const since = Date.now() - (args.timeRangeMs ?? 30 * 24 * 60 * 60 * 1000);
+    const recentLimit = Math.min(Math.max(args.recentLimit ?? 10, 1), 50);
 
+    let rows: Doc<"verifications">[];
+    let clientIds: Id<"clients">[] | null;
+    let truncated = false;
+    if (await isInternalAdmin(ctx)) {
+      // Platform-wide view: one indexed range over the time window.
+      clientIds = null;
+      rows = await ctx.db
+        .query("verifications")
+        .withIndex("by_created_at", (q) => q.gte("createdAt", since))
+        .order("desc")
+        .take(MAX_VERIFICATION_ROWS);
+      truncated = rows.length === MAX_VERIFICATION_ROWS;
+    } else {
       const memberships = await ctx.db
         .query("clientMembers")
         .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-        .collect();
-      return memberships
-        .filter((membership: any) => membership.isActive)
-        .map((membership: any) => membership.clientId);
-    })();
-
-    const since = Date.now() - (args.timeRangeMs ?? 30 * 24 * 60 * 60 * 1000);
-    const recentLimit = Math.min(Math.max(args.recentLimit ?? 10, 1), 50);
-    const rows = (
-      await Promise.all(
+        .take(MAX_MEMBERSHIPS);
+      clientIds = memberships
+        .filter((membership) => membership.isActive)
+        .map((membership) => membership.clientId);
+      // Split the read budget across the member's organisations.
+      const perClientCap = Math.ceil(MAX_VERIFICATION_ROWS / Math.max(clientIds.length, 1));
+      const perClient = await Promise.all(
         clientIds.map((clientId) =>
           ctx.db
             .query("verifications")
-            .withIndex("by_client", (q) => q.eq("clientId", clientId))
-            .collect(),
+            .withIndex("by_client_and_created_at", (q) =>
+              q.eq("clientId", clientId).gte("createdAt", since),
+            )
+            .order("desc")
+            .take(perClientCap),
         ),
-      )
-    )
-      .flat()
-      .filter((row) => row.createdAt >= since);
+      );
+      truncated = perClient.some((group) => group.length === perClientCap);
+      rows = perClient.flat();
+    }
 
     const completed = rows.filter(
       (row) => row.completedAt !== undefined && row.status === "completed",
@@ -117,14 +134,18 @@ export const overview = query({
         createdAt: row.createdAt,
       }));
 
-    const activeApiKeys = await Promise.all(
-      clientIds.map((clientId) =>
-        ctx.db
-          .query("apiKeys")
-          .withIndex("by_client", (q) => q.eq("clientId", clientId))
-          .collect(),
-      ),
-    ).then((groups) => groups.flat().filter((key) => !key.revoked).length);
+    const keyGroups =
+      clientIds === null
+        ? [await ctx.db.query("apiKeys").take(MAX_API_KEY_ROWS)]
+        : await Promise.all(
+            clientIds.map((clientId) =>
+              ctx.db
+                .query("apiKeys")
+                .withIndex("by_client", (q) => q.eq("clientId", clientId))
+                .take(MAX_API_KEY_ROWS),
+            ),
+          );
+    const activeApiKeys = keyGroups.flat().filter((key) => !key.revoked).length;
 
     return {
       total: rows.length,
@@ -132,107 +153,15 @@ export const overview = query({
       pendingReview: rows.filter((row) => row.verdict === "review").length,
       activeApiKeys,
       breakdown,
+      truncated,
       recent,
     };
   },
 });
 
-const customerMembership = v.object({
-  clientId: v.id("clients"),
-  clientName: v.string(),
-  clientStatus: v.union(
-    v.literal("active"),
-    v.literal("suspended"),
-    v.literal("trial_expired"),
-  ),
-  role: v.union(
-    v.literal("client_admin"),
-    v.literal("compliance_analyst"),
-    v.literal("developer"),
-    v.literal("viewer"),
-  ),
-});
-
-type ClientRole =
-  | "client_admin"
-  | "compliance_analyst"
-  | "developer"
-  | "viewer";
-
-function normalizeClientRole(value: unknown): ClientRole | null {
-  switch (String(value)) {
-    case "client_admin":
-    case "compliance_analyst":
-    case "developer":
-    case "viewer":
-      return value as ClientRole;
-    case "admin":
-    case "administrator":
-      return "client_admin";
-    case "analyst":
-      return "compliance_analyst";
-    case "member":
-      return "viewer";
-    default:
-      return null;
-  }
-}
-
 /** Stable customer authorization boundary. */
 export const currentAccess = query({
   args: {},
-  returns: v.object({
-    authorized: v.boolean(),
-    memberships: v.array(customerMembership),
-  }),
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { authorized: false, memberships: [] };
-
-    if (await isInternalAdmin(ctx)) {
-      const clients = (await ctx.db.query("clients").collect()).filter((client) => client.status === "active");
-      return {
-        authorized: clients.length > 0,
-        memberships: clients.map((client) => ({
-          clientId: client._id,
-          clientName: client.name,
-          clientStatus: client.status,
-          role: "client_admin" as const,
-        })),
-      };
-    }
-
-    try {
-      const rows = await ctx.db
-        .query("clientMembers")
-        .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-        .collect();
-
-      const memberships = (
-        await Promise.all(
-          rows
-            .filter((row) => row.isActive)
-            .map(async (row) => {
-              const role = normalizeClientRole(row.role);
-              if (!role) return null;
-
-              const client = await ctx.db.get(row.clientId);
-              if (!client || client.status !== "active") return null;
-
-              return {
-                clientId: client._id,
-                clientName: client.name,
-                clientStatus: client.status,
-                role,
-              };
-            }),
-        )
-      ).filter((row): row is NonNullable<typeof row> => row !== null);
-
-      return { authorized: memberships.length > 0, memberships };
-    } catch (error) {
-      console.error("[dashboard.currentAccess] denied due to read failure", error);
-      return { authorized: false, memberships: [] };
-    }
-  },
+  returns: currentAccessResult,
+  handler: async (ctx) => loadCurrentAccess(ctx),
 });
