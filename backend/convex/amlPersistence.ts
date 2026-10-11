@@ -6,6 +6,11 @@ import { chargeVerification } from "./lib/credits";
 import { MAX_LIST_AGE_MS, SOURCE_KEYS, type SourceKey } from "./lib/amlMatching";
 
 const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"));
+const openSanctionsStatusValidator = v.union(
+  v.literal("screened"),
+  v.literal("unavailable"),
+  v.literal("not_configured"),
+);
 
 // Coverage check for screening. Returns the newest active version of every
 // source, and lists which sources are missing (no active version) or stale
@@ -113,21 +118,31 @@ export const complete = internalMutation({
         ),
         missing: v.array(sourceKeyValidator),
         stale: v.array(sourceKeyValidator),
+        openSanctions: v.optional(openSanctionsStatusValidator),
       }),
     ),
     matches: v.array(
       v.object({
-        entryId: v.id("watchlistEntries"),
-        versionId: v.id("watchlistVersions"),
-        source: sourceKeyValidator,
+        // Only set for Sentinel-owned watchlist matches.
+        entryId: v.optional(v.id("watchlistEntries")),
+        versionId: v.optional(v.id("watchlistVersions")),
+        source: v.union(sourceKeyValidator, v.literal("OPENSANCTIONS")),
         sourceRecordId: v.string(),
         entityName: v.string(),
         program: v.string(),
         matchScore: v.number(),
-        matchMethod: v.union(v.literal("exact"), v.literal("normalized"), v.literal("alias"), v.literal("fuzzy")),
+        matchMethod: v.union(
+          v.literal("exact"),
+          v.literal("normalized"),
+          v.literal("alias"),
+          v.literal("fuzzy"),
+          v.literal("provider_score"),
+        ),
         matchedCountry: v.optional(v.string()),
         countryMatch: v.optional(v.union(v.literal("match"), v.literal("mismatch"), v.literal("unknown"))),
         riskLevel: v.union(v.literal("critical"), v.literal("high")),
+        topics: v.optional(v.array(v.string())),
+        datasets: v.optional(v.array(v.string())),
       }),
     ),
   },
@@ -160,6 +175,7 @@ export const complete = internalMutation({
                 })),
                 missingSources: args.coverage.missing,
                 staleSources: args.coverage.stale,
+                openSanctions: args.coverage.openSanctions ?? null,
               },
             }
           : {}),
@@ -177,6 +193,9 @@ export const complete = internalMutation({
         verificationId: args.verificationId,
         watchlistVersionId: match.versionId,
         watchlistEntryId: match.entryId,
+        ...(match.source === "OPENSANCTIONS"
+          ? { externalId: match.sourceRecordId, topics: match.topics, datasets: match.datasets }
+          : {}),
         matchMethod: match.matchMethod,
         riskLevel: match.riskLevel,
         matchedCountry: match.matchedCountry,
@@ -214,10 +233,14 @@ export const complete = internalMutation({
         subjectName: args.subjectName,
         verdict: args.verdict,
         matchCount: args.matches.length,
-        sourceVersions: [...new Set(args.matches.map((match) => match.versionId))],
+        sourceVersions: [...new Set(args.matches.flatMap((match) => (match.versionId ? [match.versionId] : [])))],
         checkedVersions: args.coverage?.checked.map((row) => row.versionId) ?? [],
         missingSources: args.coverage?.missing ?? [],
         staleSources: args.coverage?.stale ?? [],
+        openSanctions: args.coverage?.openSanctions ?? null,
+        openSanctionsEntityIds: args.matches
+          .filter((match) => match.source === "OPENSANCTIONS")
+          .map((match) => match.sourceRecordId),
       },
       timestamp: now,
     });

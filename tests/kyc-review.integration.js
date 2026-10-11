@@ -53,10 +53,15 @@ test("new admin backend contracts are present and authorization-bound", () => {
 });
 
 test("AML and liveness submissions check credits before creating work", () => {
+  // AML creation (dashboard and API) goes through one shared helper.
   const aml = read("backend/convex/aml.ts");
   const liveness = read("backend/convex/liveness.ts");
-  for (const source of [aml, liveness]) {
-    const submit = source.slice(source.indexOf("export const submit = mutation"));
+  for (const [source, anchor] of [
+    [aml, "async function createAmlVerification"],
+    [liveness, "export const submit = mutation"],
+  ]) {
+    assert.ok(source.includes(anchor), `${anchor} exists`);
+    const submit = source.slice(source.indexOf(anchor));
     const creditCheck = submit.search(/assertCredits\w*\(ctx/);
     const insert = submit.indexOf('ctx.db.insert("verifications"');
     assert.ok(creditCheck > 0, "submit checks the credit balance");

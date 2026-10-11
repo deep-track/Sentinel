@@ -56,9 +56,18 @@ The job never converts an empty or malformed download into a clean list. It reje
 
 ## Important production gaps
 
-The current parser is deliberately narrow and should be tested against official OFAC and UN XML fixtures before broad production use. It does not yet implement a durable fuzzy-match index, source-specific schema validation, signed source manifests, retention/archival policy, retry backoff, operational alerting, or a complete `POST /v1/verify/aml` decision path. Those are required before treating the chamber as a finished AML screening product.
+The current parser is deliberately narrow and should be tested against official OFAC and UN XML fixtures before broad production use. It does not yet implement a durable fuzzy-match index, source-specific schema validation, signed source manifests, retention/archival policy, retry backoff, or operational alerting. Those are required before treating the chamber as a finished AML screening product.
 
-The current repository also contains an OpenSanctions live-search adapter. That provider-side lookup is separate from the Sentinel-owned OFAC/UN ingestion path. The integration decision must be explicit: use the local normalized index, use OpenSanctions/Sanctions.io as a provider, or use a defense-in-depth combination with clearly defined precedence and audit semantics.
+## OpenSanctions (defense in depth)
+
+AML screening (`aml.runScreening`) checks every subject against both the Sentinel-owned OFAC/UN index and the OpenSanctions `/match/default` API (`backend/convex/lib/openSanctions.ts`), in parallel. Precedence and audit semantics:
+
+- The stricter verdict wins (`reject` > `review` > `pass`).
+- OpenSanctions results count only when the API flags them as a match (score ≥ 0.7). A sanctions-topic match (`sanction`, `sanction.linked`, `crime.terror`) scoring ≥ 0.9 is a `reject`; a weaker sanctions match, a PEP match (`role.pep`, `role.rca`, `role.oligarch`) or any other risk-list match is `review`.
+- If OpenSanctions is unreachable, returns an error, or `OPENSANCTIONS_API_KEY` is not set in the **Convex** environment, it is a coverage gap: the screening cannot pass, is held for review, and is not billed — exactly like a stale or missing local list.
+- OpenSanctions matches are stored on the verification result and in `flaggedEntities` with `source: "OPENSANCTIONS"`, the OpenSanctions entity id (`externalId`), topics and datasets. The audit row records the OpenSanctions status and entity ids.
+
+`POST /v1/verify/aml` (body: `subjectName`, `entityType` = `individual` | `entity`, optional `country`) starts a screening over the public API; `GET /v1/verify/{id}` returns a `screening` object (reason, sources screened, matches) for completed AML checks. Test-mode API keys get a sandbox `pass` with no screening and no charge.
 
 ## Validation and deployment
 
