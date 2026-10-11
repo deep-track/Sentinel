@@ -22,6 +22,27 @@ export async function getBalance(ctx: QueryCtx, clientId: Id<"clients">) {
   return client.creditBalance ?? (await sumLedger(ctx, clientId));
 }
 
+// Ledger amounts are signed: deductions consume credits (negative), allocations
+// and refunds add them (allocation may be 0 for zero-credit plans), and
+// adjustments may go either way. Reject rows whose sign contradicts the type.
+function assertLedgerAmount(type: LedgerType, amount: number) {
+  const valid =
+    Number.isFinite(amount) &&
+    (type === "deduction"
+      ? amount < 0
+      : type === "allocation"
+        ? amount >= 0
+        : type === "refund"
+          ? amount > 0
+          : amount !== 0);
+  if (!valid) {
+    throw new ConvexError({
+      code: "invalid_argument",
+      message: `Invalid ${type} amount: ${amount}.`,
+    });
+  }
+}
+
 // Inserts a ledger row and updates the running balance in the same transaction.
 export async function recordLedgerEntry(
   ctx: MutationCtx,
@@ -33,6 +54,7 @@ export async function recordLedgerEntry(
     reason: string;
   },
 ) {
+  assertLedgerAmount(entry.type, entry.amount);
   const balance = await getBalance(ctx, entry.clientId);
   await ctx.db.insert("creditLedger", { ...entry, createdAt: Date.now() });
   await ctx.db.patch(entry.clientId, { creditBalance: balance + entry.amount });
@@ -59,6 +81,10 @@ export async function assertCredits(
 
 // Charges a verification exactly once: a second call for the same
 // verificationId is a no-op, so retries and review resolutions can't double-bill.
+// Affordability is enforced when the verification is created
+// (assertCreditsForNewVerification reserves in-flight costs); by the time this
+// runs the work has been done, so the charge is always recorded even if a race
+// left the balance short, rather than silently giving the check away for free.
 export async function chargeVerification(
   ctx: MutationCtx,
   args: {

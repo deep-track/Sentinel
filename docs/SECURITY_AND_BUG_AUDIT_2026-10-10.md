@@ -2,6 +2,8 @@
 
 Read-only scan of the frontend (Next.js 15 / React 19), the Next server/auth layer (Auth0 v4, server actions, API routes) and the Convex backend (`backend/convex`). Findings were confirmed by reading the code; the top items in each area were re-checked by hand. Duplicates found by more than one pass are merged.
 
+> **Status:** the fixes for these findings were merged in deep-track/Sentinel#7. This report describes the code as it was before that PR. After deploying, run `npx convex run creditLedger:backfillAllocations` once so existing clients get their credit allocation.
+
 **Tooling results**
 - `tsc --noEmit` (app and `backend/convex`): passes, but much of the code path is untyped (`anyApi`, `internalApi: any`), so it catches little.
 - `next lint`: 12 errors (`no-explicit-any`) and 9 warnings (unused vars). Lint is skipped during builds (`next.config.ts` `ignoreDuringBuilds: true`).
@@ -35,7 +37,7 @@ Read-only scan of the frontend (Next.js 15 / React 19), the Next server/auth lay
 | H5 | Backend | `amlPersistence.ts:4-14`, `aml.ts` | AML screening runs even if only one sanctions list (e.g. UN only, no OFAC) is active, and there is no staleness check. The result still says "No OFAC or UN watchlist match". |
 | H6 | Backend | `lib/rbac.ts:139-144` | Internal-admin status is granted from the `email` claim without checking `email_verified`. With an unverified signup that grants full cross-tenant admin. |
 | H7 | Backend | `verifications.ts:197-207` | `verifications.review` lets any internal reviewer overwrite any verdict (e.g. sanctioned → pass) in any state. It writes no audit log, skips the certainty and notes rules, and leaves the `reviewQueue` row pending. |
-| H8 | Backend | `http.ts:88-105`, `creditLedger.ts`, all create paths | **Credits are broken end to end:** <ul><li>No `"allocation"` ledger row is ever written, so every balance is ≤ 0 and `POST /v1/verify/idp` always returns 402.</li><li>Dashboard creation paths never check the balance.</li><li>The balance check is not atomic with the deduction, so it can be double-spent.</li><li>`creditLimit` is never read.</li><li>AML is charged twice when it goes through review (`aml.ts:168` and `reviewQueue.ts:156`).</li><li>KYI is never charged.</li></ul> |
+| H8 | Backend | `http.ts:88-105`, `creditLedger.ts`, all create paths | **Credits are broken end to end:** <ul><li>No code path writes an `"allocation"` ledger row, so any client without an existing positive ledger balance gets 402 from `POST /v1/verify/idp`.</li><li>Dashboard creation paths never check the balance.</li><li>The balance check is not atomic with the deduction, so it can be double-spent.</li><li>`creditLimit` is never read.</li><li>AML is charged twice when it goes through review (`aml.ts:168` and `reviewQueue.ts:156`).</li><li>KYI is never charged.</li></ul> |
 | H9 | Frontend | `app/(platform)/aml-check/aml-screening-form.tsx:9,25` | The AML Check page crashes (`rows.map is not a function`) because `verifications.list` returns `{records, nextCursor}`. |
 | H10 | Frontend | `app/(platform)/dashboard/page.tsx:9-16`, `credit-usage-card.tsx:5` | The dashboard always shows zeros. It server-fetches its own API routes without cookies, gets a 503, and renders that as data. `/api/client/billing` does not exist, and the page returns a 500 if `NEXT_PUBLIC_APP_URL` is unset. |
 | H11 | Frontend | `modules/kyb/steps/review-step.tsx:25` | **KYB can never be submitted.** `submitKYB` is a stub that always throws, and `/kyb/new` never resolves a `clientId`. |
@@ -76,7 +78,7 @@ Read-only scan of the frontend (Next.js 15 / React 19), the Next server/auth lay
   - `compliance_analyst`/`compliance_reviewer` are emitted by the Action but rejected by the backend.
   - `.env.example` uses `/role` while Vercel uses `/roles`.
   - The singular `/role` claim is `roles[0]`, which is order-dependent.
-- Deploy footgun: there is no `convex.json`, and the root `convex/` folder is empty. `npx convex deploy` from the repo root would deploy **zero functions** (this matches `convex-auth-findings.md`).
+- Deploy footgun: the root `convex/` folder held only an empty `_generated`, so without a `convex.json` an `npx convex deploy` from the repo root would deploy **zero functions** (this matches `convex-auth-findings.md`). Resolved: `convex.json` now points to `backend/convex/` and the empty root folder is removed.
 
 **Next server / auth**
 - `backend/actions/auth-actions.ts`: the public server actions `addNewUser` (role supplied by the client) and `findUser` have no auth. They are inert today only because `/api/users` is missing.
@@ -171,7 +173,6 @@ Read-only scan of the frontend (Next.js 15 / React 19), the Next server/auth lay
 5. **Platform health:**
    - Regenerate Convex types and remove `anyApi`/`any`
    - Index and paginate the `.collect()` calls
-   - Add `convex.json`
    - Add `error.tsx`
    - Add security headers
    - Re-enable lint in builds
