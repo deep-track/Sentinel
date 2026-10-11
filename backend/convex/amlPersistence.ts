@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chargeVerification } from "./lib/credits";
@@ -12,45 +13,47 @@ const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLID
 // (older than the max age for the source's cadence). Screening is only allowed
 // to auto-pass when both lists are empty. `now` is passed in because queries
 // must not read the wall clock.
+export async function loadWatchlistCoverage(ctx: QueryCtx, now: number) {
+  const versions: Array<{
+    _id: Id<"watchlistVersions">;
+    sourceKey: SourceKey;
+    fetchedAt: number;
+    recordCount: number;
+    stale: boolean;
+  }> = [];
+  const missing: SourceKey[] = [];
+  const stale: SourceKey[] = [];
+  for (const sourceKey of SOURCE_KEYS) {
+    const source = await ctx.db
+      .query("watchlistSources")
+      .withIndex("by_source_key", (q) => q.eq("sourceKey", sourceKey))
+      .first();
+    const active = await ctx.db
+      .query("watchlistVersions")
+      .withIndex("by_source_and_status", (q) => q.eq("sourceKey", sourceKey).eq("status", "active"))
+      .order("desc")
+      .first();
+    if (!active || active.recordCount <= 0) {
+      missing.push(sourceKey);
+      continue;
+    }
+    const maxAge = MAX_LIST_AGE_MS[source?.cadence ?? "daily"];
+    const isStale = now - active.fetchedAt > maxAge;
+    if (isStale) stale.push(sourceKey);
+    versions.push({
+      _id: active._id,
+      sourceKey,
+      fetchedAt: active.fetchedAt,
+      recordCount: active.recordCount,
+      stale: isStale,
+    });
+  }
+  return { versions, missing, stale };
+}
+
 export const getActiveVersions = internalQuery({
   args: { now: v.number() },
-  handler: async (ctx, args) => {
-    const versions: Array<{
-      _id: Id<"watchlistVersions">;
-      sourceKey: SourceKey;
-      fetchedAt: number;
-      recordCount: number;
-      stale: boolean;
-    }> = [];
-    const missing: SourceKey[] = [];
-    const stale: SourceKey[] = [];
-    for (const sourceKey of SOURCE_KEYS) {
-      const source = await ctx.db
-        .query("watchlistSources")
-        .withIndex("by_source_key", (q) => q.eq("sourceKey", sourceKey))
-        .first();
-      const active = await ctx.db
-        .query("watchlistVersions")
-        .withIndex("by_source_and_status", (q) => q.eq("sourceKey", sourceKey).eq("status", "active"))
-        .order("desc")
-        .first();
-      if (!active || active.recordCount <= 0) {
-        missing.push(sourceKey);
-        continue;
-      }
-      const maxAge = MAX_LIST_AGE_MS[source?.cadence ?? "daily"];
-      const isStale = args.now - active.fetchedAt > maxAge;
-      if (isStale) stale.push(sourceKey);
-      versions.push({
-        _id: active._id,
-        sourceKey,
-        fetchedAt: active.fetchedAt,
-        recordCount: active.recordCount,
-        stale: isStale,
-      });
-    }
-    return { versions, missing, stale };
-  },
+  handler: async (ctx, args) => loadWatchlistCoverage(ctx, args.now),
 });
 
 const ENTRY_PAGE_SIZE = 500;

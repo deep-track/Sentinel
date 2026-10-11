@@ -1,16 +1,21 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { getCurrentUser, isInternalOpsRole } from "@/backend/lib/auth";
 import { getAuth0 } from "@/backend/lib/auth0";
+import { SentinelCanvas, SentinelLogo } from "@/components/sentinel/ui";
+import { OpsNav } from "./ops-nav";
 
 export const dynamic = "force-dynamic";
 
-// Only pages that exist under app/internal-ops are listed here.
-const internalOpsItems = [
-  { title: "Screening Monitor", url: "/internal-ops/monitoring" },
-  { title: "Verification Log", url: "/internal-ops/clients" },
-];
+function initials(name: string) {
+  const letters = name
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+  return letters || "?";
+}
 
 // Internal ops screens require an internal Auth0 role (see
 // backend/lib/roles.ts, mirroring backend/convex/lib/rbac.ts). The Convex
@@ -29,47 +34,45 @@ export default async function InternalOpsLayout({
 
   if (!authAvailable && !devBypass) notFound();
 
+  let user: Awaited<ReturnType<typeof getCurrentUser>> = null;
   if (!devBypass) {
-    const user = await getCurrentUser();
+    user = await getCurrentUser();
     if (!user) redirect("/auth/login");
     if (!isInternalOpsRole(user.role)) redirect("/dashboard");
   }
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-64 flex-shrink-0 bg-black text-white flex flex-col">
-        <div className="p-4 border-b border-white/10">
-          <span className="text-sm font-semibold tracking-wide">
-            SENTINEL - INTERNAL OPS
-          </span>
-        </div>
-        <nav className="flex-1 flex flex-col gap-1 p-3">
-          {internalOpsItems.map((item) => (
-            <Link
-              key={item.url}
-              href={item.url}
-              className="px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-            >
-              {item.title}
-            </Link>
-          ))}
-          <Link
-            href="/dashboard"
-            className="mt-4 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors"
-          >
-            Back to dashboard
-          </Link>
-        </nav>
-      </aside>
-
-      <div className="flex-1 flex flex-col">
-        <div className="bg-amber-500 text-black text-xs font-semibold tracking-wide px-4 py-1.5 flex items-center gap-2">
-          <AlertTriangle className="h-3.5 w-3.5" />
-          INTERNAL - NOT CLIENT VISIBLE
-          {devBypass ? " (LOCAL DEV: AUTH0 NOT CONFIGURED, ACCESS CHECK SKIPPED)" : null}
-        </div>
-        <main className="flex-1 bg-background">{children}</main>
-      </div>
+      <SentinelCanvas className="sticky top-0 flex h-screen flex-shrink-0">
+        <div className="w-1 flex-shrink-0 bg-sentinel-amber" aria-hidden="true" />
+        <aside className="flex w-[208px] flex-col gap-1 overflow-y-auto border-r border-sentinel-line px-2.5 py-4">
+          <div className="mb-2.5">
+            <SentinelLogo caption="Sentinel Ops · internal" />
+          </div>
+          <div className="mb-2.5 flex items-center gap-1.5 rounded-md border border-sentinel-amber-bg bg-sentinel-amber-deep px-2 py-1.5">
+            <AlertTriangle className="h-3 w-3 flex-shrink-0 text-sentinel-amber" aria-hidden="true" />
+            <span className="text-[10px] font-medium text-sentinel-amber">
+              Internal — not client visible{devBypass ? " (local dev: access check skipped)" : ""}
+            </span>
+          </div>
+          <OpsNav />
+          {user ? (
+            <div className="mt-auto flex items-center gap-2 border-t border-sentinel-line pt-2.5">
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-sentinel-chip bg-sentinel-line-soft text-[10px] text-sentinel-muted">
+                {initials(user.fullName)}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-[12px]">{user.fullName}</div>
+                <div className="truncate text-[10px] text-sentinel-subtle">
+                  {user.role}
+                  {user.viewOnly ? " · view only" : ""}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </aside>
+      </SentinelCanvas>
+      <main className="min-w-0 flex-1 bg-background">{children}</main>
     </div>
   );
 }
