@@ -29,7 +29,6 @@ import type * as lib_awsClients_iprsClient from "../lib/awsClients/iprsClient.js
 import type * as lib_awsClients_livenessClient from "../lib/awsClients/livenessClient.js";
 import type * as lib_credits from "../lib/credits.js";
 import type * as lib_crypto from "../lib/crypto.js";
-import type * as lib_kyc_types from "../lib/kyc-types.js";
 import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_rbac from "../lib/rbac.js";
 import type * as lib_riskEngine from "../lib/riskEngine.js";
@@ -75,7 +74,6 @@ declare const fullApi: ApiFromModules<{
   "lib/awsClients/livenessClient": typeof lib_awsClients_livenessClient;
   "lib/credits": typeof lib_credits;
   "lib/crypto": typeof lib_crypto;
-  "lib/kyc-types": typeof lib_kyc_types;
   "lib/rateLimits": typeof lib_rateLimits;
   "lib/rbac": typeof lib_rbac;
   "lib/riskEngine": typeof lib_riskEngine;
