@@ -12,6 +12,7 @@ export default withUt({
 		extend: {
 			fontFamily: {
 				outfit: ["Outfit", "sans-serif"],
+				grotesk: ["var(--font-space-grotesk)", "Space Grotesk", "sans-serif"],
 			},
 			backgroundImage: {
 				"impact-gradient": "linear-gradient(to right, #000910 0%, rgba(255, 255, 255, 0.58) 19%, #304251 75%, #32383D 100%)",
@@ -22,6 +23,34 @@ export default withUt({
 				background: "hsl(var(--background))",
 				foreground: "hsl(var(--foreground))",
 				customTeal: "#54F4FC",
+				// Sentinel brand kit (client portal + Sentinel Ops console).
+				sentinel: {
+					bg: "#0A0B0D",
+					surface: "#111318",
+					raised: "#16181C",
+					line: "#23262B",
+					"line-soft": "#1B1E24",
+					chip: "#24272E",
+					text: "#EDEFF2",
+					nav: "#9AA1AB",
+					muted: "#8B929C",
+					subtle: "#565C64",
+					faint: "#3F434B",
+					blue: "#0191DA",
+					"blue-mid": "#41ACE4",
+					"blue-light": "#7EC7EA",
+					"blue-bg": "#0D2C40",
+					green: "#30A46C",
+					"green-text": "#4CC98A",
+					"green-bg": "#0F2A1E",
+					red: "#E5484D",
+					"red-text": "#F0555C",
+					"red-bg": "#3A1418",
+					amber: "#E8A33D",
+					"amber-text": "#F0B34E",
+					"amber-bg": "#3A2C10",
+					"amber-deep": "#1B1508",
+				},
 				card: {
 					DEFAULT: "hsl(var(--card))",
 					foreground: "hsl(var(--card-foreground))",

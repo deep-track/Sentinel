@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// The sidebar links to /internal-ops; the monitor is the landing screen.
+// The sidebar links to /internal-ops; the ops overview is the landing screen.
 export default function InternalOpsIndexPage() {
-  redirect("/internal-ops/monitoring");
+  redirect("/internal-ops/overview");
 }

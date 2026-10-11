@@ -27,7 +27,8 @@ import {
 	Fingerprint,
 	Home,
 	Key,
-	Lock,
+	LayoutGrid,
+	Radar,
 	Settings,
 	Shield,
 	ShieldCheck,
@@ -48,6 +49,7 @@ const ADMIN_ROUTES = ["/members"];
 
 const getMainItems = () => [
 	{ title: "Overview", url: "/dashboard", icon: Home },
+	{ title: "Client Portal", url: "/portal", icon: LayoutGrid },
 	{ title: "Identity (KYC)", url: "/kyc", icon: ShieldCheck },
 	{ title: "Business (KYB)", url: "/kyb", icon: Building2 },
 	{ title: "KYI", url: "/kyi", icon: TrendingUp },
@@ -116,16 +118,19 @@ export function AppSidebar({ role }: Props) {
 
 	const canManageMembers = isInternalAdminRole(role);
 	const mainItems = getMainItems();
-	if (canManageMembers) {
-		mainItems.splice(1, 0, { title: "Members", url: "/members", icon: User2 });
-	}
-
-	// Internal Ops is restricted to internal (DeepTrack staff) roles and must
+	// Overview, Client Portal, then Sentinel Ops (internal roles only) and
+	// Members (internal admins only) ahead of the verification products.
+	const extraItems: typeof mainItems = [];
+	// Sentinel Ops is restricted to internal (DeepTrack staff) roles and must
 	// never be visible to client users. Backend enforcement lives in
 	// app/internal-ops/layout.tsx; this only hides the link.
 	if (isInternalOpsRole(role)) {
-		mainItems.push({ title: "Internal Ops", url: "/internal-ops", icon: Lock });
+		extraItems.push({ title: "Sentinel Ops", url: "/internal-ops", icon: Radar });
 	}
+	if (canManageMembers) {
+		extraItems.push({ title: "Members", url: "/members", icon: User2 });
+	}
+	mainItems.splice(2, 0, ...extraItems);
 
 	React.useEffect(() => {
 		if (!canManageMembers && ADMIN_ROUTES.some((route) => pathname.startsWith(route))) {

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as aml from "../aml.js";
 import type * as amlPersistence from "../amlPersistence.js";
 import type * as apiKeys from "../apiKeys.js";
@@ -40,6 +41,7 @@ import type * as lib_webhookDispatch from "../lib/webhookDispatch.js";
 import type * as liveness from "../liveness.js";
 import type * as memberships from "../memberships.js";
 import type * as monitoring from "../monitoring.js";
+import type * as portal from "../portal.js";
 import type * as reviewQueue from "../reviewQueue.js";
 import type * as settings from "../settings.js";
 import type * as verifications from "../verifications.js";
@@ -53,6 +55,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   aml: typeof aml;
   amlPersistence: typeof amlPersistence;
   apiKeys: typeof apiKeys;
@@ -85,6 +88,7 @@ declare const fullApi: ApiFromModules<{
   liveness: typeof liveness;
   memberships: typeof memberships;
   monitoring: typeof monitoring;
+  portal: typeof portal;
   reviewQueue: typeof reviewQueue;
   settings: typeof settings;
   verifications: typeof verifications;
