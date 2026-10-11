@@ -25,10 +25,15 @@ export default async function KYCHero() {
 								className="rounded-lg bg-black px-8 py-6 text-lg font-medium text-white hover:bg-gray-900 transition-colors w-full"
 							>
 								{/* Signed-in users (any role) go straight to the dashboard; the
-								    platform layout handles access checks. /new-org is a stub. */}
-								<Link href={user ? "/dashboard" : "/auth/login"}>
-									{user ? "Go to Dashboard" : "Get Started"}
-								</Link>
+								    platform layout handles access checks. /new-org is a stub.
+								    /auth/login must be a plain <a>: a <Link> prefetches it as an
+								    RSC fetch, which follows the redirect to Auth0 and is blocked
+								    by connect-src. */}
+								{user ? (
+									<Link href="/dashboard">Go to Dashboard</Link>
+								) : (
+									<a href="/auth/login">Get Started</a>
+								)}
 							</Button>
 						</div>
 					</div>
