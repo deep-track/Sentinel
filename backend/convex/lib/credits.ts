@@ -22,9 +22,11 @@ export async function getBalance(ctx: QueryCtx, clientId: Id<"clients">) {
   return client.creditBalance ?? (await sumLedger(ctx, clientId));
 }
 
-// Ledger amounts are signed: deductions consume credits (negative), allocations
-// and refunds add them (allocation may be 0 for zero-credit plans), and
-// adjustments may go either way. Reject rows whose sign contradicts the type.
+/**
+ * Ledger amounts are signed: deductions consume credits (negative), allocations
+ * and refunds add them (allocation may be 0 for zero-credit plans), and
+ * adjustments may go either way. Throws for rows whose sign contradicts the type.
+ */
 function assertLedgerAmount(type: LedgerType, amount: number) {
   const valid =
     Number.isFinite(amount) &&

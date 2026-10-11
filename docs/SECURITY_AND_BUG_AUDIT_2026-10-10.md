@@ -2,7 +2,7 @@
 
 Read-only scan of the frontend (Next.js 15 / React 19), the Next server/auth layer (Auth0 v4, server actions, API routes) and the Convex backend (`backend/convex`). Findings were confirmed by reading the code; the top items in each area were re-checked by hand. Duplicates found by more than one pass are merged.
 
-> **Status:** the fixes for these findings were merged in deep-track/Sentinel#7. This report describes the code as it was before that PR. After deploying, run `npx convex run creditLedger:backfillAllocations` once so existing clients get their credit allocation.
+> **Status:** the fixes for these findings were merged in deep-track/Sentinel#7. This report describes the code as it was before that PR. After deploying, run `npx convex run --prod creditLedger:backfillAllocations` once against production (and without `--prod` on each dev deployment) so existing clients get their credit allocation.
 
 **Tooling results**
 - `tsc --noEmit` (app and `backend/convex`): passes, but much of the code path is untyped (`anyApi`, `internalApi: any`), so it catches little.
