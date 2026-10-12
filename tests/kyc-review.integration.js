@@ -68,3 +68,23 @@ test("AML and liveness submissions check credits before creating work", () => {
     assert.ok(insert > creditCheck, "credit check happens before the verification is created");
   }
 });
+
+test("Ops review queue resolves through reviewQueue.resolve and hides actions for view-only", () => {
+  const reviewQueue = read("backend/convex/reviewQueue.ts");
+  const detail = reviewQueue.slice(reviewQueue.indexOf("export const getForInternalOps = query"));
+  assert.ok(detail.length > 0, "reviewQueue.getForInternalOps exists");
+  assert.match(detail.slice(0, detail.indexOf("});")), /requireInternalUser\(ctx\)/);
+  assert.match(detail, /withoutMedia\(verification\)/);
+
+  const listPage = read("app/internal-ops/review-queue/page.tsx");
+  const itemPage = read("app/internal-ops/review-queue/[reviewId]/page.tsx");
+  const item = read("app/internal-ops/review-queue/[reviewId]/review-item.tsx");
+  const nav = read("app/internal-ops/ops-nav.tsx");
+  for (const page of [listPage, itemPage]) {
+    assert.match(page, /!user\.viewOnly/);
+  }
+  assert.match(item, /anyApi\.reviewQueue\.resolve/);
+  assert.match(item, /anyApi\.reviewQueue\.getForInternalOps/);
+  assert.match(item, /canResolve \?/);
+  assert.match(nav, /\/internal-ops\/review-queue/);
+});

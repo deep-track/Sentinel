@@ -23,6 +23,8 @@ import {
 } from "@/components/sentinel/ui";
 import {
   PLAN_LABELS,
+  REVIEW_PRIORITY,
+  REVIEW_TRIGGER_LABELS,
   type ClientStatus,
   type Plan,
   type Verdict,
@@ -86,18 +88,6 @@ type OpsOverview = {
   }>;
   truncated: boolean;
 };
-
-const PRIORITY = {
-  high: { tone: "red", label: "P1" },
-  normal: { tone: "amber", label: "P2" },
-  low: { tone: "neutral", label: "P3" },
-} as const;
-
-const TRIGGER_LABELS = {
-  client_dispute: "Client dispute",
-  auto_escalation: "Auto-escalation",
-  internal_flag: "Internal flag",
-} as const;
 
 function dayOverDay(today: number, yesterday: number) {
   if (yesterday === 0) return "none yesterday";
@@ -306,21 +296,21 @@ export function OpsOverview() {
                 iconClassName="text-sentinel-blue-mid"
                 title="Review queue"
                 hint="open items, highest priority first"
-                action={<ViewAll href="/internal-ops/monitoring">Screening monitor</ViewAll>}
+                action={<ViewAll href="/internal-ops/review-queue">Open review queue</ViewAll>}
               />
               <DataTable
                 head={["Client", "Type", "Trigger", "Priority", "Status", "Opened"]}
                 empty={data.queue.length === 0 ? <EmptyState>The review queue is empty.</EmptyState> : null}
               >
                 {data.queue.map((item) => {
-                  const priority = PRIORITY[item.priority];
+                  const priority = REVIEW_PRIORITY[item.priority];
                   return (
                     <Row key={item._id}>
                       <Cell>{item.clientName}</Cell>
                       <Cell className="text-sentinel-muted">{typeLabel(item.type)}</Cell>
                       <Cell className="max-w-[340px] truncate text-sentinel-muted">
                         <span title={item.triggerReason}>
-                          {TRIGGER_LABELS[item.triggerType]} — {item.triggerReason}
+                          {REVIEW_TRIGGER_LABELS[item.triggerType]} — {item.triggerReason}
                         </span>
                       </Cell>
                       <Cell>

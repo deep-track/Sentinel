@@ -60,6 +60,29 @@ export function formatDuration(ms: number | null | undefined): string {
   return `${(ms / 3_600_000).toFixed(1)}h`;
 }
 
+export type ReviewPriority = "low" | "normal" | "high";
+export type ReviewTrigger = "client_dispute" | "auto_escalation" | "internal_flag";
+export type ReviewStatus = "pending" | "in_review" | "resolved";
+
+export const REVIEW_PRIORITY: Record<ReviewPriority, { tone: BadgeTone; label: string }> = {
+  high: { tone: "red", label: "P1" },
+  normal: { tone: "amber", label: "P2" },
+  low: { tone: "neutral", label: "P3" },
+};
+
+export const REVIEW_TRIGGER_LABELS: Record<ReviewTrigger, string> = {
+  client_dispute: "Client dispute",
+  auto_escalation: "Auto-escalation",
+  internal_flag: "Internal flag",
+};
+
+/** Compact age, e.g. "12m", "5h", "3d". */
+export function formatAge(ms: number): string {
+  if (ms < 3_600_000) return `${Math.max(Math.floor(ms / 60_000), 0)}m`;
+  if (ms < 48 * 3_600_000) return `${Math.floor(ms / 3_600_000)}h`;
+  return `${Math.floor(ms / 86_400_000)}d`;
+}
+
 export const PLAN_LABELS = { trial: "Trial", starter: "Starter", growth: "Growth", enterprise: "Enterprise" } as const;
 export type Plan = keyof typeof PLAN_LABELS;
 
