@@ -122,3 +122,76 @@ test("liveness callbacks are idempotent and delivery failures fail the verificat
   assert.match(liveness, /internal\.webhooks\.dispatchWebhook/);
   assert.doesNotMatch(liveness, /"unknown"/, "no placeholder provider message ids");
 });
+
+const africasTalking = loadTs("backend/convex/lib/africasTalking.ts");
+
+test("Africa's Talking: sandbox username uses the sandbox host", () => {
+  assert.equal(africasTalking.africasTalkingSmsUrl("sandbox"), "https://api.sandbox.africastalking.com/version1/messaging");
+  assert.equal(africasTalking.africasTalkingSmsUrl("deeptrack"), "https://api.africastalking.com/version1/messaging");
+});
+
+test("Africa's Talking: request body sends the sender id only when set", () => {
+  const withSender = africasTalking.africasTalkingSmsBody({ username: "u", to: "+254700000000", message: "hi", senderId: " DEEPTRACK " });
+  assert.equal(withSender.get("from"), "DEEPTRACK");
+  assert.equal(withSender.get("to"), "+254700000000");
+  const without = africasTalking.africasTalkingSmsBody({ username: "u", to: "+254700000000", message: "hi" });
+  assert.equal(without.has("from"), false);
+});
+
+test("Africa's Talking: accepted recipients return the message id", () => {
+  for (const statusCode of [100, 101, 102]) {
+    const outcome = africasTalking.parseAfricasTalkingSendResponse({
+      SMSMessageData: { Recipients: [{ statusCode, status: "Success", number: "+254700000000", messageId: "ATXid_abc" }] },
+    });
+    assert.deepEqual(outcome, { ok: true, sid: "ATXid_abc" });
+  }
+});
+
+test("Africa's Talking: rejected, empty or id-less responses fail", () => {
+  const parse = africasTalking.parseAfricasTalkingSendResponse;
+  const rejected = parse({ SMSMessageData: { Recipients: [{ statusCode: 405, status: "InsufficientBalance", messageId: "None" }] } });
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.reason, /InsufficientBalance/);
+  assert.equal(parse({ SMSMessageData: { Recipients: [] } }).ok, false);
+  assert.equal(parse(null).ok, false);
+  assert.equal(parse({ SMSMessageData: { Recipients: [{ statusCode: 101, messageId: "None" }] } }).ok, false);
+  assert.equal(parse({ SMSMessageData: { Recipients: [{ statusCode: 101 }] } }).ok, false);
+});
+
+test("Africa's Talking: maps delivery report statuses onto forward-only delivery states", () => {
+  const map = africasTalking.mapAfricasTalkingDeliveryStatus;
+  for (const status of ["Sent", "Submitted", "Buffered"]) assert.equal(map(status), "sent");
+  assert.equal(map("Success"), "delivered");
+  assert.equal(map("AbsentSubscriber"), "undelivered");
+  assert.equal(map("Expired"), "undelivered");
+  assert.equal(map("Failed"), "failed");
+  assert.equal(map("Rejected"), "failed");
+  assert.equal(map("SomethingNew"), "sent");
+  assert.equal(map(null), "sent");
+});
+
+test("Africa's Talking: callback token must match exactly", () => {
+  const match = africasTalking.callbackTokenMatches;
+  assert.equal(match("s3cret-token", "s3cret-token"), true);
+  assert.equal(match("s3cret-tokeN", "s3cret-token"), false);
+  assert.equal(match("s3cret", "s3cret-token"), false);
+  assert.equal(match(null, "s3cret-token"), false);
+  assert.equal(match("s3cret-token", undefined), false);
+  assert.equal(match("", ""), false);
+});
+
+test("Africa's Talking delivery route checks the token before acting", () => {
+  const http = read("backend/convex/http.ts");
+  const start = http.indexOf('"/webhooks/liveness/delivery/africastalking"');
+  assert.ok(start > 0, "route exists");
+  const route = http.slice(start);
+  assert.ok(route.indexOf("callbackTokenMatches(") < route.indexOf("applyDeliveryCallback"), "token is checked before the mutation runs");
+  assert.match(route, /AFRICASTALKING_CALLBACK_TOKEN/);
+});
+
+test("liveness SMS uses Africa's Talking when configured and WhatsApp stays on Twilio", () => {
+  const liveness = read("backend/convex/liveness.ts");
+  assert.match(liveness, /request\.method === "sms" && atUsername && atApiKey/);
+  assert.match(liveness, /AFRICASTALKING_SENDER_ID/);
+  assert.match(liveness, /TWILIO_WHATSAPP_FROM/);
+});
