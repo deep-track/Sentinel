@@ -178,6 +178,9 @@ async function createIdpVerification(
     input: IdpInput;
     // Extra non-media fields to keep on the row (document URLs, etc.).
     storedExtras?: Record<string, unknown>;
+    // Still selfie for the DeepTrack Live face check. Forwarded to the
+    // scan only, never stored on the row.
+    selfieBase64?: string;
     actor: { actorId: string; actorType: AuditActorType };
   },
 ) {
@@ -222,6 +225,7 @@ async function createIdpVerification(
       gender: input.gender,
       livenessCollected: hasFrames,
       livenessMediaType: hasFrames ? input.livenessMediaType : undefined,
+      faceCheckRequested: Boolean(params.selfieBase64),
     },
     reference,
     createdAt: now,
@@ -233,6 +237,7 @@ async function createIdpVerification(
     clientId: params.clientId,
     livenessFramesBase64: hasFrames ? input.livenessFramesBase64 : undefined,
     livenessMediaType: hasFrames ? input.livenessMediaType : undefined,
+    selfieBase64: params.selfieBase64,
     documentFrontBase64: input.documentFrontBase64,
     documentBackBase64: input.documentBackBase64,
     idNumber: input.idNumber,
@@ -291,8 +296,8 @@ export const createKyc = mutation({
   handler: async (ctx, args) => {
     const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
     requireText({ documentFrontUrl: args.documentFrontUrl, selfieUrl: args.selfieUrl, selfieBase64: args.selfieBase64 });
-    // The selfie isn't processed yet (no face-match step); it is size-checked
-    // but neither stored nor forwarded.
+    // The selfie goes to DeepTrack Live for a fake-face check (not a face
+    // match against the document). It is size-checked and never stored.
     assertMediaSize({ selfieBase64: args.selfieBase64 });
     return await createIdpVerification(ctx, {
       clientId: args.clientId,
@@ -313,6 +318,7 @@ export const createKyc = mutation({
         documentBackUrl: args.documentBackUrl,
         selfieUrl: args.selfieUrl,
       },
+      selfieBase64: args.selfieBase64,
       actor: { actorId: actor.userId, actorType: actorTypeForClientRole(actor.role) },
     });
   },

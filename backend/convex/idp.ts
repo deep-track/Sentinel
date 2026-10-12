@@ -17,6 +17,7 @@ const processArgs = {
   clientId: v.id("clients"),
   livenessFramesBase64: v.optional(v.string()),
   livenessMediaType: v.optional(v.union(v.literal("jpeg_frames"), v.literal("mp4"))),
+  selfieBase64: v.optional(v.string()),
   documentFrontBase64: v.string(),
   documentBackBase64: v.optional(v.string()),
   idNumber: v.string(),
@@ -31,6 +32,7 @@ type ProcessArgs = {
   clientId: Id<"clients">;
   livenessFramesBase64?: string;
   livenessMediaType?: "jpeg_frames" | "mp4";
+  selfieBase64?: string;
   documentFrontBase64: string;
   documentBackBase64?: string;
   idNumber: string;
@@ -71,6 +73,7 @@ async function runOrchestration(ctx: ActionCtx, args: ProcessArgs) {
     liveness: livenessCollected
       ? { frames: args.livenessFramesBase64!, mediaType: args.livenessMediaType! }
       : undefined,
+    selfie: args.selfieBase64?.trim() ? { selfieBase64: args.selfieBase64 } : undefined,
     document: {
       frontImageBase64: args.documentFrontBase64,
       backImageBase64: args.documentBackBase64,
