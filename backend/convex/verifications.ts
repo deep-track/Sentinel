@@ -20,7 +20,7 @@ const verificationVerdict = v.union(v.literal("pass"), v.literal("review"), v.li
 // NOTE: the former public `review` mutation was removed (audit H7). Manual
 // decisions go through reviewQueue.resolve only, which enforces the
 // certainty/notes rules, audit log, queue state, charge and webhook.
-const livenessMediaType = v.union(v.literal("jpeg_frames"), v.literal("mp4"));
+const livenessMediaType = v.union(v.literal("jpeg_frames"), v.literal("mp4"), v.literal("webm"));
 
 // Typed input for an IDP check. The *Base64 fields are media: they are handed
 // to the processing action through the scheduler and never stored on the

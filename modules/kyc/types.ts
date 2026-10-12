@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-// Frontend-only shapes for the dashboard KYC wizard. These intentionally do
-// not include liveness fields: the dashboard flow collects a still selfie,
-// which is NOT liveness evidence, so nothing is sent as livenessFramesBase64.
+// Frontend-only shapes for the dashboard KYC wizard. The still selfie is NOT
+// liveness evidence; only the recorded clip (KYCLivenessData) is sent as
+// livenessFramesBase64.
 
 export type KYCDocumentType = "passport" | "id_card" | "driving_license";
 
@@ -20,6 +20,12 @@ export type KYCSelfieData = {
   selfieUrl: string;
   /** Raw base64 (no data: prefix) of the compressed selfie. */
   selfieBase64: string;
+};
+
+export type KYCLivenessData = {
+  /** Raw base64 (no data: prefix) of the recorded clip. */
+  livenessVideoBase64: string;
+  livenessMediaType: "mp4" | "webm";
 };
 
 const ID_NUMBER_PATTERN = /^[A-Za-z0-9]{5,20}$/;
@@ -87,4 +93,5 @@ export const kycIdentitySchema = z.object({
 
 export type KYCIdentityData = z.infer<typeof kycIdentitySchema>;
 
-export type KYCWizardData = Partial<KYCDocumentData & KYCSelfieData> & Partial<Record<keyof KYCIdentityData, string>>;
+export type KYCWizardData = Partial<KYCDocumentData & KYCSelfieData & KYCLivenessData> &
+  Partial<Record<keyof KYCIdentityData, string>>;

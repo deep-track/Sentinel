@@ -118,6 +118,17 @@ export async function orchestrateIdpVerification(
       stepResults,
     };
   }
+  const livenessVerdict =
+    livenessCollected && livenessOutcome.status === "fulfilled"
+      ? (livenessOutcome.value as LivenessResult | undefined)?.decision
+      : undefined;
+  if (livenessVerdict === "reject") {
+    return {
+      verdict: "reject",
+      reason: "DeepTrack Live flagged the liveness video as fake.",
+      stepResults,
+    };
+  }
 
   // Failure on any scan -> review, never reject.
   const livenessErrored = livenessCollected && livenessOutcome.status === "rejected";

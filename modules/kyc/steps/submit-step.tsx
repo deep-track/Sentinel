@@ -154,7 +154,8 @@ export function SubmitStep({ data, onIdentityChange, onSubmit, onBack, onEdit }:
 					<strong>Selfie:</strong> {data.selfieUrl ? "Uploaded" : "Missing"}
 				</p>
 				<p className="text-sm">
-					<strong>Liveness:</strong> Not collected in this flow
+					<strong>Liveness video:</strong>{" "}
+					{data.livenessVideoBase64 ? "Recorded" : "Skipped (the verification will be held for review)"}
 				</p>
 				<button
 					type="button"
