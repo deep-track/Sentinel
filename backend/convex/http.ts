@@ -14,6 +14,7 @@ import { parseApiKeyPrefix } from "./lib/crypto";
 import { mapTwilioDeliveryStatus, verifyTwilioSignature } from "./lib/twilio";
 import { MAX_MEDIA_BASE64_CHARS } from "./lib/verificationTypes";
 import type { IdpInput } from "./verifications";
+import { MAX_COUNTRY_LENGTH, MAX_SUBJECT_NAME_LENGTH } from "./aml";
 
 const http = httpRouter();
 
@@ -80,6 +81,35 @@ async function authenticateAndRateLimit(
 }
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; response: Response };
+
+type Created = { reference: string; status: "queued" | "completed"; verdict: "pass" | null; sandbox: boolean };
+
+// Runs a create mutation and maps its known ConvexError codes to HTTP
+// statuses; returns 202 with the client-facing id on success.
+async function createdResponse(type: string, create: () => Promise<Created>): Promise<Response> {
+  let created: Created;
+  try {
+    created = await create();
+  } catch (err) {
+    if (err instanceof ConvexError) {
+      const data = err.data as { code?: string; message?: string } | undefined;
+      if (data?.code === "insufficient_credits") return json({ error: "Insufficient credits" }, 402);
+      if (data?.code === "invalid_argument") return json({ error: data.message ?? "Invalid request" }, 400);
+      if (data?.code === "payload_too_large") return json({ error: data.message ?? "Payload too large" }, 413);
+      if (data?.code === "forbidden") return json({ error: "Account is not active" }, 403);
+    }
+    throw err;
+  }
+  return json(
+    {
+      id: created.reference,
+      type,
+      status: created.status,
+      ...(created.sandbox ? { verdict: created.verdict, sandbox: true } : {}),
+    },
+    202,
+  );
+}
 
 const IDP_TEXT_FIELDS = ["idNumber", "firstName", "lastName", "dateOfBirth", "gender"] as const;
 const IDP_REQUIRED_MEDIA = ["documentFrontBase64", "livenessFramesBase64"] as const;
@@ -170,6 +200,36 @@ function parseIdpBody(body: unknown): Parsed<IdpInput> {
   };
 }
 
+// Client-facing view of a completed AML result: the reason, which sources
+// were screened, and the matches without internal Convex ids.
+function amlScreeningSummary(result: unknown) {
+  const r = (result ?? {}) as {
+    reason?: unknown;
+    matches?: Array<Record<string, unknown>>;
+    coverage?: { checkedSources?: Array<{ sourceKey?: unknown; stale?: unknown }>; openSanctions?: unknown };
+  };
+  return {
+    reason: typeof r.reason === "string" ? r.reason : null,
+    sources: {
+      watchlists: (r.coverage?.checkedSources ?? []).map((source) => ({
+        source: source.sourceKey ?? null,
+        stale: source.stale === true,
+      })),
+      openSanctions: typeof r.coverage?.openSanctions === "string" ? r.coverage.openSanctions : null,
+    },
+    matches: (Array.isArray(r.matches) ? r.matches : []).map((match) => ({
+      source: match.source ?? null,
+      sourceRecordId: match.sourceRecordId ?? null,
+      entityName: match.entityName ?? null,
+      program: match.program ?? null,
+      matchScore: match.matchScore ?? null,
+      riskLevel: match.riskLevel ?? null,
+      matchedCountry: match.matchedCountry ?? null,
+      topics: Array.isArray(match.topics) ? match.topics : [],
+    })),
+  };
+}
+
 // Optional numeric query param; returns a 400 response when present but not
 // a finite number in range.
 function parseNumberParam(
@@ -214,33 +274,88 @@ http.route({
     // Credit check, insert and scheduling happen in one mutation. Test-mode
     // keys get a deterministic sandbox result (verdict "pass", status
     // "completed", no provider calls, 0 credits).
-    let created: { reference: string; status: "queued" | "completed"; verdict: "pass" | null; sandbox: boolean };
-    try {
-      created = await ctx.runMutation(internal.verifications._createIdpFromApi, {
+    return createdResponse("idp", () =>
+      ctx.runMutation(internal.verifications._createIdpFromApi, {
         clientId: auth.clientId,
         apiKeyId: auth.apiKeyId,
         environment: auth.environment,
         input: parsed.value,
-      });
-    } catch (err) {
-      if (err instanceof ConvexError) {
-        const data = err.data as { code?: string; message?: string } | undefined;
-        if (data?.code === "insufficient_credits") return json({ error: "Insufficient credits" }, 402);
-        if (data?.code === "invalid_argument") return json({ error: data.message ?? "Invalid request" }, 400);
-        if (data?.code === "payload_too_large") return json({ error: data.message ?? "Payload too large" }, 413);
-        if (data?.code === "forbidden") return json({ error: "Account is not active" }, 403);
-      }
-      throw err;
-    }
+      }),
+    );
+  }),
+});
 
-    return json(
-      {
-        id: created.reference,
-        type: "idp",
-        status: created.status,
-        ...(created.sandbox ? { verdict: created.verdict, sandbox: true } : {}),
-      },
-      202,
+type AmlBody = { subjectName: string; entityType: "individual" | "entity"; country?: string };
+const AML_ENTITY_TYPES = ["individual", "entity"] as const;
+
+function parseAmlBody(body: unknown): Parsed<AmlBody> {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, response: json({ error: "Request body must be a JSON object" }, 400) };
+  }
+  const b = body as Record<string, unknown>;
+  const missing = (["subjectName", "entityType"] as const).filter(
+    (field) => typeof b[field] !== "string" || !(b[field] as string).trim(),
+  );
+  if (missing.length > 0) {
+    return { ok: false, response: json({ error: `Missing required fields: ${missing.join(", ")}` }, 400) };
+  }
+  const invalid: string[] = [];
+  if ((b.subjectName as string).trim().length > MAX_SUBJECT_NAME_LENGTH) invalid.push("subjectName");
+  if (!AML_ENTITY_TYPES.includes(b.entityType as AmlBody["entityType"])) invalid.push("entityType");
+  if (
+    b.country !== undefined &&
+    b.country !== null &&
+    (typeof b.country !== "string" || b.country.trim().length > MAX_COUNTRY_LENGTH)
+  ) {
+    invalid.push("country");
+  }
+  if (invalid.length > 0) {
+    return {
+      ok: false,
+      response: json(
+        {
+          error: `Invalid fields: ${invalid.join(", ")}`,
+          details: {
+            subjectName: `string of at most ${MAX_SUBJECT_NAME_LENGTH} characters`,
+            entityType: AML_ENTITY_TYPES,
+            country: `optional string of at most ${MAX_COUNTRY_LENGTH} characters (ISO code or name)`,
+          },
+        },
+        400,
+      ),
+    };
+  }
+  const country = typeof b.country === "string" && b.country.trim() ? b.country.trim() : undefined;
+  return {
+    ok: true,
+    value: { subjectName: (b.subjectName as string).trim(), entityType: b.entityType as AmlBody["entityType"], country },
+  };
+}
+
+http.route({
+  path: "/v1/verify/aml",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const authResult = await authenticateAndRateLimit(ctx, request);
+    if ("response" in authResult) return authResult.response;
+    const { auth } = authResult;
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Invalid JSON body" }, 400);
+    }
+    const parsed = parseAmlBody(body);
+    if (!parsed.ok) return parsed.response;
+
+    return createdResponse("aml", () =>
+      ctx.runMutation(internal.aml._createFromApi, {
+        clientId: auth.clientId,
+        apiKeyId: auth.apiKeyId,
+        environment: auth.environment,
+        ...parsed.value,
+      }),
     );
   }),
 });
@@ -328,6 +443,7 @@ http.route({
       completedAt: record.completedAt ?? null,
       failureReason: record.failureReason ?? null,
       sandbox: (record.input as { sandbox?: unknown } | undefined)?.sandbox === true,
+      ...(record.type === "aml" && record.status === "completed" ? { screening: amlScreeningSummary(record.result) } : {}),
     });
   }),
 });

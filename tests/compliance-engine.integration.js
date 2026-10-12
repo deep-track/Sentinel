@@ -33,6 +33,7 @@ function loadTs(relative, cache = new Map()) {
 const riskEngine = loadTs("backend/convex/lib/riskEngine.ts");
 const matching = loadTs("backend/convex/lib/amlMatching.ts");
 const parsers = loadTs("backend/convex/lib/watchlistParsers.ts");
+const openSanctions = loadTs("backend/convex/lib/openSanctions.ts");
 
 // ── Risk engine ────────────────────────────────────────────────────────────
 
@@ -296,4 +297,132 @@ test("OFAC parser: entry name and uid are not taken from nested aka records", ()
 
 test("XML decoding does not double-decode entities", () => {
   assert.equal(parsers.decodeXml("A &amp;lt; B &#38; C &#x41;"), "A &lt; B & C A");
+});
+
+// ── OpenSanctions ──────────────────────────────────────────────────────────
+
+function osResult(overrides = {}) {
+  return {
+    id: "NK-test",
+    caption: "Jane Doe",
+    schema: "Person",
+    score: 0.95,
+    match: true,
+    datasets: ["us_ofac_sdn"],
+    properties: { topics: ["sanction"], country: ["ru"] },
+    ...overrides,
+  };
+}
+
+function osBody(results, status = 200) {
+  return { responses: { q: { status, results, total: { value: results.length } } }, limit: 10 };
+}
+
+test("OpenSanctions request: /match/default, ApiKey auth, Person schema with country", async () => {
+  let captured;
+  const fetchImpl = async (url, init) => {
+    captured = { url, init };
+    return jsonResponse(200, osBody([]));
+  };
+  const matches = await openSanctions.matchOpenSanctions(
+    { name: "Jane Doe", entityType: "individual", country: "KE" },
+    { apiKey: "secret-key", fetchImpl },
+  );
+  assert.deepEqual(matches, []);
+  const url = new URL(captured.url);
+  assert.equal(url.origin + url.pathname, "https://api.opensanctions.org/match/default");
+  assert.equal(url.searchParams.get("threshold"), "0.7");
+  assert.equal(captured.init.method, "POST");
+  assert.equal(captured.init.headers.Authorization, "ApiKey secret-key");
+  assert.deepEqual(JSON.parse(captured.init.body), {
+    queries: { q: { schema: "Person", properties: { name: ["Jane Doe"], country: ["KE"] } } },
+  });
+});
+
+test("OpenSanctions request: entities use LegalEntity and omit a blank country", () => {
+  assert.deepEqual(openSanctions.buildMatchQuery({ name: "Acme Ltd", entityType: "entity", country: "  " }), {
+    queries: { q: { schema: "LegalEntity", properties: { name: ["Acme Ltd"] } } },
+  });
+});
+
+test("OpenSanctions errors: HTTP error, bad JSON, malformed body and failed query all throw", async () => {
+  const run = (response) =>
+    openSanctions.matchOpenSanctions(
+      { name: "Jane Doe", entityType: "individual" },
+      { apiKey: "k", fetchImpl: async () => response },
+    );
+  await assert.rejects(run(jsonResponse(401, { detail: "unauthorized" })), /HTTP 401/);
+  await assert.rejects(run(jsonResponse(200, "not json")), /invalid JSON/);
+  await assert.rejects(run(jsonResponse(200, { responses: {} })), /missing the query result/);
+  await assert.rejects(run(jsonResponse(200, osBody([], 500))), /query failed/);
+  await assert.rejects(run(jsonResponse(200, osBody([{ id: "x" }]))), /missing an id or score/);
+});
+
+test("OpenSanctions errors: network failure and timeout throw", async () => {
+  await assert.rejects(
+    openSanctions.matchOpenSanctions(
+      { name: "Jane Doe", entityType: "individual" },
+      { apiKey: "k", fetchImpl: async () => { throw new Error("ECONNRESET"); } },
+    ),
+    /request failed: ECONNRESET/,
+  );
+  const hang = (_url, init) =>
+    new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted"))));
+  await assert.rejects(
+    openSanctions.matchOpenSanctions({ name: "Jane Doe", entityType: "individual" }, { apiKey: "k", fetchImpl: hang, timeoutMs: 10 }),
+    /timed out/,
+  );
+});
+
+test("OpenSanctions parsing reads topics, datasets and countries", () => {
+  const [match] = openSanctions.parseMatchResponse(
+    osBody([osResult({ properties: { topics: ["role.pep"], nationality: ["ke"], country: ["ke", "ug"] } })]),
+  );
+  assert.equal(match.id, "NK-test");
+  assert.deepEqual(match.topics, ["role.pep"]);
+  assert.deepEqual(match.countries, ["ke", "ug"]);
+  assert.equal(openSanctions.categorize(match), "pep");
+});
+
+test("OpenSanctions decision: strong sanction rejects, weaker sanction and PEP review, none passes", () => {
+  const parse = (results) => openSanctions.parseMatchResponse(osBody(results));
+  assert.equal(openSanctions.decideOpenSanctions(parse([osResult()])).verdict, "reject");
+  assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ score: 0.8 })])).verdict, "review");
+  const pep = openSanctions.decideOpenSanctions(parse([osResult({ properties: { topics: ["role.pep"] } })]));
+  assert.equal(pep.verdict, "review");
+  assert.match(pep.reason, /PEP/);
+  assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ properties: {} })])).verdict, "review");
+  // Below threshold / not flagged as a match: ignored.
+  assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ match: false })])).verdict, "pass");
+  assert.equal(openSanctions.decideOpenSanctions(parse([])).verdict, "pass");
+});
+
+test("OpenSanctions combine: stricter verdict wins and outages never pass", () => {
+  const clear = { verdict: "pass", reason: "No match found on the OFAC SDN or UN Consolidated watchlists.", complete: true };
+  const screened = (results) => ({ status: "screened", matches: openSanctions.parseMatchResponse(osBody(results)) });
+
+  const allClear = openSanctions.combineWithOpenSanctions(clear, screened([]));
+  assert.equal(allClear.verdict, "pass");
+  assert.equal(allClear.complete, true);
+  assert.match(allClear.reason, /OpenSanctions/);
+
+  const osHit = openSanctions.combineWithOpenSanctions(clear, screened([osResult()]));
+  assert.equal(osHit.verdict, "reject");
+  assert.equal(osHit.complete, true);
+
+  const watchlistHit = { verdict: "reject", reason: "Exact match.", complete: true };
+  assert.equal(openSanctions.combineWithOpenSanctions(watchlistHit, screened([])).verdict, "reject");
+
+  for (const status of ["unavailable", "not_configured"]) {
+    const gap = openSanctions.combineWithOpenSanctions(clear, { status });
+    assert.equal(gap.verdict, "review");
+    assert.equal(gap.complete, false);
+    assert.match(gap.reason, /held for manual review/);
+  }
+  // A watchlist reject still rejects when OpenSanctions is down.
+  assert.equal(openSanctions.combineWithOpenSanctions(watchlistHit, { status: "unavailable" }).verdict, "reject");
+  // Incomplete watchlist coverage keeps the whole screening incomplete.
+  const partial = openSanctions.combineWithOpenSanctions({ ...clear, verdict: "review", complete: false }, screened([]));
+  assert.equal(partial.verdict, "review");
+  assert.equal(partial.complete, false);
 });

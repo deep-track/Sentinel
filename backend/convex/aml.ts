@@ -1,9 +1,12 @@
 import { ConvexError, v } from "convex/values";
-import { internalAction, mutation } from "./_generated/server";
+import { internalAction, internalMutation, mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireClientRole } from "./lib/rbac";
+import { buildVerificationReference } from "./lib/crypto";
 import { assertCreditsForNewVerification, creditsForType } from "./lib/verificationTypes";
+import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 import {
   SOURCE_LABELS,
   STRONG_MATCH_THRESHOLD,
@@ -14,51 +17,193 @@ import {
   type Candidate,
   type SourceKey,
 } from "./lib/amlMatching";
+import {
+  OPENSANCTIONS_STRONG_MATCH_SCORE,
+  OpenSanctionsRequestError,
+  categorize,
+  combineWithOpenSanctions,
+  matchOpenSanctions,
+  relevantMatches,
+  type OpenSanctionsOutcome,
+} from "./lib/openSanctions";
 
 const internalApi: any = internal;
 
 const MATCH_LIMIT = 25;
 const ENTRY_PAGE_SIZE = 500;
+export const MAX_SUBJECT_NAME_LENGTH = 300;
+export const MAX_COUNTRY_LENGTH = 100;
+
+const entityTypeValidator = v.union(v.literal("individual"), v.literal("entity"));
+
+type AmlRequest = {
+  clientId: Id<"clients">;
+  subjectName: string;
+  entityType: "individual" | "entity";
+  country?: string;
+};
+
+function normalizeAmlRequest(args: AmlRequest) {
+  const subjectName = args.subjectName.trim();
+  if (!subjectName) throw new ConvexError({ code: "invalid_argument", message: "Subject name is required." });
+  if (subjectName.length > MAX_SUBJECT_NAME_LENGTH) {
+    throw new ConvexError({ code: "invalid_argument", message: "Subject name is too long." });
+  }
+  const country = args.country?.trim() || undefined;
+  if (country && country.length > MAX_COUNTRY_LENGTH) {
+    throw new ConvexError({ code: "invalid_argument", message: "Country is too long." });
+  }
+  return { subjectName, country };
+}
+
+async function requireActiveClient(ctx: MutationCtx, clientId: Id<"clients">) {
+  const client = await ctx.db.get(clientId);
+  if (!client || client.status !== "active") {
+    throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
+  }
+}
+
+// Shared AML creation path (dashboard and public API). Checks credits,
+// inserts the row, schedules screening and audits — all in the caller's
+// transaction.
+async function createAmlVerification(
+  ctx: MutationCtx,
+  args: AmlRequest & { actor: { actorId: string; actorType: AuditActorType } },
+) {
+  const { subjectName, country } = normalizeAmlRequest(args);
+  await requireActiveClient(ctx, args.clientId);
+  const creditsUsed = creditsForType("aml");
+  // Balance check in the same transaction as the insert.
+  await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
+  const now = Date.now();
+  const reference = buildVerificationReference();
+  const verificationId = await ctx.db.insert("verifications", {
+    clientId: args.clientId,
+    type: "aml",
+    status: "queued",
+    creditsUsed,
+    input: { subjectName, entityType: args.entityType, country: country ?? null },
+    reference,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await ctx.scheduler.runAfter(0, internalApi.aml.runScreening, {
+    verificationId,
+    clientId: args.clientId,
+    subjectName,
+    entityType: args.entityType,
+    country,
+  });
+  await recordAudit(ctx, {
+    ...args.actor,
+    action: "verification.created",
+    targetType: "verification",
+    targetId: verificationId,
+    clientId: args.clientId,
+    metadata: { type: "aml", reference },
+  });
+  return { verificationId, reference };
+}
 
 export const submit = mutation({
   args: {
     clientId: v.id("clients"),
     subjectName: v.string(),
-    entityType: v.union(v.literal("individual"), v.literal("entity")),
+    entityType: entityTypeValidator,
     country: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
-    const subjectName = args.subjectName.trim();
-    if (!subjectName) throw new ConvexError({ code: "invalid_argument", message: "Subject name is required." });
-    if (subjectName.length > 300) throw new ConvexError({ code: "invalid_argument", message: "Subject name is too long." });
-    const country = args.country?.trim() || undefined;
-    const client = await ctx.db.get(args.clientId);
-    if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
-    const creditsUsed = creditsForType("aml");
-    // Balance check in the same transaction as the insert.
-    await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
-    const now = Date.now();
-    const verificationId = await ctx.db.insert("verifications", {
-      clientId: args.clientId,
-      type: "aml",
-      status: "queued",
-      creditsUsed,
-      input: { subjectName, entityType: args.entityType, country: country ?? null },
-      reference: `aml_${now}_${Math.random().toString(36).slice(2, 8)}`,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await ctx.scheduler.runAfter(0, internalApi.aml.runScreening, {
-      verificationId,
-      clientId: args.clientId,
-      subjectName,
-      entityType: args.entityType,
-      country,
+    const { userId, role } = await requireClientRole(ctx, args.clientId, [
+      "client_admin",
+      "compliance_analyst",
+      "developer",
+    ]);
+    const { verificationId } = await createAmlVerification(ctx, {
+      ...args,
+      actor: { actorId: userId, actorType: actorTypeForClientRole(role) },
     });
     return { verificationId };
   },
 });
+
+// POST /v1/verify/aml. Test-mode keys get a deterministic sandbox result
+// (verdict "pass", status "completed", no screening, 0 credits).
+export const _createFromApi = internalMutation({
+  args: {
+    clientId: v.id("clients"),
+    apiKeyId: v.id("apiKeys"),
+    environment: v.union(v.literal("live"), v.literal("test")),
+    subjectName: v.string(),
+    entityType: entityTypeValidator,
+    country: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = { actorId: args.apiKeyId, actorType: "client_api_key" as const };
+    const request = { clientId: args.clientId, subjectName: args.subjectName, entityType: args.entityType, country: args.country };
+    if (args.environment === "live") {
+      const { reference } = await createAmlVerification(ctx, { ...request, actor });
+      return { reference, status: "queued" as const, verdict: null, sandbox: false };
+    }
+
+    normalizeAmlRequest(request);
+    await requireActiveClient(ctx, args.clientId);
+    const now = Date.now();
+    const reference = buildVerificationReference();
+    const id = await ctx.db.insert("verifications", {
+      clientId: args.clientId,
+      type: "aml",
+      status: "completed",
+      verdict: "pass",
+      confidence: 1,
+      creditsUsed: 0,
+      input: { sandbox: true },
+      result: {
+        sandbox: true,
+        reason: "Test-mode API key: no watchlists were screened and no credits were charged.",
+        matches: [],
+      },
+      reference,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: now,
+    });
+    await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, { verificationId: id });
+    await recordAudit(ctx, {
+      ...actor,
+      action: "verification.created",
+      targetType: "verification",
+      targetId: id,
+      clientId: args.clientId,
+      metadata: { type: "aml", reference, sandbox: true },
+    });
+    return { reference, status: "completed" as const, verdict: "pass" as const, sandbox: true };
+  },
+});
+
+// Never throws: any failure is reported as a coverage gap so the screening
+// is held for review instead of passing or failing outright.
+async function screenOpenSanctions(subject: {
+  subjectName: string;
+  entityType: "individual" | "entity";
+  country?: string;
+}): Promise<OpenSanctionsOutcome> {
+  const apiKey = process.env.OPENSANCTIONS_API_KEY?.trim();
+  if (!apiKey) return { status: "not_configured" };
+  try {
+    const matches = await matchOpenSanctions(
+      { name: subject.subjectName, entityType: subject.entityType, country: subject.country },
+      { apiKey },
+    );
+    return { status: "screened", matches };
+  } catch (error) {
+    // No subject data in the log line.
+    console.error("[OpenSanctions] screening unavailable", {
+      status: error instanceof OpenSanctionsRequestError ? error.status : undefined,
+      message: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+    });
+    return { status: "unavailable" };
+  }
+}
 
 type Entry = {
   _id: Id<"watchlistEntries">;
@@ -140,6 +285,8 @@ export const runScreening = internalAction({
   },
   handler: async (ctx, args) => {
     await ctx.runMutation(internalApi.verifications._markProcessing, { id: args.verificationId });
+    // Runs alongside the local watchlist scan; never rejects.
+    const openSanctionsPromise = screenOpenSanctions(args);
     try {
       const coverage: Coverage = await ctx.runQuery(internalApi.amlPersistence.getActiveVersions, { now: Date.now() });
       const candidates: Array<Candidate<Entry>> = [];
@@ -160,16 +307,19 @@ export const runScreening = internalAction({
         }
       }
       candidates.sort(compareCandidates);
+      const openSanctions = await openSanctionsPromise;
       // Decide on ALL candidates, then keep only the strongest for storage.
-      const decision = finalDecision(candidates, coverage);
+      const decision = combineWithOpenSanctions(finalDecision(candidates, coverage), openSanctions);
       const stored = candidates.slice(0, MATCH_LIMIT);
+      const openSanctionsMatches = openSanctions.status === "screened" ? relevantMatches(openSanctions.matches) : [];
+      const hasAnyMatch = stored.length > 0 || openSanctionsMatches.length > 0;
       await ctx.runMutation(internalApi.amlPersistence.complete, {
         verificationId: args.verificationId,
         clientId: args.clientId,
         subjectName: args.subjectName,
         verdict: decision.verdict,
         reason: decision.reason,
-        confidence: !decision.complete && stored.length === 0 ? 0 : undefined,
+        confidence: !decision.complete && !hasAnyMatch ? 0 : undefined,
         chargeCredits: decision.complete,
         coverage: {
           checked: coverage.versions.map((version) => ({
@@ -180,20 +330,38 @@ export const runScreening = internalAction({
           })),
           missing: coverage.missing,
           stale: coverage.stale,
+          openSanctions: openSanctions.status,
         },
-        matches: stored.map((match) => ({
-          entryId: match._id,
-          versionId: match.versionId,
-          source: match.sourceKey,
-          sourceRecordId: match.sourceRecordId,
-          entityName: match.primaryName,
-          program: match.programs[0] ?? "unknown",
-          matchScore: match.nameScore,
-          matchMethod: match.method,
-          matchedCountry: match.countries[0],
-          countryMatch: match.countryMatch,
-          riskLevel: match.nameScore >= STRONG_MATCH_THRESHOLD ? ("critical" as const) : ("high" as const),
-        })),
+        matches: [
+          ...stored.map((match) => ({
+            entryId: match._id,
+            versionId: match.versionId,
+            source: match.sourceKey,
+            sourceRecordId: match.sourceRecordId,
+            entityName: match.primaryName,
+            program: match.programs[0] ?? "unknown",
+            matchScore: match.nameScore,
+            matchMethod: match.method,
+            matchedCountry: match.countries[0],
+            countryMatch: match.countryMatch,
+            riskLevel: match.nameScore >= STRONG_MATCH_THRESHOLD ? ("critical" as const) : ("high" as const),
+          })),
+          ...openSanctionsMatches.slice(0, MATCH_LIMIT).map((match) => ({
+            source: "OPENSANCTIONS" as const,
+            sourceRecordId: match.id,
+            entityName: match.caption,
+            program: match.topics.join(", ") || match.datasets[0] || "unknown",
+            matchScore: Math.round(match.score * 100),
+            matchMethod: "provider_score" as const,
+            matchedCountry: match.countries[0],
+            riskLevel:
+              categorize(match) === "sanction" && match.score >= OPENSANCTIONS_STRONG_MATCH_SCORE
+                ? ("critical" as const)
+                : ("high" as const),
+            topics: match.topics.slice(0, 20),
+            datasets: match.datasets.slice(0, 20),
+          })),
+        ],
       });
       return { verdict: decision.verdict, matches: candidates.length };
     } catch (error) {
