@@ -12,6 +12,7 @@ import {
 } from "./lib/rateLimits";
 import { parseApiKeyPrefix } from "./lib/crypto";
 import { mapTwilioDeliveryStatus, verifyTwilioSignature } from "./lib/twilio";
+import { callbackTokenMatches, mapAfricasTalkingDeliveryStatus } from "./lib/africasTalking";
 import { MAX_MEDIA_BASE64_CHARS } from "./lib/verificationTypes";
 import type { IdpInput } from "./verifications";
 import { MAX_COUNTRY_LENGTH, MAX_SUBJECT_NAME_LENGTH } from "./aml";
@@ -537,6 +538,25 @@ http.route({
     if (!providerMessageId) return json({ error: "Missing MessageSid" }, 400);
     const deliveryStatus = mapTwilioDeliveryStatus(params.get("MessageStatus"));
     const result = await ctx.runMutation(internal.liveness.applyDeliveryCallback, { providerMessageId, deliveryStatus, reason: params.get("ErrorMessage") ?? undefined });
+    return json(result, result.accepted ? 200 : 404);
+  }),
+});
+
+// Africa's Talking SMS delivery reports. Set the callback URL in the Africa's
+// Talking dashboard (SMS → Callback URLs → Delivery Reports) to
+// https://<deployment>.convex.site/webhooks/liveness/delivery/africastalking?token=<AFRICASTALKING_CALLBACK_TOKEN>.
+// Reports are not signed, so the token is the only proof of origin.
+http.route({
+  path: "/webhooks/liveness/delivery/africastalking",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const token = new URL(request.url).searchParams.get("token");
+    if (!callbackTokenMatches(token, process.env.AFRICASTALKING_CALLBACK_TOKEN)) return json({ error: "Invalid callback token" }, 401);
+    const params = new URLSearchParams(await request.text());
+    const providerMessageId = params.get("id");
+    if (!providerMessageId) return json({ error: "Missing id" }, 400);
+    const deliveryStatus = mapAfricasTalkingDeliveryStatus(params.get("status"));
+    const result = await ctx.runMutation(internal.liveness.applyDeliveryCallback, { providerMessageId, deliveryStatus, reason: params.get("failureReason") ?? undefined });
     return json(result, result.accepted ? 200 : 404);
   }),
 });

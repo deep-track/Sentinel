@@ -8,6 +8,7 @@ import { requireClientRole } from "./lib/rbac";
 import { rateLimiter } from "./lib/rateLimits";
 import { assertCredits, chargeVerification } from "./lib/credits";
 import { creditsForType } from "./lib/verificationTypes";
+import { africasTalkingSmsBody, africasTalkingSmsUrl, parseAfricasTalkingSendResponse } from "./lib/africasTalking";
 
 // "email" stays in the validator so older clients get a clear error instead of
 // a validation failure; it is always rejected below.
@@ -15,7 +16,7 @@ const deliveryMethod = v.union(v.literal("sms"), v.literal("whatsapp"), v.litera
 const deliveryStatusUpdate = v.union(v.literal("sent"), v.literal("delivered"), v.literal("failed"), v.literal("undelivered"));
 const internalApi: any = internal;
 
-const TWILIO_TIMEOUT_MS = 15_000;
+const PROVIDER_TIMEOUT_MS = 15_000;
 const E164_PATTERN = /^\+[1-9]\d{7,14}$/;
 
 // SMS toll-fraud guard: each invitation costs real money on Sentinel's Twilio
@@ -84,7 +85,7 @@ type SendOutcome = { ok: true; sid: string } | { ok: false; reason: string };
 
 async function sendTwilioMessage(sid: string, token: string, body: URLSearchParams): Promise<SendOutcome> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TWILIO_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
   try {
     const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
       method: "POST",
@@ -111,24 +112,64 @@ async function sendTwilioMessage(sid: string, token: string, body: URLSearchPara
   }
 }
 
+async function sendAfricasTalkingSms(username: string, apiKey: string, to: string, message: string, senderId?: string): Promise<SendOutcome> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+  try {
+    const response = await fetch(africasTalkingSmsUrl(username), {
+      method: "POST",
+      headers: { apiKey, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: africasTalkingSmsBody({ username, to, message, senderId }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      console.error(`[liveness.dispatch] Africa's Talking returned HTTP ${response.status}: ${text.slice(0, 300)}`);
+      return { ok: false, reason: `Provider returned HTTP ${response.status}.` };
+    }
+    const outcome = parseAfricasTalkingSendResponse(await response.json().catch(() => null));
+    if (!outcome.ok) console.error(`[liveness.dispatch] Africa's Talking: ${outcome.reason}`);
+    return outcome;
+  } catch (error) {
+    const aborted = typeof error === "object" && error !== null && (error as { name?: unknown }).name === "AbortError";
+    console.error("[liveness.dispatch] Africa's Talking request failed", error instanceof Error ? error.message : "unknown error");
+    return { ok: false, reason: aborted ? "Provider request timed out." : "Provider request failed." };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// SMS goes through Africa's Talking when it is configured, otherwise Twilio.
+// WhatsApp always goes through Twilio. Delivery reports from either provider
+// update the request by provider message id. Null means no provider is set up.
+async function sendInvitation(request: Doc<"livenessRequests">, message: string): Promise<SendOutcome | null> {
+  const atUsername = process.env.AFRICASTALKING_USERNAME?.trim();
+  const atApiKey = process.env.AFRICASTALKING_API_KEY?.trim();
+  if (request.method === "sms" && atUsername && atApiKey) {
+    return sendAfricasTalkingSms(atUsername, atApiKey, request.contact, message, process.env.AFRICASTALKING_SENDER_ID);
+  }
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from = request.method === "whatsapp" ? process.env.TWILIO_WHATSAPP_FROM : process.env.TWILIO_SMS_FROM;
+  if (!sid || !token || !from) return null;
+  const to = request.method === "whatsapp" ? `whatsapp:${request.contact.replace(/^whatsapp:/i, "")}` : request.contact;
+  const deliveryCallback = process.env.LIVENESS_DELIVERY_CALLBACK_URL;
+  const body = new URLSearchParams({ To: to, From: from, Body: message, ...(deliveryCallback ? { StatusCallback: deliveryCallback } : {}) });
+  return sendTwilioMessage(sid, token, body);
+}
+
 export const dispatch = internalAction({
   args: { requestId: v.id("livenessRequests") },
   handler: async (ctx, args) => {
     const request: Doc<"livenessRequests"> | null = await ctx.runQuery(internalApi.liveness.getInternal, { requestId: args.requestId });
     if (!request || request.status !== "pending" || request.deliveryStatus !== "pending") return;
-    const sid = process.env.TWILIO_ACCOUNT_SID;
-    const token = process.env.TWILIO_AUTH_TOKEN;
-    const from = request.method === "whatsapp" ? process.env.TWILIO_WHATSAPP_FROM : process.env.TWILIO_SMS_FROM;
     const callbackBase = process.env.LIVENESS_PUBLIC_URL;
-    if (request.method === "email" || !sid || !token || !from || !callbackBase) {
+    const link = callbackBase ? `${callbackBase.replace(/\/$/, "")}/liveness/${request._id}` : null;
+    const outcome = request.method === "email" || !link ? null : await sendInvitation(request, `Complete your Deeptrack liveness verification: ${link}`);
+    if (!outcome) {
       await ctx.runMutation(internalApi.liveness.markDeliveryFailed, { requestId: args.requestId, reason: "Liveness delivery provider is not configured." });
       return;
     }
-    const to = request.method === "whatsapp" ? `whatsapp:${request.contact.replace(/^whatsapp:/i, "")}` : request.contact;
-    const link = `${callbackBase.replace(/\/$/, "")}/liveness/${request._id}`;
-    const deliveryCallback = process.env.LIVENESS_DELIVERY_CALLBACK_URL;
-    const body = new URLSearchParams({ To: to, From: from, Body: `Complete your Deeptrack liveness verification: ${link}`, ...(deliveryCallback ? { StatusCallback: deliveryCallback } : {}) });
-    const outcome = await sendTwilioMessage(sid, token, body);
     if (!outcome.ok) {
       await ctx.runMutation(internalApi.liveness.markDeliveryFailed, { requestId: args.requestId, reason: outcome.reason });
       return;
