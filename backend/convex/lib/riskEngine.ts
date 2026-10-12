@@ -18,6 +18,8 @@ import {
   type AmlMatch,
 } from "./awsClients/amlClient";
 import { upstreamErrorCode, type UpstreamErrorCode } from "./awsClients/internalFetch";
+import { checkSelfieFace, type FaceCheckRequest } from "./awsClients/faceCheckClient";
+import { faceCheckDecision, type FaceCheckResult } from "./deeptrackLive";
 
 // This engine FAILS CLOSED: every branch that is not an explicit, recognised
 // "all clear" ends in review or reject. Only the final return yields "pass".
@@ -26,6 +28,9 @@ export type IdpOrchestrationInput = {
   // Optional: KYC's plain-selfie flow doesn't collect this. A verification
   // without liveness can never auto-pass; it is held for manual review.
   liveness?: LivenessRequest;
+  // Optional still selfie, checked by DeepTrack Live for a fake/synthetic
+  // face. It is NOT liveness: a clean photo never stands in for it.
+  selfie?: FaceCheckRequest;
   document: DocScanRequest;
   identity: IprsQuery;
   amlEntityName: string;
@@ -46,6 +51,8 @@ export type IdpOrchestrationResult = {
   stepResults: {
     // Absent when liveness was not collected for this flow.
     liveness?: LivenessResult | StepError;
+    // Absent when no selfie was supplied.
+    faceCheck?: FaceCheckResult | StepError;
     docScan?: DocScanResult | StepError;
     iprs?: { status: string } | StepError;
     aml?: { status: string; matches: AmlMatch[] } | StepError;
@@ -80,9 +87,10 @@ export async function orchestrateIdpVerification(
 
   // Liveness only runs when the caller actually collected it. We skip the
   // AWS call entirely rather than sending it an empty/fake payload.
-  const [livenessOutcome, docScanOutcome] = await Promise.allSettled([
+  const [livenessOutcome, docScanOutcome, faceCheckOutcome] = await Promise.allSettled([
     input.liveness ? checkLiveness(input.liveness) : Promise.resolve(undefined),
     scanDocument(input.document),
+    input.selfie ? checkSelfieFace(input.selfie) : Promise.resolve(undefined),
   ]);
 
   if (livenessCollected) {
@@ -95,12 +103,28 @@ export async function orchestrateIdpVerification(
     docScanOutcome.status === "rejected"
       ? stepError("docScan", docScanOutcome.reason)
       : docScanOutcome.value;
+  const faceCheckResult =
+    input.selfie && faceCheckOutcome.status === "fulfilled" ? (faceCheckOutcome.value as FaceCheckResult) : undefined;
+  if (input.selfie) {
+    stepResults.faceCheck =
+      faceCheckOutcome.status === "rejected" ? stepError("faceCheck", faceCheckOutcome.reason) : faceCheckResult;
+  }
 
-  // Failure on either scan -> review, never reject.
+  // A confident fake face is decisive on its own, even if another scan failed.
+  if (faceCheckResult && faceCheckDecision(faceCheckResult) === "reject") {
+    return {
+      verdict: "reject",
+      reason: "DeepTrack Live flagged the selfie as a fake or synthetic face.",
+      stepResults,
+    };
+  }
+
+  // Failure on any scan -> review, never reject.
   const livenessErrored = livenessCollected && livenessOutcome.status === "rejected";
-  if (livenessErrored || docScanOutcome.status === "rejected") {
+  const faceCheckErrored = Boolean(input.selfie) && faceCheckOutcome.status === "rejected";
+  if (livenessErrored || faceCheckErrored || docScanOutcome.status === "rejected") {
     return review(
-      "Liveness or document scan service unavailable — held for manual review.",
+      "Liveness, face or document scan service unavailable — held for manual review.",
       "Scan service infrastructure failure",
     );
   }
@@ -117,6 +141,9 @@ export async function orchestrateIdpVerification(
   }
   if (!(docScanResult && passesDocScanThreshold(docScanResult))) {
     reasons.push("document authenticity below threshold or flags present");
+  }
+  if (faceCheckResult && faceCheckDecision(faceCheckResult) === "review") {
+    reasons.push("selfie face check uncertain, low quality or possibly fake");
   }
   if (reasons.length > 0) {
     if (!livenessCollected) reasons.push(LIVENESS_NOT_COLLECTED);
