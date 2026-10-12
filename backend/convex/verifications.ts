@@ -52,7 +52,7 @@ const MAX_MEMBERSHIPS = 50;
 
 // Removes media fields that older rows may still carry in `input`, so viewers
 // can't read raw ID images through the read APIs.
-function withoutMedia<T extends { input?: unknown }>(row: T): T {
+export function withoutMedia<T extends { input?: unknown }>(row: T): T {
   const input = row.input;
   if (!input || typeof input !== "object" || Array.isArray(input)) return row;
   const entries = Object.entries(input as Record<string, unknown>).filter(

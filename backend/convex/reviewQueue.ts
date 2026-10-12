@@ -1,12 +1,13 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireInternalUser, requireClientRole } from "./lib/rbac";
 import { chargeVerification } from "./lib/credits";
 import { verificationTypeLabel } from "./lib/verificationTypes";
 import { recordAudit } from "./auditLog";
+import { withoutMedia } from "./verifications";
 
 // ─────────────────────────────────────────────────────────
 // Section 11.2 (engineering doc) — authoritative per Brian's directive
@@ -58,7 +59,60 @@ export const listForInternalOps = query({
           .order("desc")
           .take(MAX_QUEUE_ROWS);
 
-    return sortQueue(rows);
+    return await withReviewContext(ctx, sortQueue(rows));
+  },
+});
+
+// Adds the client name and a verification summary to each queue row so the
+// Ops console can show them without cross-tenant reads of its own.
+async function withReviewContext(ctx: QueryCtx, rows: Doc<"reviewQueue">[]) {
+  const clientIds = [...new Set(rows.map((row) => row.clientId))];
+  const clients = await Promise.all(clientIds.map((id) => ctx.db.get(id)));
+  const clientNames = new Map<Id<"clients">, string>();
+  clients.forEach((client, index) => {
+    if (client) clientNames.set(clientIds[index], client.name);
+  });
+
+  return await Promise.all(
+    rows.map(async (row) => {
+      const verification = await ctx.db.get(row.verificationId);
+      return {
+        ...row,
+        clientName: clientNames.get(row.clientId) ?? null,
+        verification: verification
+          ? {
+              type: verification.type,
+              reference: verification.reference,
+              status: verification.status,
+              verdict: verification.verdict ?? null,
+              confidence: verification.confidence ?? null,
+            }
+          : null,
+      };
+    }),
+  );
+}
+
+// Internal Ops — one queue item with its client and full verification
+// result (media stripped), for the reviewer's resolution screen. Takes a
+// plain string so a malformed id from the URL reads as "not found".
+export const getForInternalOps = query({
+  args: { reviewId: v.string() },
+  handler: async (ctx, args) => {
+    await requireInternalUser(ctx);
+    const reviewId = ctx.db.normalizeId("reviewQueue", args.reviewId);
+    if (!reviewId) return null;
+    const row = await ctx.db.get(reviewId);
+    if (!row) return null;
+    const [client, verification] = await Promise.all([
+      ctx.db.get(row.clientId),
+      ctx.db.get(row.verificationId),
+    ]);
+    return {
+      ...row,
+      clientName: client?.name ?? null,
+      verification: verification ? withoutMedia(verification) : null,
+    };
   },
 });
 

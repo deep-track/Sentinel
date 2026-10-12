@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Building2, Radar, ShieldAlert, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Building2, ClipboardCheck, Radar, ShieldAlert, type LucideIcon } from "lucide-react";
 import { cn } from "@/backend/lib/utils";
 
 type NavItem = { title: string; url: string; icon: LucideIcon };
@@ -18,7 +18,10 @@ const SECTIONS: Array<{ label: string; items: NavItem[] }> = [
   },
   {
     label: "Quality & review",
-    items: [{ title: "Screening monitor", url: "/internal-ops/monitoring", icon: ShieldAlert }],
+    items: [
+      { title: "Review queue", url: "/internal-ops/review-queue", icon: ClipboardCheck },
+      { title: "Screening monitor", url: "/internal-ops/monitoring", icon: ShieldAlert },
+    ],
   },
 ];
 
