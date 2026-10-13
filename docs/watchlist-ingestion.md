@@ -63,7 +63,8 @@ The current parser is deliberately narrow and should be tested against official 
 AML screening (`aml.runScreening`) checks every subject against both the Sentinel-owned OFAC/UN index and the OpenSanctions `/match/default` API (`backend/convex/lib/openSanctions.ts`), in parallel. Precedence and audit semantics:
 
 - The stricter verdict wins (`reject` > `review` > `pass`).
-- OpenSanctions results count only when the API flags them as a match (score ≥ 0.7). A sanctions-topic match (`sanction`, `sanction.linked`, `crime.terror`) scoring ≥ 0.9 is a `reject`; a weaker sanctions match, a PEP match (`role.pep`, `role.rca`, `role.oligarch`) or any other risk-list match is `review`.
+- OpenSanctions results count only when the API flags them as a match (score ≥ 0.7) **and** they carry a risk topic. Records with no topic (company registries and other `ext_*` enrichment data) never count and aren't stored.
+- A sanctions-topic match (`sanction`, `sanction.linked`, `crime.terror`) counts from 0.7, and from 0.9 it is a `reject`; below that it is `review`. A PEP match (`role.pep`, `role.rca`, `role.oligarch`) or any other risk-list match counts from 0.8 and is `review`, so similar-sounding names (0.7–0.8) don't hold a screening.
 - If OpenSanctions is unreachable, returns an error, or `OPENSANCTIONS_API_KEY` is not set in the **Convex** environment, it is a coverage gap: the screening cannot pass, is held for review, and is not billed — exactly like a stale or missing local list.
 - OpenSanctions matches are stored on the verification result and in `flaggedEntities` with `source: "OPENSANCTIONS"`, the OpenSanctions entity id (`externalId`), topics and datasets. The audit row records the OpenSanctions status and entity ids.
 

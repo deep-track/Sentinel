@@ -391,10 +391,33 @@ test("OpenSanctions decision: strong sanction rejects, weaker sanction and PEP r
   const pep = openSanctions.decideOpenSanctions(parse([osResult({ properties: { topics: ["role.pep"] } })]));
   assert.equal(pep.verdict, "review");
   assert.match(pep.reason, /PEP/);
-  assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ properties: {} })])).verdict, "review");
+  // Another risk list (topic but not sanction/PEP) still reviews.
+  assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ properties: { topics: ["debarment"] } })])).verdict, "review");
   // Below threshold / not flagged as a match: ignored.
   assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ match: false })])).verdict, "pass");
   assert.equal(openSanctions.decideOpenSanctions(parse([])).verdict, "pass");
+});
+
+test("OpenSanctions noise: no-topic records never count; PEP and other lists need 0.8, sanctions 0.7", () => {
+  const parse = (results) => openSanctions.parseMatchResponse(osBody(results));
+  const decide = (results) => openSanctions.decideOpenSanctions(parse(results)).verdict;
+  // A company-registry record (no risk topic) is enrichment, not a risk list.
+  const registry = osResult({ id: "ru-egrul-1", score: 0.95, datasets: ["ext_ru_egrul"], properties: {} });
+  assert.equal(openSanctions.categorize(parse([registry])[0]), "none");
+  assert.equal(decide([registry]), "pass");
+  assert.deepEqual(openSanctions.relevantMatches(parse([registry])), []);
+  // A weak PEP look-alike ("Utkin" for "Putin") is dropped; a close one counts.
+  assert.equal(decide([osResult({ score: 0.75, properties: { topics: ["role.pep"] } })]), "pass");
+  assert.equal(decide([osResult({ score: 0.8, properties: { topics: ["role.pep"] } })]), "review");
+  assert.equal(decide([osResult({ score: 0.79, properties: { topics: ["debarment"] } })]), "pass");
+  // Sanctions stay as sensitive as before.
+  assert.equal(decide([osResult({ score: 0.7 })]), "review");
+  assert.equal(decide([osResult({ score: 0.9 })]), "reject");
+  // Noise mixed with a real hit: only the hit is kept, strongest first.
+  const kept = openSanctions.relevantMatches(
+    parse([registry, osResult({ id: "pep-weak", score: 0.74, properties: { topics: ["role.pep"] } }), osResult({ id: "sdn", score: 0.97 })]),
+  );
+  assert.deepEqual(kept.map((match) => match.id), ["sdn"]);
 });
 
 test("OpenSanctions combine: stricter verdict wins and outages never pass", () => {
