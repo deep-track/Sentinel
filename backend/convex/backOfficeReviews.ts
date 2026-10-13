@@ -4,6 +4,7 @@ import type { Doc } from "./_generated/dataModel";
 import { recordAudit } from "./auditLog";
 import { displayName } from "./reviewQueue";
 import { isInternalAdmin, requireInternalUser } from "./lib/rbac";
+import { profileNames } from "./userProfiles";
 
 // Sentinel Back Office: review operations. Workload and turnaround per
 // reviewer against a deadline per priority, assignment, how often reviewers
@@ -79,7 +80,12 @@ export const reviewOperations = query({
       if (item.assignedTo && item.assignedToName) names.set(item.assignedTo, item.assignedToName);
       if (item.resolvedBy && item.resolvedByName) names.set(item.resolvedBy, item.resolvedByName);
     }
-    const nameOf = (id: string) => names.get(id) ?? id;
+    // A user's own profile (userProfiles) wins over the name stored on the item.
+    const profiles = await profileNames(
+      ctx,
+      [...recent, ...open].flatMap((item) => [item.assignedTo, item.resolvedBy].filter((id): id is string => Boolean(id))),
+    );
+    const nameOf = (id: string) => profiles.get(id) ?? names.get(id) ?? id;
 
     // Workload per reviewer.
     const reviewers = new Map<string, { open: number; overdue: number; resolved30: number; resolveMs: number[] }>();

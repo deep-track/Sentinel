@@ -252,3 +252,61 @@ test("back office nav lists every page, and every page exists", () => {
     assert.ok(fs.existsSync(path.join(__dirname, "..", "app", ...url.slice(1).split("/"), "page.tsx")), `${url} has a page`);
   }
 });
+
+// ── Display names and creation dates ───────────────────────────────────────
+
+function loadUserProfiles() {
+  const ts = require("typescript");
+  const { outputText } = ts.transpileModule(read("backend/convex/userProfiles.ts"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  });
+  const module = { exports: {} };
+  const stubs = { "./_generated/server": { mutation: (definition) => definition } };
+  new Function("exports", "require", "module", outputText)(module.exports, (name) => stubs[name] ?? require(name), module);
+  return module.exports;
+}
+
+test("created dates fall back to the insert time when createdAt was stored as 0", () => {
+  const { createdTime } = loadUserProfiles();
+  assert.equal(createdTime({ createdAt: 0, _creationTime: 1_791_000_000_000.5 }), 1_791_000_000_000);
+  assert.equal(createdTime({ createdAt: 1_790_000_000_000, _creationTime: 1_791_000_000_000 }), 1_790_000_000_000);
+  const clients = read("backend/convex/backOfficeClients.ts");
+  assert.match(clients, /created: createdTime\(client\)/);
+  assert.match(clients, /since: createdTime\(member\)/);
+  assert.match(read("backend/convex/admin.ts"), /createdAt: createdTime\(client\)/);
+});
+
+test("each user records only their own profile, from the verified identity", async () => {
+  const { recordMine, profileNames } = loadUserProfiles();
+  assert.deepEqual(recordMine.args, {}, "no user id can be passed in");
+  const rows = [];
+  const ctx = {
+    auth: { getUserIdentity: async () => ({ subject: "google-oauth2|1", name: "  Ada Reviewer ", email: "ada@example.com" }) },
+    db: {
+      query: () => ({ withIndex: (_name, pick) => {
+        let wanted;
+        pick({ eq: (_field, value) => { wanted = value; } });
+        return { unique: async () => rows.find((row) => row.userId === wanted) ?? null };
+      } }),
+      insert: async (_table, row) => { rows.push({ _id: String(rows.length), ...row }); },
+      patch: async (id, changes) => Object.assign(rows.find((row) => row._id === id), changes),
+    },
+  };
+  await recordMine.handler(ctx, {});
+  await recordMine.handler(ctx, {});
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].userId, "google-oauth2|1");
+  assert.equal(rows[0].name, "Ada Reviewer");
+  const names = await profileNames(ctx, ["google-oauth2|1", "google-oauth2|2", "system"]);
+  assert.deepEqual([...names], [["google-oauth2|1", "Ada Reviewer"]]);
+});
+
+test("back office shows profile names for reviewers, audit actors and team members", () => {
+  assert.match(read("backend/convex/schema.ts"), /userProfiles: defineTable\(\{[\s\S]*?\}\)\.index\("by_user_id", \["userId"\]\)/);
+  assert.match(read("backend/convex/backOfficeReviews.ts"), /const nameOf = \(id: string\) => profiles\.get\(id\) \?\? names\.get\(id\) \?\? id;/);
+  assert.match(read("backend/convex/backOfficeCompliance.ts"), /actorName: actorNames\.get\(row\.actorId\) \?\? null/);
+  assert.match(read("backend/convex/backOfficeClients.ts"), /name: memberNames\.get\(member\.userId\) \?\? null/);
+  const provider = read("components/convex-client-provider.tsx");
+  assert.match(provider, /useMutation\(anyApi\.userProfiles\.recordMine\)/);
+  assert.match(provider, /<RecordUserProfile \/>/);
+});

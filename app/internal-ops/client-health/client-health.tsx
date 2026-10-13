@@ -48,7 +48,7 @@ type ClientRow = {
     firstCharge: number | null;
     paying: boolean;
   };
-  team: Array<{ userId: string; role: string; isActive: boolean; since: number }>;
+  team: Array<{ userId: string; name: string | null; role: string; isActive: boolean; since: number }>;
 };
 
 type Data = { weekStarts: number[]; truncated: boolean; clients: ClientRow[] };
@@ -314,7 +314,12 @@ export function ClientHealth() {
               >
                 {selectedTeam?.team.map((member) => (
                   <Row key={member.userId}>
-                    <Cell className="font-mono text-[11px] text-sentinel-muted">{member.userId}</Cell>
+                    <Cell>
+                      {member.name ?? <span className="font-mono text-[11px] text-sentinel-muted">{member.userId}</span>}
+                      {member.name ? (
+                        <span className="block font-mono text-[10px] text-sentinel-subtle">{member.userId}</span>
+                      ) : null}
+                    </Cell>
                     <Cell>{ROLE_LABELS[member.role] ?? member.role}</Cell>
                     <Cell>
                       <Badge tone={member.isActive ? "green" : "neutral"}>{member.isActive ? "active" : "inactive"}</Badge>
@@ -326,7 +331,7 @@ export function ClientHealth() {
                 ))}
               </DataTable>
               <p className="px-3.5 py-2 text-[10px] text-sentinel-subtle">
-                Members are shown by their sign-in ID; Sentinel doesn&apos;t store their email addresses.
+                Members appear by name once they have signed in; until then only their sign-in ID is known.
               </p>
             </Panel>
           </>

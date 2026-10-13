@@ -19,6 +19,15 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_client_and_user", ["clientId", "userId"]),
 
+  // Display name and email per Auth0 user id, written by each user for
+  // themselves on sign-in (userProfiles.recordMine).
+  userProfiles: defineTable({
+    userId: v.string(),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_user_id", ["userId"]),
+
   clients: defineTable({
     name: v.string(),
     plan: v.union(

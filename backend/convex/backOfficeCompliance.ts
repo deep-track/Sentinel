@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { recordAudit } from "./auditLog";
 import { displayName } from "./reviewQueue";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
+import { profileNames } from "./userProfiles";
 
 // Sentinel Back Office: risk and compliance. Sanctions/PEP hits and fake-face
 // catches, an audit log viewer, compliance report sign-off, and a tracker for
@@ -173,6 +174,10 @@ export const auditLog = query({
 
     const ids = [...new Set(page.map((row) => row.clientId).filter((id): id is Id<"clients"> => Boolean(id)))];
     const names = new Map((await Promise.all(ids.map((id) => ctx.db.get(id)))).filter(Boolean).map((client) => [client!._id, client!.name]));
+    const actorNames = await profileNames(
+      ctx,
+      page.filter((row) => row.actorType !== "system" && row.actorType !== "client_api_key").map((row) => row.actorId),
+    );
     const recentActions = await ctx.db.query("auditLog").withIndex("by_timestamp").order("desc").take(MAX_AUDIT_ROWS);
 
     return {
@@ -184,6 +189,7 @@ export const auditLog = query({
           action: row.action,
           actorType: row.actorType,
           actorId: row.actorId,
+          actorName: actorNames.get(row.actorId) ?? null,
           targetType: row.targetType,
           targetId: row.targetId,
           clientName: row.clientId ? names.get(row.clientId) ?? null : null,
