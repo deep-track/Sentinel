@@ -15,7 +15,8 @@ type Entry = {
   createdAt: number;
   type: "allocation" | "deduction" | "refund" | "adjustment";
   credits: number;
-  value: number;
+  value: number | null;
+  currency: "USD" | "KES" | null;
   reason: string;
   verificationId: string | null;
   reference: string | null;
@@ -195,7 +196,9 @@ function HistoryPage({
                 {entry.credits > 0 ? "+" : ""}
                 {entry.credits.toLocaleString("en-US")} credits
               </p>
-              <p className="text-xs text-muted-foreground">{formatMoney(entry.value, currency)}</p>
+              <p className="text-xs text-muted-foreground" title={entry.value === null ? "Recorded before currency pricing" : undefined}>
+                {entry.value === null ? "—" : formatMoney(entry.value, entry.currency ?? currency)}
+              </p>
             </div>
           </div>
         );
@@ -221,7 +224,7 @@ function HistoryHeader({ clientId, currency, pages }: { clientId: string; curren
       new Date(entry.createdAt).toISOString(),
       TYPE_LABELS[entry.type],
       entry.credits,
-      entry.value,
+      entry.value ?? "",
       entry.reference,
       entry.verificationType,
       entry.reason,

@@ -63,8 +63,8 @@ type BillingOverview = {
 type Statement = {
   client: { name: string; plan: Plan; billingCurrency: Currency };
   currency: Currency;
-  lines: Array<{ createdAt: number; type: string; amount: number; value: number; reason: string; reference: string | null; verificationType: string | null }>;
-  totals: { creditsUsed: number; added: number; amountDue: number };
+  lines: Array<{ createdAt: number; type: string; amount: number; value: number | null; reason: string; reference: string | null; verificationType: string | null }>;
+  totals: { creditsUsed: number; added: number; amountDue: number; unpricedLines: number };
   truncated: boolean;
 };
 
@@ -393,7 +393,7 @@ function StatementPanel({ clients, monthStarts }: { clients: BillingOverview["cl
       new Date(line.createdAt).toISOString(),
       line.type,
       line.amount,
-      line.value,
+      line.value ?? "",
       line.reference,
       line.verificationType,
       line.reason,

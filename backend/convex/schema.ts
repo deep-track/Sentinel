@@ -193,6 +193,11 @@ export default defineSchema({
     ),
     amount: v.number(), // positive = added, negative = consumed
     reason: v.string(),
+    // Money value of `amount` when the row was written, in the client's
+    // billing currency then (lib/pricing.ts). Absent on rows written before
+    // currency pricing, whose money value is unknown.
+    currency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
+    value: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_client", ["clientId"])

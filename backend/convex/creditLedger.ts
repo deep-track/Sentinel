@@ -181,7 +181,9 @@ export const billingForClient = query({
           createdAt: row.createdAt,
           type: row.type,
           credits: row.amount,
-          value: creditsToMoney(row.amount, currency, plan),
+          // Recorded when written; null for rows from before currency pricing.
+          value: row.value ?? null,
+          currency: row.currency ?? null,
           reason: row.reason,
           verificationId: verification?._id ?? null,
           reference: verification?.reference ?? null,
