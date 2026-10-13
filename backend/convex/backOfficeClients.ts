@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { requireInternalUser } from "./lib/rbac";
+import { createdTime, profileNames } from "./userProfiles";
 
 // Sentinel Back Office: client health. Usage trends and churn warnings, API
 // key hygiene, integration errors, onboarding progress and client teams.
@@ -135,13 +136,14 @@ export const clientHealth = query({
           .first();
 
         const members = await ctx.db.query("clientMembers").withIndex("by_client", (q) => q.eq("clientId", client._id)).take(200);
+        const memberNames = await profileNames(ctx, members.map((member) => member.userId));
 
         return {
           _id: client._id,
           name: client.name,
           plan: client.plan,
           status: client.status,
-          createdAt: client.createdAt,
+          createdAt: createdTime(client),
           usage: { weekly, last14, previous14, byType, churnRisk: churnRisk(last14, previous14) },
           keys: keys
             .sort((a, b) => b.createdAt - a.createdAt)
@@ -163,7 +165,7 @@ export const clientHealth = query({
               .slice(0, 3),
           },
           onboarding: {
-            created: client.createdAt,
+            created: createdTime(client),
             firstKey: keys.length ? Math.min(...keys.map((key) => key.createdAt)) : null,
             firstTestCall: firstTest,
             firstLiveVerification: firstLive,
@@ -171,8 +173,14 @@ export const clientHealth = query({
             paying: client.plan !== "trial" && firstCharge !== null,
           },
           team: members
-            .sort((a, b) => a.createdAt - b.createdAt)
-            .map((member) => ({ userId: member.userId, role: member.role, isActive: member.isActive, since: member.createdAt })),
+            .sort((a, b) => createdTime(a) - createdTime(b))
+            .map((member) => ({
+              userId: member.userId,
+              name: memberNames.get(member.userId) ?? null,
+              role: member.role,
+              isActive: member.isActive,
+              since: createdTime(member),
+            })),
         };
       }),
     );

@@ -1,7 +1,8 @@
 "use client";
 
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { ConvexReactClient, ConvexProviderWithAuth } from "convex/react";
+import { ConvexReactClient, ConvexProviderWithAuth, useConvexAuth, useMutation } from "convex/react";
+import { anyApi } from "convex/server";
 import {
   RELOGIN_STORAGE_KEY,
   buildReloginUrl,
@@ -95,6 +96,23 @@ function useAuthFromAuth0() {
   return { ...authState, fetchAccessToken };
 }
 
+// Saves the signed-in user's own name and email (from the verified ID token)
+// so the Back Office can show names instead of Auth0 user ids. Once per page
+// load; the mutation skips the write when nothing changed.
+function RecordUserProfile() {
+  const { isAuthenticated } = useConvexAuth();
+  const recordMine = useMutation(anyApi.userProfiles.recordMine);
+  const [recorded, setRecorded] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || recorded) return;
+    setRecorded(true);
+    recordMine({}).catch(() => {
+      // Display names only; never block the page.
+    });
+  }, [isAuthenticated, recorded, recordMine]);
+  return null;
+}
+
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -112,6 +130,7 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
 
   return (
     <ConvexProviderWithAuth client={client} useAuth={useAuthFromAuth0}>
+      <RecordUserProfile />
       {children}
     </ConvexProviderWithAuth>
   );

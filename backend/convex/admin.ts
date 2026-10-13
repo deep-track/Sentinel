@@ -8,6 +8,7 @@ import { SOURCE_LABELS } from "./lib/amlMatching";
 import { getBalance, recordLedgerEntry } from "./lib/credits";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
 import { latencyStats } from "./portal";
+import { createdTime } from "./userProfiles";
 
 // Internal (Sentinel staff) client management and the cross-client ops
 // overview. Reads need an internal role; writes need internal_admin and are
@@ -60,7 +61,7 @@ async function clientSummary(ctx: QueryCtx, client: ClientDoc, monthStart: numbe
     usedThisMonth,
     // Share of the plan's credit limit consumed this month (null without a limit).
     usagePct: client.creditLimit > 0 ? Math.round((usedThisMonth / client.creditLimit) * 1000) / 10 : null,
-    createdAt: client.createdAt,
+    createdAt: createdTime(client),
   };
 }
 

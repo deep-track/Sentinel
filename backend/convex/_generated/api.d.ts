@@ -55,6 +55,7 @@ import type * as monitoring from "../monitoring.js";
 import type * as portal from "../portal.js";
 import type * as reviewQueue from "../reviewQueue.js";
 import type * as settings from "../settings.js";
+import type * as userProfiles from "../userProfiles.js";
 import type * as verifications from "../verifications.js";
 import type * as watchlists from "../watchlists.js";
 import type * as webhooks from "../webhooks.js";
@@ -113,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   portal: typeof portal;
   reviewQueue: typeof reviewQueue;
   settings: typeof settings;
+  userProfiles: typeof userProfiles;
   verifications: typeof verifications;
   watchlists: typeof watchlists;
   webhooks: typeof webhooks;

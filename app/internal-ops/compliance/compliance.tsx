@@ -33,6 +33,7 @@ type AuditData = {
     action: string;
     actorType: string;
     actorId: string;
+    actorName: string | null;
     targetType: string;
     targetId: string;
     clientName: string | null;
@@ -158,7 +159,7 @@ function AuditLogPanel({ now }: { now: number }) {
       new Date(row.timestamp).toISOString(),
       row.action,
       row.actorType,
-      row.actorId,
+      row.actorName ? `${row.actorName} (${row.actorId})` : row.actorId,
       row.targetType,
       row.targetId,
       row.clientName,
@@ -232,9 +233,15 @@ function AuditLogPanel({ now }: { now: number }) {
                 <Cell className="font-mono text-[11px]">{row.action}</Cell>
                 <Cell className="text-sentinel-muted">
                   {ACTOR_LABELS[row.actorType] ?? row.actorType}
-                  <span className="block max-w-[180px] truncate font-mono text-[10px] text-sentinel-subtle" title={row.actorId}>
-                    {row.actorId}
-                  </span>
+                  {row.actorName ? (
+                    <span className="block max-w-[180px] truncate text-[11px] text-sentinel-text" title={row.actorId}>
+                      {row.actorName}
+                    </span>
+                  ) : (
+                    <span className="block max-w-[180px] truncate font-mono text-[10px] text-sentinel-subtle" title={row.actorId}>
+                      {row.actorId}
+                    </span>
+                  )}
                 </Cell>
                 <Cell className="text-sentinel-muted">
                   {row.targetType}
