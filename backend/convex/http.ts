@@ -475,6 +475,85 @@ http.route({
 });
 
 
+// ── IDP: document verification ─────────────────────────────────────────────
+// POST /v1/verify/document: an identity document or a proof of address,
+// verified by Claude vision, AWS Textract OCR and forensic checks.
+
+const DOCUMENT_TEXT_FIELDS = ["expectedName", "expectedAddress", "expectedDateOfBirth", "externalRef"] as const;
+
+http.route({
+  path: "/v1/verify/document",
+  method: "POST",
+  handler: apiAction("POST /v1/verify/document", async (ctx, request, auth) => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Invalid JSON body" }, 400);
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Request body must be a JSON object" }, 400);
+    const b = body as Record<string, unknown>;
+    const invalid: string[] = [];
+    if (b.documentKind !== "identity" && b.documentKind !== "proof_of_address") invalid.push("documentKind");
+    if (typeof b.documentFrontBase64 !== "string" || !b.documentFrontBase64.trim()) invalid.push("documentFrontBase64");
+    if (b.documentBackBase64 !== undefined && b.documentBackBase64 !== null && typeof b.documentBackBase64 !== "string") invalid.push("documentBackBase64");
+    for (const field of DOCUMENT_TEXT_FIELDS) {
+      if (b[field] !== undefined && b[field] !== null && typeof b[field] !== "string") invalid.push(field);
+    }
+    if (b.maxDocumentAgeDays !== undefined && b.maxDocumentAgeDays !== null && typeof b.maxDocumentAgeDays !== "number") invalid.push("maxDocumentAgeDays");
+    if (invalid.length) {
+      return json(
+        {
+          error: `Invalid fields: ${invalid.join(", ")}`,
+          details: {
+            documentKind: ["identity", "proof_of_address"],
+            documentFrontBase64: "required: base64 JPEG, PNG, WebP or PDF",
+            documentBackBase64: "optional, identity documents only: the back of the card",
+            expectedName: "optional: name to match",
+            expectedAddress: "optional, proof of address: declared address to match",
+            expectedDateOfBirth: "optional, identity documents: YYYY-MM-DD to match",
+            maxDocumentAgeDays: "optional, proof of address: oldest acceptable issue date in days (default 90)",
+            externalRef: "optional: your reference",
+          },
+        },
+        400,
+      );
+    }
+    const optionalText = (field: (typeof DOCUMENT_TEXT_FIELDS)[number]) => (typeof b[field] === "string" && (b[field] as string).trim() ? (b[field] as string) : undefined);
+    return createdResponse("document", () =>
+      ctx.runMutation(internal.documents._createFromApi, {
+        clientId: auth.clientId,
+        apiKeyId: auth.apiKeyId,
+        environment: auth.environment,
+        documentKind: b.documentKind as "identity" | "proof_of_address",
+        documentFrontBase64: b.documentFrontBase64 as string,
+        ...(typeof b.documentBackBase64 === "string" && b.documentBackBase64.trim() ? { documentBackBase64: b.documentBackBase64 } : {}),
+        ...(optionalText("expectedName") ? { expectedName: optionalText("expectedName") } : {}),
+        ...(optionalText("expectedAddress") ? { expectedAddress: optionalText("expectedAddress") } : {}),
+        ...(optionalText("expectedDateOfBirth") ? { expectedDateOfBirth: optionalText("expectedDateOfBirth") } : {}),
+        ...(optionalText("externalRef") ? { externalRef: optionalText("externalRef") } : {}),
+        ...(typeof b.maxDocumentAgeDays === "number" ? { maxDocumentAgeDays: b.maxDocumentAgeDays } : {}),
+      }),
+    );
+  }),
+});
+
+// Client-facing view of a completed document verification.
+function documentSummary(result: unknown) {
+  const r = (result ?? {}) as Record<string, unknown>;
+  return {
+    reason: typeof r.reason === "string" ? r.reason : null,
+    riskScore: typeof r.riskScore === "number" ? r.riskScore : null,
+    documentKind: r.documentKind ?? null,
+    identity: r.identity ?? null,
+    proofOfAddress: r.proofOfAddress ?? null,
+    checks: Array.isArray(r.checks) ? r.checks : [],
+    flags: Array.isArray(r.flags) ? r.flags : [],
+    ocr: r.ocr ?? null,
+    forensics: r.forensics ?? null,
+  };
+}
+
 // ── Ongoing AML monitoring ──────────────────────────────────────────────────
 // Subjects are enrolled with POST /v1/verify/aml { monitor: true }. Alerts
 // arrive as AML verifications (webhook event "sentinel.monitoring.alert").
@@ -538,7 +617,7 @@ http.route({
     const type = url.searchParams.get("type") ?? undefined;
 
     const validStatuses = ["queued", "processing", "completed", "failed"] as const;
-    const validTypes = ["idp", "kyb", "aml", "liveness", "kyi"] as const;
+    const validTypes = ["idp", "kyb", "aml", "liveness", "kyi", "document"] as const;
     if (status && !validStatuses.includes(status as (typeof validStatuses)[number])) {
       return json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` }, 400);
     }
@@ -605,6 +684,7 @@ http.route({
       failureReason: record.failureReason ?? null,
       sandbox: (record.input as { sandbox?: unknown } | undefined)?.sandbox === true,
       ...(record.type === "aml" && record.status === "completed" ? { screening: amlScreeningSummary(record.result) } : {}),
+      ...(record.type === "document" && record.status === "completed" ? { document: documentSummary(record.result) } : {}),
     });
   }),
 });

@@ -5,9 +5,10 @@ export type Verdict = "pass" | "review" | "reject" | null;
 export type VerificationStatus = "queued" | "processing" | "completed" | "failed";
 
 const TYPE_LABELS: Record<string, string> = {
-  idp: "IDP",
+  idp: "KYC",
   kyb: "KYB",
   kyi: "KYI",
+  document: "IDP",
   aml: "AML",
   liveness: "Liveness",
 };

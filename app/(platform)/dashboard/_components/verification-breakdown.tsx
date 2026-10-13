@@ -13,7 +13,9 @@ function labelForType(type: string) {
     case "kyb":
       return "KYB";
     case "kyi":
-      return "KYI";
+      return "KYI (retired)";
+    case "document":
+      return "IDP / Documents";
     case "aml":
       return "AML";
     case "liveness":

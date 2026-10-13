@@ -13,7 +13,14 @@ import {
 } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 
-const verificationType = v.union(v.literal("idp"), v.literal("kyb"), v.literal("aml"), v.literal("liveness"), v.literal("kyi"));
+const verificationType = v.union(
+  v.literal("idp"),
+  v.literal("kyb"),
+  v.literal("aml"),
+  v.literal("liveness"),
+  v.literal("kyi"),
+  v.literal("document"),
+);
 const verificationStatus = v.union(v.literal("queued"), v.literal("processing"), v.literal("completed"), v.literal("failed"));
 const verificationVerdict = v.union(v.literal("pass"), v.literal("review"), v.literal("reject"));
 
@@ -43,7 +50,8 @@ export type IdpInput = Infer<typeof idpInput>;
 
 const DEDICATED_CREATE_PATH: Record<Exclude<Doc<"verifications">["type"], "idp">, string> = {
   kyb: "Use kyb.createKyb to submit a business verification.",
-  kyi: "Use kyi.createKyi to submit an investor verification.",
+  kyi: "KYI has been retired; use document verification (documents.submit) instead.",
+  document: "Use documents.submit to verify an identity document or proof of address.",
   aml: "Use aml.submit to run a sanctions screening.",
   liveness: "Use liveness.submit to create a liveness invitation.",
 };
