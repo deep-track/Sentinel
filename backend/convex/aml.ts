@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import Anthropic from "@anthropic-ai/sdk";
 import { internalAction, internalMutation, mutation } from "./_generated/server";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -18,6 +19,14 @@ import {
   type SourceKey,
 } from "./lib/amlMatching";
 import { isPartialIsoDate } from "./lib/amlCategories";
+import {
+  RISK_TYPE_LABELS,
+  describeAdverseMedia,
+  fetchArticleText,
+  gdeltProvider,
+  screenAdverseMediaMany,
+  type AdverseMediaOutcome,
+} from "./lib/adverseMedia";
 import { MAX_EXTERNAL_REF_LENGTH, enrolMonitoredSubject } from "./lib/amlMonitoringStore";
 import {
   OPENSANCTIONS_STRONG_MATCH_SCORE,
@@ -423,6 +432,35 @@ function finalDecision(candidates: Array<Candidate<Entry>>, coverage: Coverage) 
   };
 }
 
+// Adverse media runs when ANTHROPIC_API_KEY is set (it classifies the
+// articles). ADVERSE_MEDIA_PROVIDER=none turns it off; the default searches
+// GDELT. Unlike the sanctions sources, an adverse media outage doesn't hold
+// a screening for review: it is reported in coverage.adverseMedia.
+async function screenAdverseMedia(subjects: ScreeningSubject[]): Promise<AdverseMediaOutcome[]> {
+  const providerName = process.env.ADVERSE_MEDIA_PROVIDER?.trim().toLowerCase() || "gdelt";
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  return screenAdverseMediaMany(
+    subjects.map((subject) => ({
+      name: subject.subjectName,
+      entityType: subject.entityType,
+      country: subject.country,
+      aliases: subject.aliases,
+      birthDate: subject.dateOfBirth,
+      nationality: subject.nationality,
+      registrationNumber: subject.registrationNumber,
+      jurisdiction: subject.jurisdiction,
+    })),
+    {
+      provider: providerName === "none" ? null : gdeltProvider(),
+      client: apiKey ? new Anthropic({ apiKey }) : null,
+      fetchArticle: (url) => fetchArticleText(url),
+      onError: (error) =>
+        // No subject data in the log line.
+        console.error("[AdverseMedia] screening unavailable", error instanceof Error ? error.message.slice(0, 200) : "unknown"),
+    },
+  );
+}
+
 // The outcome of screening one subject, in the shape amlPersistence.complete
 // stores (minus the verification and client ids).
 export type ScreeningOutcome = {
@@ -435,6 +473,7 @@ export type ScreeningOutcome = {
     missing: SourceKey[];
     stale: SourceKey[];
     openSanctions: OpenSanctionsOutcome["status"];
+    adverseMedia: AdverseMediaOutcome["status"];
   };
   matches: Array<Record<string, unknown> & { source: string; sourceRecordId: string }>;
   candidateCount: number;
@@ -444,8 +483,9 @@ export type ScreeningOutcome = {
 // The watchlist entries are read once for the whole batch, so ongoing
 // monitoring can re-screen many subjects in one pass.
 export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[]): Promise<ScreeningOutcome[]> {
-  // Runs alongside the local watchlist scan; never rejects.
+  // Both run alongside the local watchlist scan; neither rejects.
   const openSanctionsPromise = screenOpenSanctions(subjects);
+  const adverseMediaPromise = screenAdverseMedia(subjects);
   const coverage: Coverage = await ctx.runQuery(internalApi.amlPersistence.getActiveVersions, { now: Date.now() });
   const candidates: Array<Array<Candidate<Entry>>> = subjects.map(() => []);
   for (const version of coverage.versions) {
@@ -467,6 +507,7 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
     }
   }
   const openSanctionsOutcomes = await openSanctionsPromise;
+  const adverseMediaOutcomes = await adverseMediaPromise;
 
   return subjects.map((_, index) => {
     const subjectCandidates = candidates[index].sort(compareCandidates);
@@ -475,10 +516,15 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
     const decision = combineWithOpenSanctions(finalDecision(subjectCandidates, coverage), openSanctions);
     const stored = subjectCandidates.slice(0, MATCH_LIMIT);
     const openSanctionsMatches = openSanctions.status === "screened" ? relevantMatches(openSanctions.matches) : [];
-    const hasAnyMatch = stored.length > 0 || openSanctionsMatches.length > 0;
+    const adverseMedia = adverseMediaOutcomes[index];
+    const mediaHits = adverseMedia.status === "screened" ? adverseMedia.hits.slice(0, MATCH_LIMIT) : [];
+    const hasAnyMatch = stored.length > 0 || openSanctionsMatches.length > 0 || mediaHits.length > 0;
+    // Adverse media can only make a verdict stricter (pass → review).
+    const verdict = mediaHits.length > 0 && decision.verdict === "pass" ? "review" : decision.verdict;
+    const reason = mediaHits.length > 0 ? `${decision.reason} ${describeAdverseMedia(mediaHits)}` : decision.reason;
     return {
-      verdict: decision.verdict,
-      reason: decision.reason,
+      verdict,
+      reason,
       complete: decision.complete,
       confidence: !decision.complete && !hasAnyMatch ? 0 : undefined,
       coverage: {
@@ -491,6 +537,7 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
         missing: coverage.missing,
         stale: coverage.stale,
         openSanctions: openSanctions.status,
+        adverseMedia: adverseMedia.status,
       },
       matches: [
         ...stored.map((match) => ({
@@ -526,6 +573,28 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
           ...(match.birthDateMatch ? { birthDateMatch: match.birthDateMatch } : {}),
           ...(match.pepStatus ? { pepStatus: match.pepStatus } : {}),
           ...(match.pepPositions?.length ? { pepPositions: match.pepPositions.slice(0, 5) } : {}),
+        })),
+        ...mediaHits.map((hit) => ({
+          source: "ADVERSE_MEDIA" as const,
+          sourceRecordId: hit.url,
+          entityName: hit.title,
+          program: hit.riskTypes.map((type) => RISK_TYPE_LABELS[type]).join(", "),
+          matchScore: hit.severity === "high" ? 90 : 70,
+          matchMethod: "ai_classification" as const,
+          riskLevel: "high" as const,
+          categories: ["adverse_media" as const],
+          media: {
+            url: hit.url,
+            title: hit.title,
+            domain: hit.domain,
+            publishedAt: hit.publishedAt,
+            language: hit.language,
+            sourceCountry: hit.sourceCountry,
+            aboutSubject: hit.aboutSubject,
+            severity: hit.severity,
+            riskTypes: hit.riskTypes,
+            summary: hit.summary,
+          },
         })),
       ],
       candidateCount: subjectCandidates.length,

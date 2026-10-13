@@ -41,6 +41,7 @@ const CONFIG: Array<{ key: string; label: string; purpose: string; required: boo
   { key: "AFRICASTALKING_CALLBACK_TOKEN", label: "Africa's Talking callback token", purpose: "SMS delivery reports", required: false },
   { key: "TWILIO_ACCOUNT_SID", label: "Twilio account", purpose: "Liveness WhatsApp / SMS fallback", required: false },
   { key: "TWILIO_AUTH_TOKEN", label: "Twilio auth token", purpose: "Liveness WhatsApp / SMS fallback", required: false },
+  { key: "ANTHROPIC_API_KEY", label: "Claude API key", purpose: "Adverse media screening", required: false },
   { key: "LIVENESS_CALLBACK_SECRET", label: "Liveness result webhook secret", purpose: "External liveness results", required: false },
 ];
 

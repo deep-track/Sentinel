@@ -167,6 +167,9 @@ const completeArgs = {
       missing: v.array(sourceKeyValidator),
       stale: v.array(sourceKeyValidator),
       openSanctions: v.optional(openSanctionsStatusValidator),
+      adverseMedia: v.optional(
+        v.union(v.literal("screened"), v.literal("unavailable"), v.literal("not_configured"), v.literal("disabled")),
+      ),
     }),
   ),
   matches: v.array(
@@ -174,7 +177,7 @@ const completeArgs = {
       // Only set for Sentinel-owned watchlist matches.
       entryId: v.optional(v.id("watchlistEntries")),
       versionId: v.optional(v.id("watchlistVersions")),
-      source: v.union(sourceKeyValidator, v.literal("OPENSANCTIONS")),
+      source: v.union(sourceKeyValidator, v.literal("OPENSANCTIONS"), v.literal("ADVERSE_MEDIA")),
       sourceRecordId: v.string(),
       entityName: v.string(),
       program: v.string(),
@@ -185,6 +188,7 @@ const completeArgs = {
         v.literal("alias"),
         v.literal("fuzzy"),
         v.literal("provider_score"),
+        v.literal("ai_classification"),
       ),
       matchedCountry: v.optional(v.string()),
       countryMatch: v.optional(v.union(v.literal("match"), v.literal("mismatch"), v.literal("unknown"))),
@@ -196,6 +200,21 @@ const completeArgs = {
       birthDateMatch: v.optional(v.union(v.literal("match"), v.literal("mismatch"), v.literal("unknown"))),
       pepStatus: v.optional(v.union(v.literal("current"), v.literal("former"), v.literal("unknown"))),
       pepPositions: v.optional(v.array(pepPositionValidator)),
+      // Adverse media hits: the article and how it was classified.
+      media: v.optional(
+        v.object({
+          url: v.string(),
+          title: v.string(),
+          domain: v.union(v.string(), v.null()),
+          publishedAt: v.union(v.string(), v.null()),
+          language: v.union(v.string(), v.null()),
+          sourceCountry: v.union(v.string(), v.null()),
+          aboutSubject: v.union(v.literal("yes"), v.literal("no"), v.literal("unclear")),
+          severity: v.union(v.literal("none"), v.literal("low"), v.literal("medium"), v.literal("high")),
+          riskTypes: v.array(v.string()),
+          summary: v.string(),
+        }),
+      ),
     }),
   ),
 };
@@ -244,6 +263,7 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
               missingSources: args.coverage.missing,
               staleSources: args.coverage.stale,
               openSanctions: args.coverage.openSanctions ?? null,
+              adverseMedia: args.coverage.adverseMedia ?? null,
             },
           }
         : {}),
@@ -263,6 +283,9 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
       watchlistEntryId: match.entryId,
       ...(match.source === "OPENSANCTIONS"
         ? { externalId: match.sourceRecordId, topics: match.topics, datasets: match.datasets }
+        : {}),
+      ...(match.source === "ADVERSE_MEDIA" && match.media
+        ? { externalId: match.media.url, topics: match.media.riskTypes, datasets: match.media.domain ? [match.media.domain] : [] }
         : {}),
       ...(match.categories ? { categories: match.categories } : {}),
       ...(match.pepClass ? { pepClass: match.pepClass } : {}),

@@ -30,6 +30,7 @@ import type * as idp from "../idp.js";
 import type * as kyb from "../kyb.js";
 import type * as kyi from "../kyi.js";
 import type * as lib_access from "../lib/access.js";
+import type * as lib_adverseMedia from "../lib/adverseMedia.js";
 import type * as lib_africasTalking from "../lib/africasTalking.js";
 import type * as lib_amlCategories from "../lib/amlCategories.js";
 import type * as lib_amlMatching from "../lib/amlMatching.js";
@@ -92,6 +93,7 @@ declare const fullApi: ApiFromModules<{
   kyb: typeof kyb;
   kyi: typeof kyi;
   "lib/access": typeof lib_access;
+  "lib/adverseMedia": typeof lib_adverseMedia;
   "lib/africasTalking": typeof lib_africasTalking;
   "lib/amlCategories": typeof lib_amlCategories;
   "lib/amlMatching": typeof lib_amlMatching;

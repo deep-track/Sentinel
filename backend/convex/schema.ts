@@ -257,6 +257,7 @@ export default defineSchema({
       v.literal("UN_CONSOLIDATED"),
       v.literal("FBI_MOST_WANTED"),
       v.literal("OPENSANCTIONS"),
+      v.literal("ADVERSE_MEDIA"),
     ),
     program: v.string(),
     matchScore: v.number(), // 0-100
@@ -291,6 +292,7 @@ export default defineSchema({
       v.literal("alias"),
       v.literal("fuzzy"),
       v.literal("provider_score"),
+      v.literal("ai_classification"),
     ),
     riskLevel: v.union(v.literal("critical"), v.literal("high")),
     matchedCountry: v.optional(v.string()),

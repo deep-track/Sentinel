@@ -100,7 +100,11 @@ export const _recordRun = internalMutation({
       return;
     }
 
-    const current = hitsFromMatches(outcome.matches);
+    // When adverse media couldn't be screened this time, keep its known hits
+    // so they aren't "removed" today and alerted again tomorrow.
+    const carriedMedia =
+      outcome.coverage?.adverseMedia === "screened" ? [] : subject.hits.filter((hit) => hit.source === "ADVERSE_MEDIA");
+    const current = [...hitsFromMatches(outcome.matches), ...carriedMedia];
     // Without a baseline (the enrolment screening was incomplete) every hit
     // is new: an incomplete screening can't have cleared anything.
     const { added, escalated, removed } = diffHits(subject.baselineSet ? subject.hits : [], current);
