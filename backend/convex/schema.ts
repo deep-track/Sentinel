@@ -107,10 +107,17 @@ export default defineSchema({
     sentAt: v.number(),
     completedAt: v.optional(v.number()),
     failureReason: v.optional(v.string()),
+    // Hosted capture page (/liveness/<token>): SHA-256 of the one-time link
+    // token (the raw token is only ever in the texted link), when the link
+    // stops working, and when a video was submitted through it (single use).
+    linkTokenHash: v.optional(v.string()),
+    linkExpiresAt: v.optional(v.number()),
+    captureSubmittedAt: v.optional(v.number()),
     })
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"])
-    .index("by_provider_message", ["providerMessageId"]),
+    .index("by_provider_message", ["providerMessageId"])
+    .index("by_link_token_hash", ["linkTokenHash"]),
   creditLedger: defineTable({
     clientId: v.id("clients"),
     verificationId: v.optional(v.id("verifications")),
