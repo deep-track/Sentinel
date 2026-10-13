@@ -215,7 +215,8 @@ test("adverse media wiring: stricter verdict only, coverage reported, monitoring
   const aml = read("backend/convex/aml.ts");
   assert.match(aml, /const verdict = mediaHits\.length > 0 && decision\.verdict === "pass" \? "review" : decision\.verdict;/);
   assert.match(aml, /adverseMedia: adverseMedia\.status,/);
-  assert.match(aml, /provider: providerName === "none" \? null : gdeltProvider\(\)/);
+  assert.match(aml, /process\.env\.ADVERSE_MEDIA_PROVIDER\?\.trim\(\)\.toLowerCase\(\) \|\| WEB_SEARCH_PROVIDER/, "web search is the default");
+  assert.match(aml, /provider: providerName === "none" \? null : providerName === "gdelt" \? gdeltProvider\(\) : WEB_SEARCH_PROVIDER/);
   assert.match(aml, /client: apiKey \? new Anthropic\(\{ apiKey \}\) : null/);
   assert.match(aml, /source: "ADVERSE_MEDIA" as const,\s*sourceRecordId: hit\.url,/);
   assert.match(aml, /categories: \["adverse_media" as const\]/);
@@ -227,4 +228,111 @@ test("adverse media wiring: stricter verdict only, coverage reported, monitoring
 
   assert.match(read("backend/convex/schema.ts"), /v\.literal\("ADVERSE_MEDIA"\)/);
   assert.match(read("backend/convex/backOfficeHealth.ts"), /key: "ANTHROPIC_API_KEY", label: "Claude API key", purpose: "Adverse media screening", required: false/);
+});
+
+// ── Claude web search ───────────────────────────────────────────────────────
+
+const searchResult = (url) => ({ type: "web_search_tool_result", content: [{ type: "web_search_result", url, title: "t", encrypted_content: "x", page_age: null }] });
+const webArticle = (url, overrides = {}) => ({
+  url,
+  title: "Jane Wanjiru charged with fraud",
+  domain: null,
+  publishedAt: "2026-09-30",
+  aboutSubject: "yes",
+  severity: "high",
+  riskTypes: ["fraud", "nonsense"],
+  summary: "Charged.",
+  ...overrides,
+});
+
+test("web search: only articles whose URL was in the actual search results are kept", () => {
+  const urls = media.searchResultUrls([
+    searchResult("https://www.nation.africa/news/a#top"),
+    { type: "text", text: "x" },
+    { type: "web_search_tool_result", content: { type: "web_search_tool_result_error", error_code: "max_uses_exceeded" } },
+  ]);
+  assert.deepEqual([...urls], ["https://www.nation.africa/news/a"]);
+  const accepted = media.acceptWebSearchArticles(
+    [
+      webArticle("https://www.nation.africa/news/a"),
+      webArticle("https://www.nation.africa/news/a/"),
+      webArticle("https://made-up.example/story"),
+      webArticle("http://www.nation.africa/news/a"),
+    ],
+    urls,
+  );
+  assert.equal(accepted.length, 1, "duplicates, invented URLs and plain http are dropped");
+  assert.equal(accepted[0].domain, "nation.africa");
+  assert.deepEqual(accepted[0].riskTypes, ["fraud"]);
+  assert.equal(accepted[0].publishedAt, "2026-09-30");
+  assert.equal(media.adverseMediaHits(accepted).length, 1);
+});
+
+test("web search request: Opus 5.5, web_search tool capped, structured output, fallbacks; resumes pause_turn", async () => {
+  const replies = [
+    { stop_reason: "pause_turn", content: [searchResult("https://a.example/1")], parsed_output: null },
+    { stop_reason: "end_turn", content: [{ type: "text", text: "{}" }], parsed_output: { articles: [webArticle("https://a.example/1")] } },
+  ];
+  const client = fakeClient(() => replies.shift());
+  const { articlesFound, classified } = await media.searchAndClassifyWithClaude(client, subject);
+  assert.equal(client.calls.length, 2);
+  const request = client.calls[0];
+  assert.equal(request.model, "claude-opus-5-5");
+  assert.deepEqual(request.tools, [{ type: "web_search_20260209", name: "web_search", max_uses: media.WEB_SEARCH_MAX_USES }]);
+  assert.equal(request.output_config.format.type, "json_schema");
+  assert.equal(request.fallbacks, "default");
+  assert.match(request.system, /never invent or modify a URL/);
+  assert.match(request.messages[0].content, /Date of birth: 1980-02-03/);
+  assert.equal(client.calls[1].messages.at(-1).role, "assistant", "the paused turn is sent back to resume");
+  assert.equal(articlesFound, 1);
+  assert.equal(classified.length, 1, "results from the paused part count");
+});
+
+test("web search: a 400 on structured output retries asking for plain JSON; other failures surface", async () => {
+  let call = 0;
+  const client = {
+    calls: [],
+    beta: {
+      messages: {
+        parse: async (request) => {
+          client.calls.push(request);
+          call += 1;
+          if (call === 1) throw Object.assign(new Error("bad request"), { status: 400 });
+          return {
+            stop_reason: "end_turn",
+            parsed_output: null,
+            content: [searchResult("https://a.example/1"), { type: "text", text: JSON.stringify({ articles: [webArticle("https://a.example/1")] }) }],
+          };
+        },
+      },
+    },
+  };
+  const { classified } = await media.searchAndClassifyWithClaude(client, subject);
+  assert.equal(classified.length, 1);
+  assert.equal(client.calls[1].output_config.format, undefined);
+  assert.match(client.calls[1].system, /reply with only a JSON object/);
+
+  const failing = { beta: { messages: { parse: async () => Promise.reject(Object.assign(new Error("overloaded"), { status: 529 })) } } };
+  await assert.rejects(media.searchAndClassifyWithClaude(failing, subject), /overloaded/);
+  const refused = fakeClient({ stop_reason: "refusal", content: [], parsed_output: null });
+  await assert.rejects(media.searchAndClassifyWithClaude(refused, subject), /declined/);
+});
+
+test("screening many with web search: no GDELT spacing, failures isolated", async () => {
+  const client = fakeClient((request) =>
+    request.messages[0].content.includes("Second Person")
+      ? Promise.reject(new Error("down"))
+      : { stop_reason: "end_turn", content: [searchResult("https://a.example/1")], parsed_output: { articles: [webArticle("https://a.example/1")] } },
+  );
+  const sleeps = [];
+  const outcomes = await media.screenAdverseMediaMany([subject, { ...subject, name: "Second Person" }], {
+    provider: media.WEB_SEARCH_PROVIDER,
+    client,
+    sleep: async (ms) => sleeps.push(ms),
+  });
+  assert.equal(outcomes[0].status, "screened");
+  assert.equal(outcomes[0].provider, "claude_web_search");
+  assert.equal(outcomes[0].hits.length, 1);
+  assert.deepEqual(outcomes[1], { status: "unavailable" });
+  assert.deepEqual(sleeps, []);
 });
