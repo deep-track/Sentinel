@@ -12,6 +12,7 @@ import type * as admin from "../admin.js";
 import type * as aml from "../aml.js";
 import type * as amlMonitoring from "../amlMonitoring.js";
 import type * as amlPersistence from "../amlPersistence.js";
+import type * as amlReport from "../amlReport.js";
 import type * as apiKeys from "../apiKeys.js";
 import type * as auditLog from "../auditLog.js";
 import type * as backOfficeBilling from "../backOfficeBilling.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   aml: typeof aml;
   amlMonitoring: typeof amlMonitoring;
   amlPersistence: typeof amlPersistence;
+  amlReport: typeof amlReport;
   apiKeys: typeof apiKeys;
   auditLog: typeof auditLog;
   backOfficeBilling: typeof backOfficeBilling;
