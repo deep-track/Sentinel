@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chargeVerification } from "./lib/credits";
 import { MAX_LIST_AGE_MS, SOURCE_KEYS, type SourceKey } from "./lib/amlMatching";
+import { summarizeCategories } from "./lib/amlCategories";
 
 const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"));
 const openSanctionsStatusValidator = v.union(
@@ -101,6 +102,16 @@ export const getEntryPage = internalQuery({
   },
 });
 
+export const riskCategoryValidator = v.union(
+  v.literal("sanctions"),
+  v.literal("pep"),
+  v.literal("special_interest"),
+  v.literal("fitness_probity"),
+  v.literal("adverse_media"),
+  v.literal("insolvency"),
+);
+export const pepClassValidator = v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4));
+
 export const complete = internalMutation({
   args: {
     verificationId: v.id("verifications"),
@@ -149,6 +160,9 @@ export const complete = internalMutation({
         riskLevel: v.union(v.literal("critical"), v.literal("high")),
         topics: v.optional(v.array(v.string())),
         datasets: v.optional(v.array(v.string())),
+        categories: v.optional(v.array(riskCategoryValidator)),
+        pepClass: v.optional(pepClassValidator),
+        birthDateMatch: v.optional(v.union(v.literal("match"), v.literal("mismatch"), v.literal("unknown"))),
       }),
     ),
   },
@@ -171,6 +185,9 @@ export const complete = internalMutation({
         subjectName: args.subjectName,
         reason: args.reason,
         matches: args.matches,
+        categories: summarizeCategories(
+          args.matches.map((match) => ({ categories: match.categories ?? [], pepClass: match.pepClass ?? null })),
+        ),
         ...(args.coverage
           ? {
               coverage: {
@@ -202,6 +219,8 @@ export const complete = internalMutation({
         ...(match.source === "OPENSANCTIONS"
           ? { externalId: match.sourceRecordId, topics: match.topics, datasets: match.datasets }
           : {}),
+        ...(match.categories ? { categories: match.categories } : {}),
+        ...(match.pepClass ? { pepClass: match.pepClass } : {}),
         matchMethod: match.matchMethod,
         riskLevel: match.riskLevel,
         matchedCountry: match.matchedCountry,

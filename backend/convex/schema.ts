@@ -269,6 +269,21 @@ export default defineSchema({
     externalId: v.optional(v.string()),
     topics: v.optional(v.array(v.string())),
     datasets: v.optional(v.array(v.string())),
+    // AML risk categories of the hit (lib/amlCategories.ts) and, for PEPs,
+    // the Class 1–4 tier. Absent on rows created before categories existed.
+    categories: v.optional(
+      v.array(
+        v.union(
+          v.literal("sanctions"),
+          v.literal("pep"),
+          v.literal("special_interest"),
+          v.literal("fitness_probity"),
+          v.literal("adverse_media"),
+          v.literal("insolvency"),
+        ),
+      ),
+    ),
+    pepClass: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4))),
     matchMethod: v.union(
       v.literal("exact"),
       v.literal("normalized"),

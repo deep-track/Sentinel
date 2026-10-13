@@ -5,6 +5,7 @@
 // can be unit tested directly.
 
 import type { Decision } from "./amlMatching";
+import { PEP_CLASS_LABELS, birthDateMatch, categoriesFor, pepClassFor, type RiskCategory } from "./amlCategories";
 
 export const OPENSANCTIONS_BASE_URL = "https://api.opensanctions.org";
 export const OPENSANCTIONS_DATASET = "default";
@@ -19,13 +20,18 @@ export const OPENSANCTIONS_NON_SANCTION_MIN_SCORE = 0.8;
 export const OPENSANCTIONS_RESULT_LIMIT = 10;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
-const SANCTION_TOPICS = new Set(["sanction", "sanction.linked", "crime.terror"]);
-const PEP_TOPICS = new Set(["role.pep", "role.rca", "role.oligarch"]);
-
 export type OpenSanctionsSubject = {
   name: string;
   entityType: "individual" | "entity";
   country?: string | null;
+  // Optional identifiers. Sent to the match API, which uses them to score
+  // candidates; a conflicting date of birth also rules out look-alikes.
+  aliases?: string[];
+  birthDate?: string | null; // YYYY, YYYY-MM or YYYY-MM-DD
+  nationality?: string | null;
+  idNumber?: string | null;
+  registrationNumber?: string | null;
+  jurisdiction?: string | null;
 };
 
 export type OpenSanctionsMatch = {
@@ -37,6 +43,9 @@ export type OpenSanctionsMatch = {
   datasets: string[];
   topics: string[];
   countries: string[];
+  birthDates: string[];
+  // Set by annotateBirthDates against the subject's date of birth.
+  birthDateMatch?: "match" | "mismatch" | "unknown";
 };
 
 // "none" = no risk topic at all: enrichment records such as company
@@ -57,8 +66,21 @@ export class OpenSanctionsRequestError extends Error {
 
 export function buildMatchQuery(subject: OpenSanctionsSubject) {
   const properties: Record<string, string[]> = { name: [subject.name] };
-  const country = subject.country?.trim();
-  if (country) properties.country = [country];
+  const add = (key: string, value: string | null | undefined) => {
+    const trimmed = value?.trim();
+    if (trimmed) properties[key] = [trimmed];
+  };
+  add("country", subject.country);
+  const aliases = (subject.aliases ?? []).map((alias) => alias.trim()).filter(Boolean);
+  if (aliases.length > 0) properties.alias = aliases;
+  if (subject.entityType === "individual") {
+    add("birthDate", subject.birthDate);
+    add("nationality", subject.nationality);
+    add("idNumber", subject.idNumber);
+  } else {
+    add("registrationNumber", subject.registrationNumber);
+    add("jurisdiction", subject.jurisdiction);
+  }
   return {
     queries: {
       q: {
@@ -110,6 +132,7 @@ export function parseMatchResponse(raw: unknown): OpenSanctionsMatch[] {
           ...stringArray(properties.jurisdiction),
         ]),
       ],
+      birthDates: stringArray(properties.birthDate),
     };
   });
 }
@@ -158,23 +181,41 @@ export async function matchOpenSanctions(
   return parseMatchResponse(body);
 }
 
+// Records whether each match's birth dates agree with the subject's.
+export function annotateBirthDates(matches: OpenSanctionsMatch[], birthDate: string | null | undefined): OpenSanctionsMatch[] {
+  return matches.map((match) => ({ ...match, birthDateMatch: birthDateMatch(birthDate, match.birthDates) }));
+}
+
+export function riskCategories(match: OpenSanctionsMatch): RiskCategory[] {
+  return categoriesFor(match.topics);
+}
+
+export function pepClass(match: OpenSanctionsMatch) {
+  return pepClassFor(match.topics);
+}
+
+// "none" = no risk topic: company registries, reference data, or roles that
+// carry no AML risk on their own (e.g. a bank, a journalist).
 export function categorize(match: OpenSanctionsMatch): OpenSanctionsCategory {
-  if (match.topics.some((topic) => SANCTION_TOPICS.has(topic))) return "sanction";
-  if (match.topics.some((topic) => PEP_TOPICS.has(topic))) return "pep";
-  return match.topics.length > 0 ? "other" : "none";
+  const categories = riskCategories(match);
+  if (categories.includes("sanctions")) return "sanction";
+  if (categories.includes("pep")) return "pep";
+  return categories.length > 0 ? "other" : "none";
 }
 
 // The matches that affect the verdict and are stored. Only results the API
 // flags as matches count (already filtered by the cutoff; this guards against
 // API-side default changes). Sanctions count from 0.7; PEP and other risk
-// lists from 0.8; records with no risk topic never count.
+// lists from 0.8; records with no risk topic never count. A non-sanctions
+// match whose date of birth contradicts the subject's is a different person.
 export function relevantMatches(matches: OpenSanctionsMatch[]): OpenSanctionsMatch[] {
   return matches
     .filter((match) => {
       if (!match.match || match.score < OPENSANCTIONS_MATCH_THRESHOLD) return false;
       const category = categorize(match);
       if (category === "none") return false;
-      return category === "sanction" || match.score >= OPENSANCTIONS_NON_SANCTION_MIN_SCORE;
+      if (category === "sanction") return true;
+      return match.birthDateMatch !== "mismatch" && match.score >= OPENSANCTIONS_NON_SANCTION_MIN_SCORE;
     })
     .sort((left, right) => right.score - left.score);
 }
@@ -183,7 +224,8 @@ export function decideOpenSanctions(matches: OpenSanctionsMatch[]): Decision {
   const relevant = relevantMatches(matches);
   if (relevant.length === 0) return { verdict: "pass", reason: "No match found on OpenSanctions." };
   const sanctions = relevant.filter((match) => categorize(match) === "sanction");
-  if (sanctions.some((match) => match.score >= OPENSANCTIONS_STRONG_MATCH_SCORE)) {
+  // A conflicting date of birth can't be a hard stop, only a review.
+  if (sanctions.some((match) => match.score >= OPENSANCTIONS_STRONG_MATCH_SCORE && match.birthDateMatch !== "mismatch")) {
     return {
       verdict: "reject",
       reason: "Strong OpenSanctions sanctions match requires compliance escalation.",
@@ -192,13 +234,22 @@ export function decideOpenSanctions(matches: OpenSanctionsMatch[]): Decision {
   if (sanctions.length > 0) {
     return { verdict: "review", reason: "Possible OpenSanctions sanctions match requires human identity resolution." };
   }
-  if (relevant.some((match) => categorize(match) === "pep")) {
+  const pepClasses = relevant.map(pepClass).filter((value): value is NonNullable<typeof value> => value !== null);
+  if (pepClasses.length > 0) {
+    const highest = Math.min(...pepClasses) as keyof typeof PEP_CLASS_LABELS;
     return {
       verdict: "review",
-      reason: "OpenSanctions politically exposed person (PEP) match requires enhanced due diligence.",
+      reason: `OpenSanctions politically exposed person match (${PEP_CLASS_LABELS[highest]}) requires enhanced due diligence.`,
     };
   }
-  return { verdict: "review", reason: "OpenSanctions risk-list match requires human review." };
+  const categories = new Set(relevant.flatMap(riskCategories));
+  if (categories.has("fitness_probity")) {
+    return { verdict: "review", reason: "OpenSanctions fitness and probity match (disqualification, debarment or regulator action) requires human review." };
+  }
+  if (categories.has("insolvency")) {
+    return { verdict: "review", reason: "OpenSanctions insolvency match requires human review." };
+  }
+  return { verdict: "review", reason: "OpenSanctions special interest match (crime, wanted or person of interest) requires human review." };
 }
 
 const VERDICT_RANK: Record<Decision["verdict"], number> = { pass: 0, review: 1, reject: 2 };

@@ -17,10 +17,14 @@ import {
   type Candidate,
   type SourceKey,
 } from "./lib/amlMatching";
+import { isPartialIsoDate } from "./lib/amlCategories";
 import {
   OPENSANCTIONS_STRONG_MATCH_SCORE,
   OpenSanctionsRequestError,
+  annotateBirthDates,
   categorize,
+  pepClass,
+  riskCategories,
   combineWithOpenSanctions,
   matchOpenSanctions,
   relevantMatches,
@@ -33,27 +37,78 @@ const MATCH_LIMIT = 25;
 const ENTRY_PAGE_SIZE = 500;
 export const MAX_SUBJECT_NAME_LENGTH = 300;
 export const MAX_COUNTRY_LENGTH = 100;
+export const MAX_IDENTIFIER_LENGTH = 100;
+export const MAX_ALIASES = 10;
 
 const entityTypeValidator = v.union(v.literal("individual"), v.literal("entity"));
 
-type AmlRequest = {
+// Optional subject details that sharpen matching. Individuals: date of birth,
+// nationality, national ID or passport number. Entities: registration number
+// and jurisdiction. Both: known aliases.
+export const amlSubjectDetailsValidator = {
+  aliases: v.optional(v.array(v.string())),
+  dateOfBirth: v.optional(v.string()),
+  nationality: v.optional(v.string()),
+  idNumber: v.optional(v.string()),
+  registrationNumber: v.optional(v.string()),
+  jurisdiction: v.optional(v.string()),
+};
+
+export type AmlSubjectDetails = {
+  aliases?: string[];
+  dateOfBirth?: string;
+  nationality?: string;
+  idNumber?: string;
+  registrationNumber?: string;
+  jurisdiction?: string;
+};
+
+type AmlRequest = AmlSubjectDetails & {
   clientId: Id<"clients">;
   subjectName: string;
   entityType: "individual" | "entity";
   country?: string;
 };
 
-function normalizeAmlRequest(args: AmlRequest) {
+function invalid(message: string): never {
+  throw new ConvexError({ code: "invalid_argument", message });
+}
+
+function optionalText(value: string | undefined, label: string, max: number) {
+  const trimmed = value?.trim() || undefined;
+  if (trimmed && trimmed.length > max) invalid(`${label} is too long.`);
+  return trimmed;
+}
+
+export function normalizeAmlRequest(args: AmlRequest) {
   const subjectName = args.subjectName.trim();
-  if (!subjectName) throw new ConvexError({ code: "invalid_argument", message: "Subject name is required." });
-  if (subjectName.length > MAX_SUBJECT_NAME_LENGTH) {
-    throw new ConvexError({ code: "invalid_argument", message: "Subject name is too long." });
+  if (!subjectName) invalid("Subject name is required.");
+  if (subjectName.length > MAX_SUBJECT_NAME_LENGTH) invalid("Subject name is too long.");
+  const country = optionalText(args.country, "Country", MAX_COUNTRY_LENGTH);
+  const aliases = [...new Set((args.aliases ?? []).map((alias) => alias.trim()).filter(Boolean))];
+  if (aliases.length > MAX_ALIASES) invalid(`At most ${MAX_ALIASES} aliases are allowed.`);
+  if (aliases.some((alias) => alias.length > MAX_SUBJECT_NAME_LENGTH)) invalid("An alias is too long.");
+  const individual = args.entityType === "individual";
+  const dateOfBirth = optionalText(args.dateOfBirth, "Date of birth", 10);
+  if (dateOfBirth && !individual) invalid("Date of birth applies to individuals only.");
+  if (dateOfBirth && !isPartialIsoDate(dateOfBirth)) invalid("Date of birth must be YYYY, YYYY-MM or YYYY-MM-DD.");
+  const nationality = optionalText(args.nationality, "Nationality", MAX_COUNTRY_LENGTH);
+  const idNumber = optionalText(args.idNumber, "ID number", MAX_IDENTIFIER_LENGTH);
+  const registrationNumber = optionalText(args.registrationNumber, "Registration number", MAX_IDENTIFIER_LENGTH);
+  const jurisdiction = optionalText(args.jurisdiction, "Jurisdiction", MAX_COUNTRY_LENGTH);
+  if ((nationality || idNumber) && !individual) invalid("Nationality and ID number apply to individuals only.");
+  if ((registrationNumber || jurisdiction) && individual) {
+    invalid("Registration number and jurisdiction apply to companies only.");
   }
-  const country = args.country?.trim() || undefined;
-  if (country && country.length > MAX_COUNTRY_LENGTH) {
-    throw new ConvexError({ code: "invalid_argument", message: "Country is too long." });
-  }
-  return { subjectName, country };
+  const details: AmlSubjectDetails = {
+    ...(aliases.length ? { aliases } : {}),
+    ...(dateOfBirth ? { dateOfBirth } : {}),
+    ...(nationality ? { nationality } : {}),
+    ...(idNumber ? { idNumber } : {}),
+    ...(registrationNumber ? { registrationNumber } : {}),
+    ...(jurisdiction ? { jurisdiction } : {}),
+  };
+  return { subjectName, country, details };
 }
 
 async function requireActiveClient(ctx: MutationCtx, clientId: Id<"clients">) {
@@ -70,7 +125,7 @@ async function createAmlVerification(
   ctx: MutationCtx,
   args: AmlRequest & { actor: { actorId: string; actorType: AuditActorType } },
 ) {
-  const { subjectName, country } = normalizeAmlRequest(args);
+  const { subjectName, country, details } = normalizeAmlRequest(args);
   await requireActiveClient(ctx, args.clientId);
   const creditsUsed = creditsForType("aml");
   // Balance check in the same transaction as the insert.
@@ -82,7 +137,7 @@ async function createAmlVerification(
     type: "aml",
     status: "queued",
     creditsUsed,
-    input: { subjectName, entityType: args.entityType, country: country ?? null },
+    input: { subjectName, entityType: args.entityType, country: country ?? null, ...details },
     reference,
     createdAt: now,
     updatedAt: now,
@@ -93,6 +148,7 @@ async function createAmlVerification(
     subjectName,
     entityType: args.entityType,
     country,
+    ...details,
   });
   await recordAudit(ctx, {
     ...args.actor,
@@ -111,6 +167,7 @@ export const submit = mutation({
     subjectName: v.string(),
     entityType: entityTypeValidator,
     country: v.optional(v.string()),
+    ...amlSubjectDetailsValidator,
   },
   handler: async (ctx, args) => {
     const { userId, role } = await requireClientRole(ctx, args.clientId, [
@@ -136,10 +193,11 @@ export const _createFromApi = internalMutation({
     subjectName: v.string(),
     entityType: entityTypeValidator,
     country: v.optional(v.string()),
+    ...amlSubjectDetailsValidator,
   },
   handler: async (ctx, args) => {
     const actor = { actorId: args.apiKeyId, actorType: "client_api_key" as const };
-    const request = { clientId: args.clientId, subjectName: args.subjectName, entityType: args.entityType, country: args.country };
+    const { apiKeyId: _apiKeyId, environment: _environment, ...request } = args;
     if (args.environment === "live") {
       const { reference } = await createAmlVerification(ctx, { ...request, actor });
       return { reference, status: "queued" as const, verdict: null, sandbox: false };
@@ -182,19 +240,27 @@ export const _createFromApi = internalMutation({
 
 // Never throws: any failure is reported as a coverage gap so the screening
 // is held for review instead of passing or failing outright.
-async function screenOpenSanctions(subject: {
-  subjectName: string;
-  entityType: "individual" | "entity";
-  country?: string;
-}): Promise<OpenSanctionsOutcome> {
+async function screenOpenSanctions(
+  subject: AmlSubjectDetails & { subjectName: string; entityType: "individual" | "entity"; country?: string },
+): Promise<OpenSanctionsOutcome> {
   const apiKey = process.env.OPENSANCTIONS_API_KEY?.trim();
   if (!apiKey) return { status: "not_configured" };
   try {
     const matches = await matchOpenSanctions(
-      { name: subject.subjectName, entityType: subject.entityType, country: subject.country },
+      {
+        name: subject.subjectName,
+        entityType: subject.entityType,
+        country: subject.country,
+        aliases: subject.aliases,
+        birthDate: subject.dateOfBirth,
+        nationality: subject.nationality,
+        idNumber: subject.idNumber,
+        registrationNumber: subject.registrationNumber,
+        jurisdiction: subject.jurisdiction,
+      },
       { apiKey },
     );
-    return { status: "screened", matches };
+    return { status: "screened", matches: annotateBirthDates(matches, subject.dateOfBirth) };
   } catch (error) {
     // No subject data in the log line.
     console.error("[OpenSanctions] screening unavailable", {
@@ -282,6 +348,7 @@ export const runScreening = internalAction({
     subjectName: v.string(),
     entityType: v.union(v.literal("individual"), v.literal("entity")),
     country: v.optional(v.string()),
+    ...amlSubjectDetailsValidator,
   },
   handler: async (ctx, args) => {
     await ctx.runMutation(internalApi.verifications._markProcessing, { id: args.verificationId });
@@ -345,6 +412,7 @@ export const runScreening = internalAction({
             matchedCountry: match.countries[0],
             countryMatch: match.countryMatch,
             riskLevel: match.nameScore >= STRONG_MATCH_THRESHOLD ? ("critical" as const) : ("high" as const),
+            categories: ["sanctions" as const],
           })),
           ...openSanctionsMatches.slice(0, MATCH_LIMIT).map((match) => ({
             source: "OPENSANCTIONS" as const,
@@ -360,6 +428,9 @@ export const runScreening = internalAction({
                 : ("high" as const),
             topics: match.topics.slice(0, 20),
             datasets: match.datasets.slice(0, 20),
+            categories: riskCategories(match),
+            ...(pepClass(match) ? { pepClass: pepClass(match)! } : {}),
+            ...(match.birthDateMatch ? { birthDateMatch: match.birthDateMatch } : {}),
           })),
         ],
       });

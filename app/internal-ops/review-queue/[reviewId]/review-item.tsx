@@ -33,6 +33,7 @@ import {
   verdictBadge,
 } from "@/components/sentinel/format";
 import { RESOLUTION_LABELS, type ReviewQueueItem, reviewStatusBadge } from "../review-queue";
+import { PEP_CLASS_LABELS, RISK_CATEGORY_LABELS, type PepClass, type RiskCategory } from "@/backend/convex/lib/amlCategories";
 
 type VerificationDetail = {
   _id: string;
@@ -61,6 +62,9 @@ type AmlMatch = {
   matchedCountry?: string;
   countryMatch?: string;
   riskLevel: string;
+  categories?: RiskCategory[];
+  pepClass?: PepClass;
+  birthDateMatch?: "match" | "mismatch" | "unknown";
 };
 
 type AmlResult = {
@@ -305,13 +309,30 @@ function VerificationResult({ verification }: { verification: VerificationDetail
             hint={`${aml.matches.length} match${aml.matches.length === 1 ? "" : "es"}`}
           />
           <DataTable
-            head={["Entity", "Source", "Program", "Score", "Method", "Country", "Risk"]}
+            head={["Entity", "Category", "Source", "Program", "Score", "Method", "Country", "Risk"]}
             empty={aml.matches.length === 0 ? <EmptyState>No watchlist matches.</EmptyState> : null}
           >
             {aml.matches.map((match) => (
               <Row key={`${match.source}:${match.sourceRecordId}`}>
                 <Cell className="max-w-[220px] truncate">
                   <span title={match.entityName}>{match.entityName}</span>
+                  {match.birthDateMatch && match.birthDateMatch !== "unknown" ? (
+                    <span className="block text-[10px] text-sentinel-subtle">
+                      date of birth {match.birthDateMatch === "match" ? "matches" : "differs"}
+                    </span>
+                  ) : null}
+                </Cell>
+                <Cell>
+                  <span className="flex flex-wrap gap-1">
+                    {(match.categories ?? []).map((category) => (
+                      <span key={category} title={category === "pep" && match.pepClass ? PEP_CLASS_LABELS[match.pepClass] : undefined}>
+                        <Badge tone={category === "sanctions" ? "red" : "amber"}>
+                          {category === "pep" && match.pepClass ? `PEP Class ${match.pepClass}` : RISK_CATEGORY_LABELS[category]}
+                        </Badge>
+                      </span>
+                    ))}
+                    {(match.categories ?? []).length === 0 ? <span className="text-sentinel-subtle">—</span> : null}
+                  </span>
                 </Cell>
                 <Cell className="text-sentinel-muted">
                   {match.source}
