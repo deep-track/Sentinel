@@ -141,13 +141,57 @@ async function runIngestion(ctx: ActionCtx, sourceKey: SourceKey, sourceUrl: str
 export const ingestOfac = internalAction({
   args: { allowRecordDrop: v.optional(v.boolean()) },
   handler: async (ctx, args) =>
-    runIngestion(ctx, "OFAC_SDN", requireUrl("WATCHLIST_OFAC_SDN_URL", DEFAULT_OFAC_URL), args.allowRecordDrop ?? false),
+    runIngestion(
+      ctx,
+      "OFAC_SDN",
+      await resolveSourceUrl(ctx, "OFAC_SDN", "WATCHLIST_OFAC_SDN_URL", DEFAULT_OFAC_URL),
+      args.allowRecordDrop ?? false,
+    ),
 });
 
 export const ingestUn = internalAction({
   args: { allowRecordDrop: v.optional(v.boolean()) },
   handler: async (ctx, args) =>
-    runIngestion(ctx, "UN_CONSOLIDATED", requireUrl("WATCHLIST_UN_CONSOLIDATED_URL"), args.allowRecordDrop ?? false),
+    runIngestion(
+      ctx,
+      "UN_CONSOLIDATED",
+      await resolveSourceUrl(ctx, "UN_CONSOLIDATED", "WATCHLIST_UN_CONSOLIDATED_URL"),
+      args.allowRecordDrop ?? false,
+    ),
+});
+
+// A missing or invalid URL setting fails before any version exists, so it is
+// recorded on the source here; otherwise the nightly run fails with no trace
+// in the data and Ops only ever sees "unavailable".
+async function resolveSourceUrl(ctx: ActionCtx, sourceKey: SourceKey, envName: string, fallback?: string) {
+  try {
+    return requireUrl(envName, fallback);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `${envName} is not usable`;
+    await ctx.runMutation(internal.watchlists._recordConfigError, { sourceKey, error: message.slice(0, 500), at: Date.now() });
+    throw new Error(`${sourceKey} ingestion failed: ${message}`);
+  }
+}
+
+export const _recordConfigError = internalMutation({
+  args: { sourceKey: sourceKeyValidator, error: v.string(), at: v.number() },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("watchlistSources").withIndex("by_source_key", (q) => q.eq("sourceKey", args.sourceKey)).unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, { lastAttemptedAt: args.at, lastError: args.error, updatedAt: args.at });
+      return;
+    }
+    await ctx.db.insert("watchlistSources", {
+      sourceKey: args.sourceKey,
+      displayName: args.sourceKey === "OFAC_SDN" ? "OFAC Specially Designated Nationals" : "UN Security Council Consolidated List",
+      sourceUrl: "",
+      cadence: "daily",
+      enabled: true,
+      lastAttemptedAt: args.at,
+      lastError: args.error,
+      updatedAt: args.at,
+    });
+  },
 });
 
 async function activeVersionFor(ctx: MutationCtx, sourceKey: SourceKey) {

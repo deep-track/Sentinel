@@ -98,15 +98,20 @@ export const listClients = query({
 });
 
 export const getClient = query({
-  args: { clientId: v.id("clients"), monthStart: v.number(), ledgerLimit: v.optional(v.number()) },
+  // A string, not v.id: the id comes from the ?client= URL, and a malformed or
+  // foreign id must read as "not found" rather than fail validation and crash
+  // the page.
+  args: { clientId: v.string(), monthStart: v.number(), ledgerLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requireInternalUser(ctx);
-    const client = await ctx.db.get(args.clientId);
+    const clientId = ctx.db.normalizeId("clients", args.clientId);
+    if (!clientId) return null;
+    const client = await ctx.db.get(clientId);
     if (!client) return null;
     const limit = Math.min(Math.max(Math.floor(args.ledgerLimit ?? 20), 1), 100);
     const ledger = await ctx.db
       .query("creditLedger")
-      .withIndex("by_client_created_at", (q) => q.eq("clientId", args.clientId))
+      .withIndex("by_client_created_at", (q) => q.eq("clientId", clientId))
       .order("desc")
       .take(limit);
     return {
@@ -201,14 +206,14 @@ export const opsOverview = query({
       ...coverage.missing.map((key) => ({
         severity: "critical" as const,
         title: `${SOURCE_LABELS[key]} watchlist unavailable`,
-        detail: "AML screenings are held for manual review until it is ingested.",
+        detail: withLastError("AML screenings are held for manual review until it is ingested.", coverage.lastErrors[key]),
       })),
       ...coverage.versions
         .filter((version) => version.stale)
         .map((version) => ({
           severity: "warning" as const,
           title: `${SOURCE_LABELS[version.sourceKey]} watchlist is stale`,
-          detail: "AML screenings are held for manual review until it refreshes.",
+          detail: withLastError("AML screenings are held for manual review until it refreshes.", coverage.lastErrors[version.sourceKey]),
           at: version.fetchedAt,
         })),
       ...clients.flatMap(clientAlerts),
@@ -234,6 +239,10 @@ export const opsOverview = query({
     };
   },
 });
+
+function withLastError(detail: string, lastError: string | undefined) {
+  return lastError ? `${detail} Last ingestion error: ${lastError}` : detail;
+}
 
 function requireReason(reason: string) {
   const trimmed = reason.trim();
