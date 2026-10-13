@@ -149,3 +149,56 @@ export const backfillAllocations = internalMutation({
     return { processed: page.page.length, allocated, done: page.isDone };
   },
 });
+
+const HISTORY_ROLES = ["client_admin", "compliance_analyst", "developer", "viewer"] as const;
+
+// Client Billing page: plan, balance, prices and one page of the credit
+// ledger (newest first), with each line's money value and the check it was
+// for. `before` is the createdAt cursor from the previous page.
+export const billingForClient = query({
+  args: { clientId: v.id("clients"), limit: v.optional(v.number()), before: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requireClientRole(ctx, args.clientId, [...HISTORY_ROLES]);
+    const client = await ctx.db.get(args.clientId);
+    if (!client) return null;
+    const plan = client.plan;
+    const currency = client.billingCurrency ?? "USD";
+    const limit = Math.min(Math.max(Math.floor(args.limit ?? 25), 1), 100);
+    const rows = await ctx.db
+      .query("creditLedger")
+      .withIndex("by_client_created_at", (q) => {
+        const byClient = q.eq("clientId", args.clientId);
+        return args.before === undefined ? byClient : byClient.lt("createdAt", args.before);
+      })
+      .order("desc")
+      .take(limit + 1);
+    const page = rows.slice(0, limit);
+    const entries = await Promise.all(
+      page.map(async (row) => {
+        const verification = row.verificationId ? await ctx.db.get(row.verificationId) : null;
+        return {
+          _id: row._id,
+          createdAt: row.createdAt,
+          type: row.type,
+          credits: row.amount,
+          value: creditsToMoney(row.amount, currency, plan),
+          reason: row.reason,
+          verificationId: verification?._id ?? null,
+          reference: verification?.reference ?? null,
+          verificationType: verification?.type ?? null,
+        };
+      }),
+    );
+    const balance = await getBalance(ctx, args.clientId);
+    return {
+      client: { name: client.name, plan, currency },
+      balance,
+      balanceValue: creditsToMoney(balance, currency, plan),
+      creditPrice: CREDIT_VALUE[currency],
+      planBonus: PLAN_BONUS[currency][plan],
+      prices: priceList(plan, currency),
+      entries,
+      nextCursor: rows.length > limit ? page[page.length - 1].createdAt : null,
+    };
+  },
+});
