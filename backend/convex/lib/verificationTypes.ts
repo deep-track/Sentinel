@@ -9,6 +9,7 @@ export function creditsForType(type: VerificationType): number {
   switch (type) {
     case "idp": return 1;
     case "kyi": return 1;
+    case "document": return 1;
     case "kyb": return 3;
     case "aml": return 1;
     case "liveness": return 1;
@@ -18,8 +19,9 @@ export function creditsForType(type: VerificationType): number {
 // Human-readable label used in ledger reasons and audit metadata.
 export function verificationTypeLabel(type: VerificationType): string {
   switch (type) {
-    case "idp": return "IDP verification";
+    case "idp": return "KYC identity verification";
     case "kyi": return "KYI verification";
+    case "document": return "IDP document verification";
     case "kyb": return "KYB verification";
     case "aml": return "AML sanctions screening";
     case "liveness": return "Liveness check";

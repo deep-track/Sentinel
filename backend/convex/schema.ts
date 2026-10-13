@@ -71,7 +71,8 @@ export default defineSchema({
       v.literal("kyb"),
       v.literal("aml"),
       v.literal("liveness"),
-      v.literal("kyi"),
+      v.literal("kyi"), // retired: existing records are read-only
+      v.literal("document"), // IDP: identity document or proof of address
     ),
     status: v.union(
       v.literal("queued"),

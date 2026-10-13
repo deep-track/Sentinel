@@ -62,6 +62,12 @@ export const createKyi = mutation({
     corporateDocUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // KYI has been retired: identity documents and proof of address are now
+    // verified by IDP (documents.submit). Existing KYI records stay readable.
+    void ctx;
+    void args;
+    throw new ConvexError({ code: "invalid_argument", message: "KYI has been retired. Use IDP document verification instead." });
+
     // Also rejects inactive clients (write role set).
     const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
 

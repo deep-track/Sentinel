@@ -32,7 +32,7 @@ import {
 	Settings,
 	Shield,
 	ShieldCheck,
-	TrendingUp,
+	FileScan,
 	User2,
 	Webhook,
 } from "lucide-react";
@@ -52,7 +52,7 @@ const getMainItems = () => [
 	{ title: "Client Portal", url: "/portal", icon: LayoutGrid },
 	{ title: "Identity (KYC)", url: "/kyc", icon: ShieldCheck },
 	{ title: "Business (KYB)", url: "/kyb", icon: Building2 },
-	{ title: "KYI", url: "/kyi", icon: TrendingUp },
+	{ title: "Documents (IDP)", url: "/idp", icon: FileScan },
 	{ title: "AML Screening", url: "/aml-check", icon: Shield },
 	{ title: "Liveness", url: "/liveness", icon: Fingerprint },
 ];

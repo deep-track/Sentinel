@@ -26,6 +26,8 @@ import type * as complianceReports from "../complianceReports.js";
 import type * as creditLedger from "../creditLedger.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
+import type * as documents from "../documents.js";
+import type * as documentsNode from "../documentsNode.js";
 import type * as http from "../http.js";
 import type * as idp from "../idp.js";
 import type * as kyb from "../kyb.js";
@@ -45,6 +47,9 @@ import type * as lib_awsClients_livenessClient from "../lib/awsClients/livenessC
 import type * as lib_credits from "../lib/credits.js";
 import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_deeptrackLive from "../lib/deeptrackLive.js";
+import type * as lib_documentChecks from "../lib/documentChecks.js";
+import type * as lib_documentPipeline from "../lib/documentPipeline.js";
+import type * as lib_documentVision from "../lib/documentVision.js";
 import type * as lib_openSanctions from "../lib/openSanctions.js";
 import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_rbac from "../lib/rbac.js";
@@ -90,6 +95,8 @@ declare const fullApi: ApiFromModules<{
   creditLedger: typeof creditLedger;
   crons: typeof crons;
   dashboard: typeof dashboard;
+  documents: typeof documents;
+  documentsNode: typeof documentsNode;
   http: typeof http;
   idp: typeof idp;
   kyb: typeof kyb;
@@ -109,6 +116,9 @@ declare const fullApi: ApiFromModules<{
   "lib/credits": typeof lib_credits;
   "lib/crypto": typeof lib_crypto;
   "lib/deeptrackLive": typeof lib_deeptrackLive;
+  "lib/documentChecks": typeof lib_documentChecks;
+  "lib/documentPipeline": typeof lib_documentPipeline;
+  "lib/documentVision": typeof lib_documentVision;
   "lib/openSanctions": typeof lib_openSanctions;
   "lib/rateLimits": typeof lib_rateLimits;
   "lib/rbac": typeof lib_rbac;
