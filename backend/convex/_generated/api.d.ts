@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as aml from "../aml.js";
+import type * as amlMonitoring from "../amlMonitoring.js";
 import type * as amlPersistence from "../amlPersistence.js";
 import type * as apiKeys from "../apiKeys.js";
 import type * as auditLog from "../auditLog.js";
@@ -30,7 +31,9 @@ import type * as kyb from "../kyb.js";
 import type * as kyi from "../kyi.js";
 import type * as lib_access from "../lib/access.js";
 import type * as lib_africasTalking from "../lib/africasTalking.js";
+import type * as lib_amlCategories from "../lib/amlCategories.js";
 import type * as lib_amlMatching from "../lib/amlMatching.js";
+import type * as lib_amlMonitoringStore from "../lib/amlMonitoringStore.js";
 import type * as lib_awsClients_amlClient from "../lib/awsClients/amlClient.js";
 import type * as lib_awsClients_docScanClient from "../lib/awsClients/docScanClient.js";
 import type * as lib_awsClients_faceCheckClient from "../lib/awsClients/faceCheckClient.js";
@@ -69,6 +72,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   aml: typeof aml;
+  amlMonitoring: typeof amlMonitoring;
   amlPersistence: typeof amlPersistence;
   apiKeys: typeof apiKeys;
   auditLog: typeof auditLog;
@@ -89,7 +93,9 @@ declare const fullApi: ApiFromModules<{
   kyi: typeof kyi;
   "lib/access": typeof lib_access;
   "lib/africasTalking": typeof lib_africasTalking;
+  "lib/amlCategories": typeof lib_amlCategories;
   "lib/amlMatching": typeof lib_amlMatching;
+  "lib/amlMonitoringStore": typeof lib_amlMonitoringStore;
   "lib/awsClients/amlClient": typeof lib_awsClients_amlClient;
   "lib/awsClients/docScanClient": typeof lib_awsClients_docScanClient;
   "lib/awsClients/faceCheckClient": typeof lib_awsClients_faceCheckClient;

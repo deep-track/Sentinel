@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internalAction, internalMutation, mutation } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireClientRole } from "./lib/rbac";
@@ -18,15 +18,19 @@ import {
   type SourceKey,
 } from "./lib/amlMatching";
 import { isPartialIsoDate } from "./lib/amlCategories";
+import { MAX_EXTERNAL_REF_LENGTH, enrolMonitoredSubject } from "./lib/amlMonitoringStore";
 import {
   OPENSANCTIONS_STRONG_MATCH_SCORE,
   OpenSanctionsRequestError,
   annotateBirthDates,
+  applyPepPositions,
   categorize,
+  fetchEntityNested,
+  parsePepPositions,
   pepClass,
   riskCategories,
   combineWithOpenSanctions,
-  matchOpenSanctions,
+  matchOpenSanctionsMany,
   relevantMatches,
   type OpenSanctionsOutcome,
 } from "./lib/openSanctions";
@@ -69,6 +73,15 @@ type AmlRequest = AmlSubjectDetails & {
   entityType: "individual" | "entity";
   country?: string;
 };
+
+// Ongoing monitoring options on a new screening: `monitor` enrols the
+// subject, `externalRef` is the client's own customer id for it.
+export const amlMonitoringOptionsValidator = {
+  monitor: v.optional(v.boolean()),
+  externalRef: v.optional(v.string()),
+};
+
+type MonitoringOptions = { monitor?: boolean; externalRef?: string };
 
 function invalid(message: string): never {
   throw new ConvexError({ code: "invalid_argument", message });
@@ -123,9 +136,11 @@ async function requireActiveClient(ctx: MutationCtx, clientId: Id<"clients">) {
 // transaction.
 async function createAmlVerification(
   ctx: MutationCtx,
-  args: AmlRequest & { actor: { actorId: string; actorType: AuditActorType } },
+  args: AmlRequest & MonitoringOptions & { actor: { actorId: string; actorType: AuditActorType } },
 ) {
   const { subjectName, country, details } = normalizeAmlRequest(args);
+  const externalRef = optionalText(args.externalRef, "Customer reference", MAX_EXTERNAL_REF_LENGTH);
+  if (externalRef && !args.monitor) invalid("A customer reference is only used with monitor: true.");
   await requireActiveClient(ctx, args.clientId);
   const creditsUsed = creditsForType("aml");
   // Balance check in the same transaction as the insert.
@@ -150,15 +165,27 @@ async function createAmlVerification(
     country,
     ...details,
   });
+  const monitoring = args.monitor
+    ? await enrolMonitoredSubject(ctx, {
+        clientId: args.clientId,
+        subjectName,
+        entityType: args.entityType,
+        country,
+        ...details,
+        externalRef,
+        verificationId,
+        enrolledBy: args.actor.actorId,
+      })
+    : null;
   await recordAudit(ctx, {
     ...args.actor,
     action: "verification.created",
     targetType: "verification",
     targetId: verificationId,
     clientId: args.clientId,
-    metadata: { type: "aml", reference },
+    metadata: { type: "aml", reference, ...(monitoring ? { monitoredSubject: monitoring.reference } : {}) },
   });
-  return { verificationId, reference };
+  return { verificationId, reference, monitoringId: monitoring?.reference ?? null };
 }
 
 export const submit = mutation({
@@ -168,6 +195,7 @@ export const submit = mutation({
     entityType: entityTypeValidator,
     country: v.optional(v.string()),
     ...amlSubjectDetailsValidator,
+    ...amlMonitoringOptionsValidator,
   },
   handler: async (ctx, args) => {
     const { userId, role } = await requireClientRole(ctx, args.clientId, [
@@ -194,15 +222,17 @@ export const _createFromApi = internalMutation({
     entityType: entityTypeValidator,
     country: v.optional(v.string()),
     ...amlSubjectDetailsValidator,
+    ...amlMonitoringOptionsValidator,
   },
   handler: async (ctx, args) => {
     const actor = { actorId: args.apiKeyId, actorType: "client_api_key" as const };
     const { apiKeyId: _apiKeyId, environment: _environment, ...request } = args;
     if (args.environment === "live") {
-      const { reference } = await createAmlVerification(ctx, { ...request, actor });
-      return { reference, status: "queued" as const, verdict: null, sandbox: false };
+      const { reference, monitoringId } = await createAmlVerification(ctx, { ...request, actor });
+      return { reference, status: "queued" as const, verdict: null, sandbox: false, monitoringId };
     }
 
+    // Test-mode keys never enrol subjects for monitoring.
     normalizeAmlRequest(request);
     await requireActiveClient(ctx, args.clientId);
     const now = Date.now();
@@ -234,40 +264,92 @@ export const _createFromApi = internalMutation({
       clientId: args.clientId,
       metadata: { type: "aml", reference, sandbox: true },
     });
-    return { reference, status: "completed" as const, verdict: "pass" as const, sandbox: true };
+    return { reference, status: "completed" as const, verdict: "pass" as const, sandbox: true, monitoringId: null };
   },
 });
 
+export type ScreeningSubject = AmlSubjectDetails & {
+  subjectName: string;
+  entityType: "individual" | "entity";
+  country?: string;
+};
+
+const OPENSANCTIONS_BATCH_SIZE = 20;
+// Position lookups per screening batch (one OpenSanctions request each).
+const MAX_POSITION_LOOKUPS = 20;
+const MAX_POSITION_LOOKUPS_PER_SUBJECT = 3;
+
+function toOpenSanctionsSubject(subject: ScreeningSubject) {
+  return {
+    name: subject.subjectName,
+    entityType: subject.entityType,
+    country: subject.country,
+    aliases: subject.aliases,
+    birthDate: subject.dateOfBirth,
+    nationality: subject.nationality,
+    idNumber: subject.idNumber,
+    registrationNumber: subject.registrationNumber,
+    jurisdiction: subject.jurisdiction,
+  };
+}
+
+function logOpenSanctionsError(error: unknown) {
+  // No subject data in the log line.
+  console.error("[OpenSanctions] screening unavailable", {
+    status: error instanceof OpenSanctionsRequestError ? error.status : undefined,
+    message: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+  });
+}
+
 // Never throws: any failure is reported as a coverage gap so the screening
 // is held for review instead of passing or failing outright.
-async function screenOpenSanctions(
-  subject: AmlSubjectDetails & { subjectName: string; entityType: "individual" | "entity"; country?: string },
-): Promise<OpenSanctionsOutcome> {
+async function screenOpenSanctions(subjects: ScreeningSubject[]): Promise<OpenSanctionsOutcome[]> {
   const apiKey = process.env.OPENSANCTIONS_API_KEY?.trim();
-  if (!apiKey) return { status: "not_configured" };
-  try {
-    const matches = await matchOpenSanctions(
-      {
-        name: subject.subjectName,
-        entityType: subject.entityType,
-        country: subject.country,
-        aliases: subject.aliases,
-        birthDate: subject.dateOfBirth,
-        nationality: subject.nationality,
-        idNumber: subject.idNumber,
-        registrationNumber: subject.registrationNumber,
-        jurisdiction: subject.jurisdiction,
-      },
-      { apiKey },
-    );
-    return { status: "screened", matches: annotateBirthDates(matches, subject.dateOfBirth) };
-  } catch (error) {
-    // No subject data in the log line.
-    console.error("[OpenSanctions] screening unavailable", {
-      status: error instanceof OpenSanctionsRequestError ? error.status : undefined,
-      message: error instanceof Error ? error.message.slice(0, 200) : "unknown",
-    });
-    return { status: "unavailable" };
+  if (!apiKey) return subjects.map(() => ({ status: "not_configured" as const }));
+  const outcomes: OpenSanctionsOutcome[] = [];
+  for (let start = 0; start < subjects.length; start += OPENSANCTIONS_BATCH_SIZE) {
+    const batch = subjects.slice(start, start + OPENSANCTIONS_BATCH_SIZE);
+    try {
+      const results = await matchOpenSanctionsMany(batch.map(toOpenSanctionsSubject), { apiKey });
+      results.forEach((result, index) => {
+        if (result instanceof OpenSanctionsRequestError) {
+          logOpenSanctionsError(result);
+          outcomes.push({ status: "unavailable" });
+        } else {
+          outcomes.push({ status: "screened", matches: annotateBirthDates(result, batch[index].dateOfBirth) });
+        }
+      });
+    } catch (error) {
+      logOpenSanctionsError(error);
+      for (const _ of batch) outcomes.push({ status: "unavailable" });
+    }
+  }
+  await addPepPositions(outcomes, apiKey);
+  return outcomes;
+}
+
+// Looks up recorded positions for relevant PEP matches (not close
+// associates, who are always Class 4), so the PEP class comes from the
+// actual office held. A failed lookup keeps the topic-based class.
+async function addPepPositions(outcomes: OpenSanctionsOutcome[], apiKey: string) {
+  let lookups = 0;
+  for (const outcome of outcomes) {
+    if (outcome.status !== "screened") continue;
+    const relevant = new Set(relevantMatches(outcome.matches).map((match) => match.id));
+    let perSubject = 0;
+    for (let index = 0; index < outcome.matches.length; index++) {
+      const match = outcome.matches[index];
+      if (!relevant.has(match.id) || !match.topics.includes("role.pep")) continue;
+      if (lookups >= MAX_POSITION_LOOKUPS || perSubject >= MAX_POSITION_LOOKUPS_PER_SUBJECT) return;
+      lookups += 1;
+      perSubject += 1;
+      try {
+        const entity = await fetchEntityNested(match.id, { apiKey });
+        outcome.matches[index] = applyPepPositions(match, parsePepPositions(entity));
+      } catch (error) {
+        logOpenSanctionsError(error);
+      }
+    }
   }
 }
 
@@ -341,6 +423,116 @@ function finalDecision(candidates: Array<Candidate<Entry>>, coverage: Coverage) 
   };
 }
 
+// The outcome of screening one subject, in the shape amlPersistence.complete
+// stores (minus the verification and client ids).
+export type ScreeningOutcome = {
+  verdict: "pass" | "review" | "reject";
+  reason: string;
+  complete: boolean;
+  confidence?: number;
+  coverage: {
+    checked: Array<{ versionId: Id<"watchlistVersions">; sourceKey: SourceKey; fetchedAt: number; stale: boolean }>;
+    missing: SourceKey[];
+    stale: SourceKey[];
+    openSanctions: OpenSanctionsOutcome["status"];
+  };
+  matches: Array<Record<string, unknown> & { source: string; sourceRecordId: string }>;
+  candidateCount: number;
+};
+
+// Screens subjects against the Sentinel-owned watchlists and OpenSanctions.
+// The watchlist entries are read once for the whole batch, so ongoing
+// monitoring can re-screen many subjects in one pass.
+export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[]): Promise<ScreeningOutcome[]> {
+  // Runs alongside the local watchlist scan; never rejects.
+  const openSanctionsPromise = screenOpenSanctions(subjects);
+  const coverage: Coverage = await ctx.runQuery(internalApi.amlPersistence.getActiveVersions, { now: Date.now() });
+  const candidates: Array<Array<Candidate<Entry>>> = subjects.map(() => []);
+  for (const version of coverage.versions) {
+    let cursor: string | undefined;
+    while (true) {
+      const page = await ctx.runQuery(internalApi.amlPersistence.getEntryPage, {
+        versionId: version._id,
+        cursor,
+        numItems: ENTRY_PAGE_SIZE,
+      });
+      for (const entry of page.page as Entry[]) {
+        subjects.forEach((subject, index) => {
+          const candidate = scoreCandidate(subject.subjectName, subject.entityType, subject.country, entry);
+          if (candidate) candidates[index].push(candidate);
+        });
+      }
+      if (page.isDone) break;
+      cursor = page.continueCursor;
+    }
+  }
+  const openSanctionsOutcomes = await openSanctionsPromise;
+
+  return subjects.map((_, index) => {
+    const subjectCandidates = candidates[index].sort(compareCandidates);
+    const openSanctions = openSanctionsOutcomes[index];
+    // Decide on ALL candidates, then keep only the strongest for storage.
+    const decision = combineWithOpenSanctions(finalDecision(subjectCandidates, coverage), openSanctions);
+    const stored = subjectCandidates.slice(0, MATCH_LIMIT);
+    const openSanctionsMatches = openSanctions.status === "screened" ? relevantMatches(openSanctions.matches) : [];
+    const hasAnyMatch = stored.length > 0 || openSanctionsMatches.length > 0;
+    return {
+      verdict: decision.verdict,
+      reason: decision.reason,
+      complete: decision.complete,
+      confidence: !decision.complete && !hasAnyMatch ? 0 : undefined,
+      coverage: {
+        checked: coverage.versions.map((version) => ({
+          versionId: version._id,
+          sourceKey: version.sourceKey,
+          fetchedAt: version.fetchedAt,
+          stale: version.stale,
+        })),
+        missing: coverage.missing,
+        stale: coverage.stale,
+        openSanctions: openSanctions.status,
+      },
+      matches: [
+        ...stored.map((match) => ({
+          entryId: match._id,
+          versionId: match.versionId,
+          source: match.sourceKey,
+          sourceRecordId: match.sourceRecordId,
+          entityName: match.primaryName,
+          program: match.programs[0] ?? "unknown",
+          matchScore: match.nameScore,
+          matchMethod: match.method,
+          matchedCountry: match.countries[0],
+          countryMatch: match.countryMatch,
+          riskLevel: match.nameScore >= STRONG_MATCH_THRESHOLD ? ("critical" as const) : ("high" as const),
+          categories: ["sanctions" as const],
+        })),
+        ...openSanctionsMatches.slice(0, MATCH_LIMIT).map((match) => ({
+          source: "OPENSANCTIONS" as const,
+          sourceRecordId: match.id,
+          entityName: match.caption,
+          program: match.topics.join(", ") || match.datasets[0] || "unknown",
+          matchScore: Math.round(match.score * 100),
+          matchMethod: "provider_score" as const,
+          matchedCountry: match.countries[0],
+          riskLevel:
+            categorize(match) === "sanction" && match.score >= OPENSANCTIONS_STRONG_MATCH_SCORE
+              ? ("critical" as const)
+              : ("high" as const),
+          topics: match.topics.slice(0, 20),
+          datasets: match.datasets.slice(0, 20),
+          categories: riskCategories(match),
+          ...(pepClass(match) ? { pepClass: pepClass(match)! } : {}),
+          ...(match.birthDateMatch ? { birthDateMatch: match.birthDateMatch } : {}),
+          ...(match.pepStatus ? { pepStatus: match.pepStatus } : {}),
+          ...(match.pepPositions?.length ? { pepPositions: match.pepPositions.slice(0, 5) } : {}),
+        })),
+      ],
+      candidateCount: subjectCandidates.length,
+    };
+  });
+}
+
 export const runScreening = internalAction({
   args: {
     verificationId: v.id("verifications"),
@@ -352,89 +544,22 @@ export const runScreening = internalAction({
   },
   handler: async (ctx, args) => {
     await ctx.runMutation(internalApi.verifications._markProcessing, { id: args.verificationId });
-    // Runs alongside the local watchlist scan; never rejects.
-    const openSanctionsPromise = screenOpenSanctions(args);
     try {
-      const coverage: Coverage = await ctx.runQuery(internalApi.amlPersistence.getActiveVersions, { now: Date.now() });
-      const candidates: Array<Candidate<Entry>> = [];
-      for (const version of coverage.versions) {
-        let cursor: string | undefined;
-        while (true) {
-          const page = await ctx.runQuery(internalApi.amlPersistence.getEntryPage, {
-            versionId: version._id,
-            cursor,
-            numItems: ENTRY_PAGE_SIZE,
-          });
-          for (const entry of page.page as Entry[]) {
-            const candidate = scoreCandidate(args.subjectName, args.entityType, args.country, entry);
-            if (candidate) candidates.push(candidate);
-          }
-          if (page.isDone) break;
-          cursor = page.continueCursor;
-        }
-      }
-      candidates.sort(compareCandidates);
-      const openSanctions = await openSanctionsPromise;
-      // Decide on ALL candidates, then keep only the strongest for storage.
-      const decision = combineWithOpenSanctions(finalDecision(candidates, coverage), openSanctions);
-      const stored = candidates.slice(0, MATCH_LIMIT);
-      const openSanctionsMatches = openSanctions.status === "screened" ? relevantMatches(openSanctions.matches) : [];
-      const hasAnyMatch = stored.length > 0 || openSanctionsMatches.length > 0;
+      const { verificationId, clientId, ...subject } = args;
+      const [outcome] = await screenSubjects(ctx, [subject]);
       await ctx.runMutation(internalApi.amlPersistence.complete, {
-        verificationId: args.verificationId,
-        clientId: args.clientId,
+        verificationId,
+        clientId,
         subjectName: args.subjectName,
-        verdict: decision.verdict,
-        reason: decision.reason,
-        confidence: !decision.complete && !hasAnyMatch ? 0 : undefined,
-        chargeCredits: decision.complete,
-        coverage: {
-          checked: coverage.versions.map((version) => ({
-            versionId: version._id,
-            sourceKey: version.sourceKey,
-            fetchedAt: version.fetchedAt,
-            stale: version.stale,
-          })),
-          missing: coverage.missing,
-          stale: coverage.stale,
-          openSanctions: openSanctions.status,
-        },
-        matches: [
-          ...stored.map((match) => ({
-            entryId: match._id,
-            versionId: match.versionId,
-            source: match.sourceKey,
-            sourceRecordId: match.sourceRecordId,
-            entityName: match.primaryName,
-            program: match.programs[0] ?? "unknown",
-            matchScore: match.nameScore,
-            matchMethod: match.method,
-            matchedCountry: match.countries[0],
-            countryMatch: match.countryMatch,
-            riskLevel: match.nameScore >= STRONG_MATCH_THRESHOLD ? ("critical" as const) : ("high" as const),
-            categories: ["sanctions" as const],
-          })),
-          ...openSanctionsMatches.slice(0, MATCH_LIMIT).map((match) => ({
-            source: "OPENSANCTIONS" as const,
-            sourceRecordId: match.id,
-            entityName: match.caption,
-            program: match.topics.join(", ") || match.datasets[0] || "unknown",
-            matchScore: Math.round(match.score * 100),
-            matchMethod: "provider_score" as const,
-            matchedCountry: match.countries[0],
-            riskLevel:
-              categorize(match) === "sanction" && match.score >= OPENSANCTIONS_STRONG_MATCH_SCORE
-                ? ("critical" as const)
-                : ("high" as const),
-            topics: match.topics.slice(0, 20),
-            datasets: match.datasets.slice(0, 20),
-            categories: riskCategories(match),
-            ...(pepClass(match) ? { pepClass: pepClass(match)! } : {}),
-            ...(match.birthDateMatch ? { birthDateMatch: match.birthDateMatch } : {}),
-          })),
-        ],
+        verdict: outcome.verdict,
+        reason: outcome.reason,
+        confidence: outcome.confidence,
+        chargeCredits: outcome.complete,
+        complete: outcome.complete,
+        coverage: outcome.coverage,
+        matches: outcome.matches,
       });
-      return { verdict: decision.verdict, matches: candidates.length };
+      return { verdict: outcome.verdict, matches: outcome.candidateCount };
     } catch (error) {
       const reason = error instanceof Error ? error.message : "AML screening failed";
       await ctx.runMutation(internalApi.verifications._fail, { id: args.verificationId, reason: "AML screening unavailable; manual operational review required." });

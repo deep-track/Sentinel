@@ -15,7 +15,8 @@ const WEBHOOK_TIMEOUT_MS = 10_000;
 
 // payload
 export type WebhookPayload = {
-  event: "sentinel.scan.complete";
+  // "sentinel.monitoring.alert" for alerts raised by ongoing AML monitoring.
+  event: "sentinel.scan.complete" | "sentinel.monitoring.alert";
   scan_id: string;
   status: "PASS" | "REVIEW" | "REJECT" | "FAILED";
   timestamp: string; // ISO 8601
@@ -58,8 +59,9 @@ export function buildWebhookPayload(params: {
   verdict: "pass" | "review" | "reject";
   result: unknown;
 }): WebhookPayload {
+  const monitoring = (params.result as { monitoring?: unknown } | null)?.monitoring;
   return {
-    event: "sentinel.scan.complete",
+    event: monitoring ? "sentinel.monitoring.alert" : "sentinel.scan.complete",
     scan_id: params.reference,
     status: verdictToWebhookStatus(params.verdict),
     timestamp: new Date().toISOString(),
