@@ -99,3 +99,42 @@ test("billing: unbilled work = open review items with no deduction yet", () => {
   assert.match(source, /withIndex\("by_verification", \(q\) => q\.eq\("verificationId", item\.verificationId\)\)\s*\.filter\(\(q\) => q\.eq\(q\.field\("type"\), "deduction"\)\)/);
   assert.match(source, /if \(charged\) return null;/);
 });
+
+// ── Client health ───────────────────────────────────────────────────────────
+
+const clientsModule = loadWithStubs("backend/convex/backOfficeClients.ts");
+const DAY = 24 * 60 * 60 * 1000;
+
+test("client health: churn warning needs a real baseline and a 50% drop", () => {
+  assert.equal(clientsModule.churnRisk(5, 10), true);
+  assert.equal(clientsModule.churnRisk(6, 10), false);
+  assert.equal(clientsModule.churnRisk(0, 9), false, "too small a baseline to judge");
+  assert.equal(clientsModule.churnRisk(0, 40), true);
+});
+
+test("client health: API key flags", () => {
+  const now = 1_800_000_000_000;
+  assert.deepEqual(clientsModule.keyFlags({ revoked: false, createdAt: now - DAY }, now), ["never used"]);
+  assert.deepEqual(clientsModule.keyFlags({ revoked: false, createdAt: now - DAY, lastUsedAt: now - 31 * DAY }, now), ["idle 31 days"]);
+  assert.deepEqual(clientsModule.keyFlags({ revoked: false, createdAt: now - 200 * DAY, lastUsedAt: now - DAY }, now), ["due for rotation"]);
+  assert.deepEqual(clientsModule.keyFlags({ revoked: true, createdAt: now - 400 * DAY }, now), [], "revoked keys need nothing");
+});
+
+test("client health: every API-key route logs client errors, and logging never breaks a response", () => {
+  const http = read("backend/convex/http.ts");
+  for (const route of ["POST /v1/verify/idp", "POST /v1/verify/aml", "GET /v1/verify", "GET /v1/verify/*", "GET /v1/credits", "GET /v1/credits/ledger"]) {
+    assert.ok(http.includes(`apiAction("${route}"`), route);
+  }
+  assert.doesNotMatch(http, /handler: httpAction\(async \(ctx, request\) => \{\s*const authResult = await authenticateAndRateLimit/, "no route bypasses the wrapper");
+  const logger = http.slice(http.indexOf("async function logClientError"), http.indexOf("function apiAction"));
+  assert.match(logger, /try \{[\s\S]*_logApiError[\s\S]*\} catch/);
+  assert.match(http, /return \{ response: rateLimited\(rateLimit\.retryAfterMs\), auth \}/, "rate limits after auth are attributed");
+  assert.match(read("backend/convex/crons.ts"), /internal\.backOfficeClients\.purgeApiErrors/);
+});
+
+test("client health: reads need an internal role and test calls are left out of usage", () => {
+  const source = read("backend/convex/backOfficeClients.ts");
+  const query = source.slice(source.indexOf("export const clientHealth"));
+  assert.match(query.slice(0, 400), /await requireInternalUser\(ctx\)/);
+  assert.match(query, /if \(isSandbox\(row\)\) continue;/);
+});
