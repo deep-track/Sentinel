@@ -49,6 +49,7 @@ const SOURCE_LABELS: Record<string, string> = {
   UN_CONSOLIDATED: "UN Consolidated",
   OPENSANCTIONS: "OpenSanctions",
   FBI_MOST_WANTED: "FBI Most Wanted",
+  ADVERSE_MEDIA: "Adverse media",
 };
 
 // Fixed order and colours so a list keeps its colour across weeks.
@@ -57,6 +58,7 @@ const SOURCE_COLORS: Record<string, string> = {
   UN_CONSOLIDATED: "#7EC7EA",
   OPENSANCTIONS: "#E8A33D",
   FBI_MOST_WANTED: "#E5484D",
+  ADVERSE_MEDIA: "#8E4EC6",
 };
 
 function pct(part: number, whole: number) {

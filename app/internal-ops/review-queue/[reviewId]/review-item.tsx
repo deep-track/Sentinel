@@ -65,6 +65,7 @@ type AmlMatch = {
   categories?: RiskCategory[];
   pepClass?: PepClass;
   birthDateMatch?: "match" | "mismatch" | "unknown";
+  media?: { url: string; domain: string | null; publishedAt: string | null; summary: string; severity: string };
 };
 
 type AmlResult = {
@@ -315,7 +316,19 @@ function VerificationResult({ verification }: { verification: VerificationDetail
             {aml.matches.map((match) => (
               <Row key={`${match.source}:${match.sourceRecordId}`}>
                 <Cell className="max-w-[220px] truncate">
-                  <span title={match.entityName}>{match.entityName}</span>
+                  {match.media ? (
+                    <a href={match.media.url} target="_blank" rel="noopener noreferrer" title={match.media.summary} className="text-sentinel-blue hover:underline">
+                      {match.entityName}
+                    </a>
+                  ) : (
+                    <span title={match.entityName}>{match.entityName}</span>
+                  )}
+                  {match.media ? (
+                    <span className="block whitespace-normal text-[10px] text-sentinel-subtle">
+                      {[match.media.domain, match.media.publishedAt?.slice(0, 10), `${match.media.severity} severity`].filter(Boolean).join(" · ")}
+                      {match.media.summary ? ` — ${match.media.summary}` : ""}
+                    </span>
+                  ) : null}
                   {match.birthDateMatch && match.birthDateMatch !== "unknown" ? (
                     <span className="block text-[10px] text-sentinel-subtle">
                       date of birth {match.birthDateMatch === "match" ? "matches" : "differs"}
