@@ -111,6 +111,18 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"])
     .index("by_provider_message", ["providerMessageId"]),
+  // Back Office service health: one row per scheduled probe of an external
+  // dependency (every 15 min, kept 7 days).
+  serviceHealthChecks: defineTable({
+    service: v.union(v.literal("deeptrack_live"), v.literal("opensanctions"), v.literal("internal_api")),
+    ok: v.boolean(),
+    httpStatus: v.optional(v.number()),
+    latencyMs: v.optional(v.number()),
+    error: v.optional(v.string()),
+    checkedAt: v.number(),
+  })
+    .index("by_service_and_checked_at", ["service", "checkedAt"])
+    .index("by_checked_at", ["checkedAt"]),
   creditLedger: defineTable({
     clientId: v.id("clients"),
     verificationId: v.optional(v.id("verifications")),

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Building2, ClipboardCheck, Radar, ShieldAlert, type LucideIcon } from "lucide-react";
+import { Activity, ArrowLeft, Building2, ClipboardCheck, Radar, ShieldAlert, type LucideIcon } from "lucide-react";
 import { cn } from "@/backend/lib/utils";
 
 type NavItem = { title: string; url: string; icon: LucideIcon };
@@ -10,14 +10,18 @@ type NavItem = { title: string; url: string; icon: LucideIcon };
 // Only pages that exist under app/internal-ops are listed here.
 const SECTIONS: Array<{ label: string; items: NavItem[] }> = [
   {
-    label: "Cross-client",
+    label: "Back office",
     items: [
       { title: "Overview", url: "/internal-ops/overview", icon: Radar },
-      { title: "Client accounts", url: "/internal-ops/clients", icon: Building2 },
+      { title: "Service health", url: "/internal-ops/health", icon: Activity },
     ],
   },
   {
-    label: "Quality & review",
+    label: "Clients",
+    items: [{ title: "Client accounts", url: "/internal-ops/clients", icon: Building2 }],
+  },
+  {
+    label: "Reviews & risk",
     items: [
       { title: "Review queue", url: "/internal-ops/review-queue", icon: ClipboardCheck },
       { title: "Screening monitor", url: "/internal-ops/monitoring", icon: ShieldAlert },
@@ -28,7 +32,7 @@ const SECTIONS: Array<{ label: string; items: NavItem[] }> = [
 export function OpsNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Sentinel Ops" className="flex flex-col gap-1">
+    <nav aria-label="Sentinel Back Office" className="flex flex-col gap-1">
       {SECTIONS.map((section) => (
         <div key={section.label} className="flex flex-col gap-1">
           <div className="px-1.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-sentinel-faint">

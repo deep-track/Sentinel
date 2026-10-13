@@ -118,14 +118,14 @@ export function AppSidebar({ role }: Props) {
 
 	const canManageMembers = isInternalAdminRole(role);
 	const mainItems = getMainItems();
-	// Overview, Client Portal, then Sentinel Ops (internal roles only) and
+	// Overview, Client Portal, then Sentinel Back Office (internal roles only) and
 	// Members (internal admins only) ahead of the verification products.
 	const extraItems: typeof mainItems = [];
-	// Sentinel Ops is restricted to internal (DeepTrack staff) roles and must
+	// Sentinel Back Office is restricted to internal (DeepTrack staff) roles and must
 	// never be visible to client users. Backend enforcement lives in
 	// app/internal-ops/layout.tsx; this only hides the link.
 	if (isInternalOpsRole(role)) {
-		extraItems.push({ title: "Sentinel Ops", url: "/internal-ops", icon: Radar });
+		extraItems.push({ title: "Sentinel Back Office", url: "/internal-ops", icon: Radar });
 	}
 	if (canManageMembers) {
 		extraItems.push({ title: "Members", url: "/members", icon: User2 });

@@ -127,7 +127,7 @@ export const getClient = query({
   },
 });
 
-// Cross-client overview for the Sentinel Ops console. Time boundaries come
+// Cross-client overview for the Sentinel Back Office. Time boundaries come
 // from the browser (queries must not read the wall clock).
 export const opsOverview = query({
   args: { now: v.number(), dayStart: v.number(), monthStart: v.number(), recentLimit: v.optional(v.number()) },

@@ -11,4 +11,7 @@ crons.cron("generate weekly compliance report", "30 4 * * 1", internal.complianc
 // self-continuing batches (~20k rows are superseded per daily ingestion).
 crons.interval("purge superseded watchlist versions", { hours: 1 }, internal.watchlists.purgeWatchlistVersions, {});
 
+// Back Office service health probes (DeepTrack Live, OpenSanctions, scanning service).
+crons.interval("probe external services", { minutes: 15 }, internal.backOfficeHealth.runHealthChecks, {});
+
 export default crons;
