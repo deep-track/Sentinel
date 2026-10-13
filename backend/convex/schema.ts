@@ -111,6 +111,24 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"])
     .index("by_provider_message", ["providerMessageId"]),
+  // Back Office: data subject requests (Kenya Data Protection Act) tracked by
+  // the compliance team. `subject` should be a verification reference, not
+  // the person's details.
+  dataRequests: defineTable({
+    requestType: v.union(v.literal("access"), v.literal("erasure"), v.literal("rectification"), v.literal("objection")),
+    subject: v.string(),
+    clientId: v.optional(v.id("clients")),
+    status: v.union(v.literal("open"), v.literal("in_progress"), v.literal("completed"), v.literal("rejected")),
+    receivedAt: v.number(),
+    dueAt: v.number(),
+    notes: v.optional(v.string()),
+    createdBy: v.string(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_status_and_due", ["status", "dueAt"])
+    .index("by_received_at", ["receivedAt"]),
+
   // Back Office client health: one row per 4xx/5xx an authenticated API
   // client received (kept 30 days). No request bodies or personal data.
   apiErrors: defineTable({
@@ -349,6 +367,11 @@ export default defineSchema({
     exportStorageId: v.optional(v.id("_storage")),
     // True when a source hit the export row cap, so counts are lower bounds.
     truncated: v.optional(v.boolean()),
+    // Back Office sign-off (internal_admin), recorded once.
+    signedOffBy: v.optional(v.string()),
+    signedOffByName: v.optional(v.string()),
+    signedOffAt: v.optional(v.number()),
+    signOffNotes: v.optional(v.string()),
     failureReason: v.optional(v.string()),
   })
     .index("by_generated_at", ["generatedAt"])
