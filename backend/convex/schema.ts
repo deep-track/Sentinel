@@ -284,6 +284,7 @@ export default defineSchema({
       ),
     ),
     pepClass: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4))),
+    pepStatus: v.optional(v.union(v.literal("current"), v.literal("former"), v.literal("unknown"))),
     matchMethod: v.union(
       v.literal("exact"),
       v.literal("normalized"),
@@ -298,6 +299,61 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"])
     .index("by_watchlist_entry", ["watchlistEntryId"]),
+
+  // Ongoing AML monitoring (amlMonitoring.ts, lib/amlMonitoringStore.ts).
+  // Each active subject is re-screened daily; `hits` is the baseline from the
+  // last complete screening, and only new or more severe hits alert.
+  amlMonitoredSubjects: defineTable({
+    clientId: v.id("clients"),
+    reference: v.string(), // client-facing id, "mon_…"
+    status: v.union(v.literal("active"), v.literal("removed")),
+    subjectName: v.string(),
+    entityType: v.union(v.literal("individual"), v.literal("entity")),
+    country: v.optional(v.string()),
+    aliases: v.optional(v.array(v.string())),
+    dateOfBirth: v.optional(v.string()),
+    nationality: v.optional(v.string()),
+    idNumber: v.optional(v.string()),
+    registrationNumber: v.optional(v.string()),
+    jurisdiction: v.optional(v.string()),
+    externalRef: v.optional(v.string()), // the client's own customer id
+    enrolledVerificationId: v.id("verifications"),
+    enrolledBy: v.string(),
+    baselineSet: v.boolean(),
+    hits: v.array(
+      v.object({
+        key: v.string(),
+        source: v.string(),
+        sourceRecordId: v.string(),
+        entityName: v.string(),
+        categories: v.array(
+          v.union(
+            v.literal("sanctions"),
+            v.literal("pep"),
+            v.literal("special_interest"),
+            v.literal("fitness_probity"),
+            v.literal("adverse_media"),
+            v.literal("insolvency"),
+          ),
+        ),
+        pepClass: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4))),
+        riskLevel: v.union(v.literal("critical"), v.literal("high")),
+      }),
+    ),
+    screenCount: v.number(),
+    alertCount: v.number(),
+    lastScreenedAt: v.optional(v.number()),
+    lastAlertAt: v.optional(v.number()),
+    nextScreenAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    removedAt: v.optional(v.number()),
+  })
+    .index("by_client_and_status", ["clientId", "status", "createdAt"])
+    .index("by_status_and_next_screen", ["status", "nextScreenAt"])
+    .index("by_reference", ["reference"])
+    .index("by_client_and_external_ref", ["clientId", "externalRef"])
+    .index("by_enrolled_verification", ["enrolledVerificationId"]),
 
   reviewQueue: defineTable({
     verificationId: v.id("verifications"),

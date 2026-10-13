@@ -172,7 +172,7 @@ test("subject details are validated, stored and sent to OpenSanctions", () => {
   assert.match(aml, /Nationality and ID number apply to individuals only\./);
   assert.match(aml, /input: \{ subjectName, entityType: args\.entityType, country: country \?\? null, \.\.\.details \}/);
   assert.match(aml, /birthDate: subject\.dateOfBirth,/);
-  assert.match(aml, /annotateBirthDates\(matches, subject\.dateOfBirth\)/);
+  assert.match(aml, /annotateBirthDates\(result, batch\[index\]\.dateOfBirth\)/);
   assert.match(aml, /categories: \["sanctions" as const\]/, "OFAC / UN hits are sanctions");
   assert.match(aml, /categories: riskCategories\(match\)/);
   const http = read("backend/convex/http.ts");

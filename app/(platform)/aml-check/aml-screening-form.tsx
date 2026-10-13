@@ -34,6 +34,19 @@ type AmlRow = {
 
 type ListResult = { records: AmlRow[]; nextCursor: number | null };
 
+type MonitoredSubject = {
+  _id: string;
+  reference: string;
+  subjectName: string;
+  entityType: EntityType;
+  externalRef: string | null;
+  hits: Array<{ key: string; categories: RiskCategory[]; pepClass?: PepClass }>;
+  alertCount: number;
+  lastScreenedAt: number | null;
+  nextScreenAt: number | null;
+  createdAt: number;
+};
+
 function outcomeLabel(row: AmlRow): { label: string; className: string } {
   if (row.status === "failed") return { label: "Failed", className: "text-red-600 dark:text-red-400" };
   if (row.verdict === "pass") return { label: "Clear", className: "text-emerald-600 dark:text-emerald-400" };
@@ -59,6 +72,8 @@ const inputClass = "mt-2 w-full rounded-lg border p-2.5";
 
 export function AMLScreeningForm({ clientId, canSubmit }: { clientId: string; canSubmit: boolean }) {
   const submit = useMutation(anyApi.aml.submit);
+  const removeMonitored = useMutation(anyApi.amlMonitoring.remove);
+  const monitored = useAuthedQuery(anyApi.amlMonitoring.listForClient, { clientId }) as MonitoredSubject[] | undefined;
   const result = useAuthedQuery(anyApi.verifications.list, { type: "aml", limit: 50 }) as ListResult | undefined;
   // verifications.list spans every organization the user can access; show
   // only the one selected in the sidebar.
@@ -73,6 +88,9 @@ export function AMLScreeningForm({ clientId, canSubmit }: { clientId: string; ca
   const [idNumber, setIdNumber] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [jurisdiction, setJurisdiction] = useState("");
+  const [monitor, setMonitor] = useState(false);
+  const [externalRef, setExternalRef] = useState("");
+  const [removing, setRemoving] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "info" | "error"; text: string } | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -99,6 +117,7 @@ export function AMLScreeningForm({ clientId, canSubmit }: { clientId: string; ca
         entityType,
         country: optional(country),
         aliases: aliasList.length ? aliasList : undefined,
+        ...(monitor ? { monitor: true, externalRef: optional(externalRef) } : {}),
         ...(individual
           ? { dateOfBirth: optional(dateOfBirth), nationality: optional(nationality), idNumber: optional(idNumber) }
           : { registrationNumber: optional(registrationNumber), jurisdiction: optional(jurisdiction) }),
@@ -110,7 +129,13 @@ export function AMLScreeningForm({ clientId, canSubmit }: { clientId: string; ca
       setIdNumber("");
       setRegistrationNumber("");
       setJurisdiction("");
-      setMessage({ tone: "info", text: "Screening queued. Results will update automatically." });
+      setExternalRef("");
+      setMessage({
+        tone: "info",
+        text: monitor
+          ? "Screening queued, and the subject will be re-screened daily."
+          : "Screening queued. Results will update automatically.",
+      });
     } catch (error) {
       setMessage({ tone: "error", text: getErrorMessage(error, "Screening could not be queued.") });
     } finally {
@@ -222,6 +247,24 @@ export function AMLScreeningForm({ clientId, canSubmit }: { clientId: string; ca
               </>
             )}
           </div>
+          <div className="flex flex-wrap items-end gap-4">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={monitor} onChange={(e) => setMonitor(e.target.checked)} />
+              Keep monitoring (re-screen daily, alert on new hits)
+            </label>
+            {monitor ? (
+              <label className="text-sm font-medium">
+                Customer reference
+                <input
+                  value={externalRef}
+                  onChange={(e) => setExternalRef(e.target.value)}
+                  className={inputClass}
+                  placeholder="Optional, your customer id"
+                  maxLength={100}
+                />
+              </label>
+            ) : null}
+          </div>
           <p className="text-xs text-muted-foreground">
             Screens sanctions and watchlists, politically exposed persons (Class 1–4), special interest persons and
             entities, and fitness and probity lists. A date of birth or ID number reduces false matches.
@@ -245,6 +288,65 @@ export function AMLScreeningForm({ clientId, canSubmit }: { clientId: string; ca
           Your role can view screenings but not run new ones.
         </div>
       )}
+
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="border-b p-4">
+          <p className="font-medium">Monitored subjects</p>
+          <p className="text-xs text-muted-foreground">
+            Re-screened every day. New or more severe hits appear under recent screenings and are sent to your webhook.
+          </p>
+        </div>
+        <div className="divide-y">
+          {monitored === undefined ? (
+            <div className="p-4" aria-busy="true">
+              <Skeleton className="h-5 w-full" />
+            </div>
+          ) : monitored.length === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground">No subjects are being monitored.</p>
+          ) : (
+            monitored.map((subject) => (
+              <div key={subject._id} className="flex items-center justify-between gap-4 p-4 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">
+                    {subject.subjectName}
+                    {subject.externalRef ? <span className="ml-2 text-xs text-muted-foreground">{subject.externalRef}</span> : null}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {subject.lastScreenedAt ? (
+                      <>
+                        Last screened <ClientDate value={subject.lastScreenedAt} format="PPp" />
+                      </>
+                    ) : (
+                      "Waiting for the first screening"
+                    )}
+                    {` · ${subject.hits.length} current hit${subject.hits.length === 1 ? "" : "s"}`}
+                    {subject.alertCount > 0 ? ` · ${subject.alertCount} alert${subject.alertCount === 1 ? "" : "s"}` : null}
+                  </p>
+                </div>
+                {canSubmit ? (
+                  <button
+                    type="button"
+                    disabled={removing === subject._id}
+                    onClick={async () => {
+                      setRemoving(subject._id);
+                      try {
+                        await removeMonitored({ subjectId: subject._id });
+                      } catch (error) {
+                        setMessage({ tone: "error", text: getErrorMessage(error, "Could not stop monitoring.") });
+                      } finally {
+                        setRemoving(null);
+                      }
+                    }}
+                    className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                  >
+                    Stop monitoring
+                  </button>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
 
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="border-b p-4 font-medium">Recent screenings</div>

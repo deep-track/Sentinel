@@ -16,6 +16,7 @@ import { callbackTokenMatches, mapAfricasTalkingDeliveryStatus } from "./lib/afr
 import { MAX_MEDIA_BASE64_CHARS } from "./lib/verificationTypes";
 import type { IdpInput } from "./verifications";
 import { MAX_ALIASES, MAX_COUNTRY_LENGTH, MAX_IDENTIFIER_LENGTH, MAX_SUBJECT_NAME_LENGTH, type AmlSubjectDetails } from "./aml";
+import { MAX_EXTERNAL_REF_LENGTH } from "./lib/amlMonitoringStore";
 
 const http = httpRouter();
 
@@ -125,7 +126,14 @@ function apiAction(route: string, handler: (ctx: ActionCtx, request: Request, au
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; response: Response };
 
-type Created = { reference: string; status: "queued" | "completed"; verdict: "pass" | null; sandbox: boolean };
+type Created = {
+  reference: string;
+  status: "queued" | "completed";
+  verdict: "pass" | null;
+  sandbox: boolean;
+  // AML only: the monitored subject's id when the request asked for monitoring.
+  monitoringId?: string | null;
+};
 
 // Runs a create mutation and maps its known ConvexError codes to HTTP
 // statuses; returns 202 with the client-facing id on success.
@@ -149,6 +157,7 @@ async function createdResponse(type: string, create: () => Promise<Created>): Pr
       type,
       status: created.status,
       ...(created.sandbox ? { verdict: created.verdict, sandbox: true } : {}),
+      ...(created.monitoringId !== undefined ? { monitoringId: created.monitoringId } : {}),
     },
     202,
   );
@@ -333,7 +342,13 @@ http.route({
   }),
 });
 
-type AmlBody = AmlSubjectDetails & { subjectName: string; entityType: "individual" | "entity"; country?: string };
+type AmlBody = AmlSubjectDetails & {
+  subjectName: string;
+  entityType: "individual" | "entity";
+  country?: string;
+  monitor?: boolean;
+  externalRef?: string;
+};
 const AML_ENTITY_TYPES = ["individual", "entity"] as const;
 // Optional string fields and their maximum lengths. Whether each applies to
 // the entity type, and the date format, are checked in aml.normalizeAmlRequest.
@@ -379,6 +394,14 @@ function parseAmlBody(body: unknown): Parsed<AmlBody> {
   ) {
     invalid.push("aliases");
   }
+  if (b.monitor !== undefined && b.monitor !== null && typeof b.monitor !== "boolean") invalid.push("monitor");
+  if (
+    b.externalRef !== undefined &&
+    b.externalRef !== null &&
+    (typeof b.externalRef !== "string" || b.externalRef.trim().length > MAX_EXTERNAL_REF_LENGTH)
+  ) {
+    invalid.push("externalRef");
+  }
   if (invalid.length > 0) {
     return {
       ok: false,
@@ -395,6 +418,8 @@ function parseAmlBody(body: unknown): Parsed<AmlBody> {
             idNumber: `optional, individuals only: national ID or passport number, at most ${MAX_IDENTIFIER_LENGTH} characters`,
             registrationNumber: `optional, entities only: company registration number, at most ${MAX_IDENTIFIER_LENGTH} characters`,
             jurisdiction: "optional, entities only: country of incorporation (ISO code or name)",
+            monitor: "optional boolean: keep re-screening this subject daily and alert on new hits",
+            externalRef: `optional, with monitor: your customer id, at most ${MAX_EXTERNAL_REF_LENGTH} characters`,
           },
         },
         400,
@@ -408,9 +433,19 @@ function parseAmlBody(body: unknown): Parsed<AmlBody> {
     if (typeof value === "string" && value.trim()) details[field] = value.trim() as never;
   }
   if (Array.isArray(b.aliases) && b.aliases.length > 0) details.aliases = (b.aliases as string[]).map((alias) => alias.trim());
+  const monitoring = {
+    ...(b.monitor === true ? { monitor: true } : {}),
+    ...(typeof b.externalRef === "string" && b.externalRef.trim() ? { externalRef: b.externalRef.trim() } : {}),
+  };
   return {
     ok: true,
-    value: { subjectName: (b.subjectName as string).trim(), entityType: b.entityType as AmlBody["entityType"], country, ...details },
+    value: {
+      subjectName: (b.subjectName as string).trim(),
+      entityType: b.entityType as AmlBody["entityType"],
+      country,
+      ...details,
+      ...monitoring,
+    },
   };
 }
 
@@ -439,6 +474,59 @@ http.route({
   }),
 });
 
+
+// ── Ongoing AML monitoring ──────────────────────────────────────────────────
+// Subjects are enrolled with POST /v1/verify/aml { monitor: true }. Alerts
+// arrive as AML verifications (webhook event "sentinel.monitoring.alert").
+
+http.route({
+  path: "/v1/monitoring/subjects",
+  method: "GET",
+  handler: apiAction("GET /v1/monitoring/subjects", async (ctx, request, auth) => {
+    const url = new URL(request.url);
+    const limit = parseNumberParam(url, "limit", { integer: true, min: 1, max: 100 });
+    if (!limit.ok) return limit.response;
+    const before = parseNumberParam(url, "before", { min: 0, max: Number.MAX_SAFE_INTEGER });
+    if (!before.ok) return before.response;
+    const result = await ctx.runQuery(internal.amlMonitoring._listForApi, {
+      clientId: auth.clientId,
+      limit: limit.value ?? 50,
+      before: before.value,
+    });
+    return json(result);
+  }),
+});
+
+function monitoringReference(request: Request): string | null {
+  const reference = new URL(request.url).pathname.split("/").pop();
+  return reference && /^mon_[A-Za-z0-9]{1,64}$/.test(reference) ? reference : null;
+}
+
+http.route({
+  pathPrefix: "/v1/monitoring/subjects/",
+  method: "GET",
+  handler: apiAction("GET /v1/monitoring/subjects/*", async (ctx, request, auth) => {
+    const reference = monitoringReference(request);
+    if (!reference) return json({ error: "Missing or invalid monitored subject id" }, 400);
+    const subject = await ctx.runQuery(internal.amlMonitoring._getForApi, { clientId: auth.clientId, reference });
+    return subject ? json(subject) : json({ error: "Monitored subject not found" }, 404);
+  }),
+});
+
+http.route({
+  pathPrefix: "/v1/monitoring/subjects/",
+  method: "DELETE",
+  handler: apiAction("DELETE /v1/monitoring/subjects/*", async (ctx, request, auth) => {
+    const reference = monitoringReference(request);
+    if (!reference) return json({ error: "Missing or invalid monitored subject id" }, 400);
+    const removed = await ctx.runMutation(internal.amlMonitoring._removeFromApi, {
+      clientId: auth.clientId,
+      apiKeyId: auth.apiKeyId,
+      reference,
+    });
+    return removed ? json({ id: reference, status: "removed" }) : json({ error: "Monitored subject not found" }, 404);
+  }),
+});
 
 http.route({
   path: "/v1/verify",

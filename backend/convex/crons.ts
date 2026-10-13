@@ -14,6 +14,10 @@ crons.interval("purge superseded watchlist versions", { hours: 1 }, internal.wat
 // Back Office service health probes (DeepTrack Live, OpenSanctions, scanning service).
 crons.interval("probe external services", { minutes: 15 }, internal.backOfficeHealth.runHealthChecks, {});
 
+// Ongoing AML monitoring: re-screens subjects that are due (each one daily)
+// and alerts on new or more severe hits.
+crons.interval("re-screen monitored AML subjects", { minutes: 15 }, internal.amlMonitoring.runDue, {});
+
 // Back Office client health: drop logged API errors older than 30 days.
 crons.interval("purge old API error logs", { hours: 1 }, internal.backOfficeClients.purgeApiErrors, {});
 
