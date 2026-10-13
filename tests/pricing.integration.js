@@ -102,3 +102,15 @@ test("wiring: every check is priced from the client's plan and currency at creat
   assert.match(read("backend/convex/schema.ts"), /billingCurrency: v\.optional\(v\.union\(v\.literal\("USD"\), v\.literal\("KES"\)\)\)/);
   assert.match(read("backend/convex/http.ts"), /internal\.creditLedger\._getCreditSummary/);
 });
+
+test("client billing page: per-organization history query, role-gated, with money values", () => {
+  const ledger = read("backend/convex/creditLedger.ts");
+  const fn = ledger.slice(ledger.indexOf("export const billingForClient"));
+  assert.match(fn.slice(0, 400), /await requireClientRole\(ctx, args\.clientId, \[\.\.\.HISTORY_ROLES\]\)/);
+  assert.match(fn, /withIndex\("by_client_created_at"/);
+  assert.match(fn, /value: creditsToMoney\(row\.amount, currency, plan\)/);
+  const page = read("app/(platform)/billing/page.tsx");
+  assert.match(page, /requireActiveScope\(\)/, "one organization at a time, not summed across currencies");
+  assert.doesNotMatch(page, /Transaction history isn&apos;t available yet/);
+  assert.match(read("app/(platform)/billing/billing-view.tsx"), /anyApi\.creditLedger\.billingForClient/);
+});
