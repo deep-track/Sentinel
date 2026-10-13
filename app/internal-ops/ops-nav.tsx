@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowLeft, Building2, ClipboardCheck, Radar, ShieldAlert, type LucideIcon } from "lucide-react";
+import { Activity, ArrowLeft, Building2, ClipboardCheck, Radar, Receipt, ShieldAlert, type LucideIcon } from "lucide-react";
 import { cn } from "@/backend/lib/utils";
 
 type NavItem = { title: string; url: string; icon: LucideIcon };
@@ -14,6 +14,7 @@ const SECTIONS: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { title: "Overview", url: "/internal-ops/overview", icon: Radar },
       { title: "Service health", url: "/internal-ops/health", icon: Activity },
+      { title: "Revenue & billing", url: "/internal-ops/billing", icon: Receipt },
     ],
   },
   {
