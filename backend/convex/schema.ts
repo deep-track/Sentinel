@@ -111,6 +111,52 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"])
     .index("by_provider_message", ["providerMessageId"]),
+  // Back Office: data subject requests (Kenya Data Protection Act) tracked by
+  // the compliance team. `subject` should be a verification reference, not
+  // the person's details.
+  dataRequests: defineTable({
+    requestType: v.union(v.literal("access"), v.literal("erasure"), v.literal("rectification"), v.literal("objection")),
+    subject: v.string(),
+    clientId: v.optional(v.id("clients")),
+    status: v.union(v.literal("open"), v.literal("in_progress"), v.literal("completed"), v.literal("rejected")),
+    receivedAt: v.number(),
+    dueAt: v.number(),
+    notes: v.optional(v.string()),
+    createdBy: v.string(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_status_and_due", ["status", "dueAt"])
+    .index("by_received_at", ["receivedAt"]),
+
+  // Back Office client health: one row per 4xx/5xx an authenticated API
+  // client received (kept 30 days). No request bodies or personal data.
+  apiErrors: defineTable({
+    clientId: v.id("clients"),
+    apiKeyId: v.id("apiKeys"),
+    environment: v.union(v.literal("live"), v.literal("test")),
+    route: v.string(),
+    status: v.number(),
+    at: v.number(),
+  })
+    .index("by_client_and_at", ["clientId", "at"])
+    .index("by_at", ["at"]),
+
+  // Back Office pricing: one row (key "default"). Price per credit for each
+  // plan; unset prices make the billing screens show credits only.
+  billingSettings: defineTable({
+    key: v.literal("default"),
+    currency: v.string(), // ISO 4217, e.g. "KES"
+    pricePerCredit: v.object({
+      trial: v.optional(v.number()),
+      starter: v.optional(v.number()),
+      growth: v.optional(v.number()),
+      enterprise: v.optional(v.number()),
+    }),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_key", ["key"]),
+
   // Back Office service health: one row per scheduled probe of an external
   // dependency (every 15 min, kept 7 days).
   serviceHealthChecks: defineTable({
@@ -245,6 +291,11 @@ export default defineSchema({
       v.literal("resolved"),
     ),
     assignedTo: v.optional(v.string()),
+    // Display names captured when the item was assigned / resolved, so the
+    // Back Office can show people instead of sign-in IDs.
+    assignedToName: v.optional(v.string()),
+    assignedAt: v.optional(v.number()),
+    resolvedByName: v.optional(v.string()),
     resolutionAction: v.optional(
       v.union(
         v.literal("confirm"),
@@ -316,6 +367,11 @@ export default defineSchema({
     exportStorageId: v.optional(v.id("_storage")),
     // True when a source hit the export row cap, so counts are lower bounds.
     truncated: v.optional(v.boolean()),
+    // Back Office sign-off (internal_admin), recorded once.
+    signedOffBy: v.optional(v.string()),
+    signedOffByName: v.optional(v.string()),
+    signedOffAt: v.optional(v.number()),
+    signOffNotes: v.optional(v.string()),
     failureReason: v.optional(v.string()),
   })
     .index("by_generated_at", ["generatedAt"])
