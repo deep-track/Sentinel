@@ -111,6 +111,19 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"])
     .index("by_provider_message", ["providerMessageId"]),
+  // Back Office client health: one row per 4xx/5xx an authenticated API
+  // client received (kept 30 days). No request bodies or personal data.
+  apiErrors: defineTable({
+    clientId: v.id("clients"),
+    apiKeyId: v.id("apiKeys"),
+    environment: v.union(v.literal("live"), v.literal("test")),
+    route: v.string(),
+    status: v.number(),
+    at: v.number(),
+  })
+    .index("by_client_and_at", ["clientId", "at"])
+    .index("by_at", ["at"]),
+
   // Back Office pricing: one row (key "default"). Price per credit for each
   // plan; unset prices make the billing screens show credits only.
   billingSettings: defineTable({

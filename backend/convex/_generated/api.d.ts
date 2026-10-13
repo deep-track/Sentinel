@@ -14,6 +14,7 @@ import type * as amlPersistence from "../amlPersistence.js";
 import type * as apiKeys from "../apiKeys.js";
 import type * as auditLog from "../auditLog.js";
 import type * as backOfficeBilling from "../backOfficeBilling.js";
+import type * as backOfficeClients from "../backOfficeClients.js";
 import type * as backOfficeHealth from "../backOfficeHealth.js";
 import type * as clients from "../clients.js";
 import type * as complianceReports from "../complianceReports.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   apiKeys: typeof apiKeys;
   auditLog: typeof auditLog;
   backOfficeBilling: typeof backOfficeBilling;
+  backOfficeClients: typeof backOfficeClients;
   backOfficeHealth: typeof backOfficeHealth;
   clients: typeof clients;
   complianceReports: typeof complianceReports;

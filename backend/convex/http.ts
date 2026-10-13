@@ -53,7 +53,7 @@ function authFailureKey(request: Request): string {
 async function authenticateAndRateLimit(
   ctx: ActionCtx,
   request: Request,
-): Promise<{ auth: Extract<ApiKeyAuthResult, { ok: true }> } | { response: Response }> {
+): Promise<{ auth: AuthenticatedKey } | { response: Response; auth?: AuthenticatedKey }> {
   // Pre-auth: callers that keep failing authentication are throttled before
   // any key lookup happens (brute force / prefix enumeration).
   const failureKey = authFailureKey(request);
@@ -70,15 +70,57 @@ async function authenticateAndRateLimit(
 
   const rateLimit = await checkApiRateLimit(ctx, auth.plan, auth.apiKeyId);
   if (rateLimit.ok === false) {
-    return { response: rateLimited(rateLimit.retryAfterMs) };
+    return { response: rateLimited(rateLimit.retryAfterMs), auth };
   }
   // Per-client cap (clients.rpmCap) on top of the plan limit.
   const clientCap = await checkClientRpmCap(ctx, auth.clientId, auth.rpmCap);
   if (clientCap.ok === false) {
-    return { response: rateLimited(clientCap.retryAfterMs) };
+    return { response: rateLimited(clientCap.retryAfterMs), auth };
   }
 
   return { auth };
+}
+
+type AuthenticatedKey = Extract<ApiKeyAuthResult, { ok: true }>;
+
+// Records an error response a client received, for the Back Office client
+// health page. Unattributable failures (bad or missing keys) are not logged.
+// Logging must never change or break the response.
+async function logClientError(ctx: ActionCtx, auth: AuthenticatedKey, route: string, status: number) {
+  if (status < 400) return;
+  try {
+    await ctx.runMutation(internal.backOfficeClients._logApiError, {
+      clientId: auth.clientId,
+      apiKeyId: auth.apiKeyId,
+      environment: auth.environment,
+      route,
+      status,
+    });
+  } catch (error) {
+    console.error("[http] could not log API error", error instanceof Error ? error.message : "");
+  }
+}
+
+// An API-key route: authenticates and rate-limits, runs the handler, and logs
+// any 4xx/5xx the client gets (an unhandled error is logged as a 500).
+function apiAction(route: string, handler: (ctx: ActionCtx, request: Request, auth: AuthenticatedKey) => Promise<Response>) {
+  return httpAction(async (ctx, request) => {
+    const authResult = await authenticateAndRateLimit(ctx, request);
+    if ("response" in authResult) {
+      if (authResult.auth) await logClientError(ctx, authResult.auth, route, authResult.response.status);
+      return authResult.response;
+    }
+    const { auth } = authResult;
+    let response: Response;
+    try {
+      response = await handler(ctx, request, auth);
+    } catch (error) {
+      await logClientError(ctx, auth, route, 500);
+      throw error;
+    }
+    await logClientError(ctx, auth, route, response.status);
+    return response;
+  });
 }
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; response: Response };
@@ -258,10 +300,7 @@ function parseNumberParam(
 http.route({
   path: "/v1/verify/idp",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const authResult = await authenticateAndRateLimit(ctx, request);
-    if ("response" in authResult) return authResult.response;
-    const { auth } = authResult;
+  handler: apiAction("POST /v1/verify/idp", async (ctx, request, auth) => {
 
     let body: unknown;
     try {
@@ -336,10 +375,7 @@ function parseAmlBody(body: unknown): Parsed<AmlBody> {
 http.route({
   path: "/v1/verify/aml",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const authResult = await authenticateAndRateLimit(ctx, request);
-    if ("response" in authResult) return authResult.response;
-    const { auth } = authResult;
+  handler: apiAction("POST /v1/verify/aml", async (ctx, request, auth) => {
 
     let body: unknown;
     try {
@@ -365,10 +401,7 @@ http.route({
 http.route({
   path: "/v1/verify",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const authResult = await authenticateAndRateLimit(ctx, request);
-    if ("response" in authResult) return authResult.response;
-    const { auth } = authResult;
+  handler: apiAction("GET /v1/verify", async (ctx, request, auth) => {
 
     const url = new URL(request.url);
     const status = url.searchParams.get("status") ?? undefined;
@@ -414,10 +447,7 @@ http.route({
 http.route({
   pathPrefix: "/v1/verify/",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const authResult = await authenticateAndRateLimit(ctx, request);
-    if ("response" in authResult) return authResult.response;
-    const { auth } = authResult;
+  handler: apiAction("GET /v1/verify/*", async (ctx, request, auth) => {
 
     const url = new URL(request.url);
     const reference = url.pathname.split("/").pop();
@@ -453,10 +483,7 @@ http.route({
 http.route({
   path: "/v1/credits",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const authResult = await authenticateAndRateLimit(ctx, request);
-    if ("response" in authResult) return authResult.response;
-    const { auth } = authResult;
+  handler: apiAction("GET /v1/credits", async (ctx, request, auth) => {
 
     const balance = await ctx.runQuery(internal.creditLedger._getBalance, {
       clientId: auth.clientId,
@@ -470,10 +497,7 @@ http.route({
 http.route({
   path: "/v1/credits/ledger",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const authResult = await authenticateAndRateLimit(ctx, request);
-    if ("response" in authResult) return authResult.response;
-    const { auth } = authResult;
+  handler: apiAction("GET /v1/credits/ledger", async (ctx, request, auth) => {
 
     const url = new URL(request.url);
     const limit = parseNumberParam(url, "limit", { integer: true, min: 1, max: 100 });
