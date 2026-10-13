@@ -59,7 +59,16 @@ export async function recordLedgerEntry(
 ) {
   assertLedgerAmount(entry.type, entry.amount);
   const balance = await getBalance(ctx, entry.clientId);
-  await ctx.db.insert("creditLedger", { ...entry, createdAt: Date.now() });
+  // Record what the credits were worth now, so later currency or plan
+  // changes never reprice history.
+  const client = await ctx.db.get(entry.clientId);
+  const currency = client?.billingCurrency ?? "USD";
+  await ctx.db.insert("creditLedger", {
+    ...entry,
+    currency,
+    value: creditsToMoney(entry.amount, currency, client?.plan ?? "starter"),
+    createdAt: Date.now(),
+  });
   await ctx.db.patch(entry.clientId, { creditBalance: balance + entry.amount });
   return balance + entry.amount;
 }

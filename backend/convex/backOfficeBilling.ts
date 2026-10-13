@@ -72,11 +72,19 @@ export const overview = query({
           .withIndex("by_client_created_at", (q) => q.eq("clientId", client._id).gte("createdAt", from))
           .take(MAX_LEDGER_ROWS_PER_CLIENT);
         const byMonth = monthStarts.map(() => 0);
+        // Revenue from the money recorded on each charge (rows from before
+        // currency pricing have none and count as 0).
+        const revenueByMonth = monthStarts.map(() => 0);
         let lastWindow = 0;
         for (const row of rows) {
           const used = creditsUsed(row);
           const index = monthIndex(row.createdAt);
-          if (index >= 0) byMonth[index] += used;
+          if (index >= 0) {
+            byMonth[index] += used;
+            if ((row.type === "deduction" || row.type === "refund") && row.value !== undefined && row.currency === currencyOf(client)) {
+              revenueByMonth[index] -= row.value;
+            }
+          }
           if (row.createdAt >= forecastFrom) lastWindow += used;
         }
         const balance = await getBalance(ctx, client._id);
@@ -89,7 +97,7 @@ export const overview = query({
           balance,
           balanceValue: creditsToMoney(balance, currencyOf(client), client.plan),
           creditsByMonth: byMonth.map((value) => Math.max(0, value)),
-          revenueByMonth: byMonth.map((value) => creditsToMoney(Math.max(0, value), currencyOf(client), client.plan)),
+          revenueByMonth: revenueByMonth.map((value) => Math.max(0, Math.round(value * 100) / 100)),
           usedLast14Days: Math.max(0, lastWindow),
           daysLeft: client.status === "active" ? daysUntilEmpty(balance, Math.max(0, lastWindow), FORECAST_WINDOW_DAYS) : null,
           truncated: rows.length === MAX_LEDGER_ROWS_PER_CLIENT,
@@ -207,11 +215,20 @@ export const statement = query({
       client: { name: client.name, plan: client.plan, billingCurrency: currency },
       currency,
       usdToKes,
-      lines: lines.map((line) => ({ ...line, value: creditsToMoney(line.amount, currency, client.plan) })),
+      lines: lines.map((line, index) => ({ ...line, value: rows[index].value ?? null })),
       totals: {
         creditsUsed: Math.max(0, used),
         added: rows.filter((row) => row.type === "allocation" || (row.type === "adjustment" && row.amount > 0)).reduce((sum, row) => sum + row.amount, 0),
-        amountDue: creditsToMoney(Math.max(0, used), currency, client.plan),
+        // Charges less refunds, from the money recorded on each row.
+        amountDue: Math.max(
+          0,
+          Math.round(
+            rows
+              .filter((row) => (row.type === "deduction" || row.type === "refund") && row.value !== undefined && row.currency === currency)
+              .reduce((sum, row) => sum - (row.value ?? 0), 0) * 100,
+          ) / 100,
+        ),
+        unpricedLines: rows.filter((row) => row.value === undefined).length,
       },
       truncated: rows.length === MAX_STATEMENT_ROWS,
     };

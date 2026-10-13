@@ -108,9 +108,20 @@ test("client billing page: per-organization history query, role-gated, with mone
   const fn = ledger.slice(ledger.indexOf("export const billingForClient"));
   assert.match(fn.slice(0, 400), /await requireClientRole\(ctx, args\.clientId, \[\.\.\.HISTORY_ROLES\]\)/);
   assert.match(fn, /withIndex\("by_client_created_at"/);
-  assert.match(fn, /value: creditsToMoney\(row\.amount, currency, plan\)/);
+  assert.match(fn, /value: row\.value \?\? null,/);
   const page = read("app/(platform)/billing/page.tsx");
   assert.match(page, /requireActiveScope\(\)/, "one organization at a time, not summed across currencies");
   assert.doesNotMatch(page, /Transaction history isn&apos;t available yet/);
   assert.match(read("app/(platform)/billing/billing-view.tsx"), /anyApi\.creditLedger\.billingForClient/);
+});
+
+test("ledger rows record their money value when written; history never reprices", () => {
+  const credits = read("backend/convex/lib/credits.ts");
+  assert.match(credits, /value: creditsToMoney\(entry\.amount, currency, client\?\.plan \?\? "starter"\)/);
+  assert.match(read("backend/convex/schema.ts"), /currency: v\.optional\(v\.union\(v\.literal\("USD"\), v\.literal\("KES"\)\)\),\s*value: v\.optional\(v\.number\(\)\),/);
+  assert.match(read("backend/convex/creditLedger.ts"), /value: row\.value \?\? null,/);
+  const billing = read("backend/convex/backOfficeBilling.ts");
+  assert.match(billing, /revenueByMonth\[index\] -= row\.value;/);
+  assert.match(billing, /lines: lines\.map\(\(line, index\) => \(\{ \.\.\.line, value: rows\[index\]\.value \?\? null \}\)\)/);
+  assert.match(read("app/(platform)/billing/billing-view.tsx"), /Recorded before currency pricing/);
 });
