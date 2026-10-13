@@ -3,6 +3,7 @@ import { internalMutation, internalQuery, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireClientRole } from "./lib/rbac";
 import { chargeVerification, getBalance, recordLedgerEntry } from "./lib/credits";
+import { CREDIT_VALUE, PLAN_BONUS, creditsToMoney, priceList } from "./lib/pricing";
 
 const ledgerType = v.union(
   v.literal("allocation"),
@@ -41,6 +42,28 @@ export const _insertLedgerEntry = internalMutation({
 export const _getBalance = internalQuery({
   args: { clientId: v.id("clients") },
   handler: async (ctx, args) => await getBalance(ctx, args.clientId),
+});
+
+// GET /v1/credits: balance in credits and in the client's billing currency,
+// the plan, and the plan's price per check (lib/pricing.ts).
+export const _getCreditSummary = internalQuery({
+  args: { clientId: v.id("clients") },
+  handler: async (ctx, args) => {
+    const client = await ctx.db.get(args.clientId);
+    const balance = await getBalance(ctx, args.clientId);
+    const plan = client?.plan ?? "starter";
+    const currency = client?.billingCurrency ?? "USD";
+    return {
+      balance,
+      currency,
+      creditPrice: CREDIT_VALUE[currency],
+      planBonus: PLAN_BONUS[currency][plan],
+      // What the balance is worth on this plan (after any plan bonus).
+      balanceValue: creditsToMoney(balance, currency, plan),
+      plan,
+      prices: priceList(plan, currency).map((row) => ({ service: row.service, credits: row.credits, amount: row.amount })),
+    };
+  },
 });
 
 export const _getLedgerHistory = internalQuery({

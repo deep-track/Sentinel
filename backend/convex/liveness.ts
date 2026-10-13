@@ -7,7 +7,7 @@ import { buildVerificationReference } from "./lib/crypto";
 import { requireClientRole } from "./lib/rbac";
 import { rateLimiter } from "./lib/rateLimits";
 import { assertCredits, chargeVerification } from "./lib/credits";
-import { creditsForType } from "./lib/verificationTypes";
+import { creditsForVerification } from "./lib/verificationTypes";
 import { africasTalkingSmsBody, africasTalkingSmsUrl, parseAfricasTalkingSendResponse } from "./lib/africasTalking";
 
 // "email" stays in the validator so older clients get a clear error instead of
@@ -65,7 +65,7 @@ export const submit = mutation({
     // Liveness is billed when the provider accepts the SMS (markSent), not on
     // completion, so plain assertCredits is used rather than the in-flight
     // reservation helper (which assumes queued rows are still unbilled).
-    const creditsUsed = creditsForType("liveness");
+    const creditsUsed = await creditsForVerification(ctx, args.clientId, "liveness");
     await assertCredits(ctx, args.clientId, creditsUsed);
 
     const perClient = await rateLimiter.limit(ctx, "livenessInvitePerClient", { key: args.clientId, config: PER_CLIENT_LIMIT });

@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireClientRole } from "./lib/rbac";
 import { buildVerificationReference } from "./lib/crypto";
-import { assertCreditsForNewVerification, creditsForType } from "./lib/verificationTypes";
+import { assertCreditsForNewVerification, creditsForVerification } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 import {
   SOURCE_LABELS,
@@ -152,7 +152,7 @@ async function createAmlVerification(
   const externalRef = optionalText(args.externalRef, "Customer reference", MAX_EXTERNAL_REF_LENGTH);
   if (externalRef && !args.monitor) invalid("A customer reference is only used with monitor: true.");
   await requireActiveClient(ctx, args.clientId);
-  const creditsUsed = creditsForType("aml");
+  const creditsUsed = await creditsForVerification(ctx, args.clientId, "aml");
   // Balance check in the same transaction as the insert.
   await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
   const now = Date.now();

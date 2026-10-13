@@ -5,10 +5,13 @@ import type { QueryCtx } from "./_generated/server";
 import { recordAudit } from "./auditLog";
 import { getBalance } from "./lib/credits";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
+import { BILLING_CURRENCIES, creditsToMoney, PLANS, toUsd, type BillingCurrency } from "./lib/pricing";
 
 // Sentinel Back Office: revenue and billing. Usage = deductions minus refunds
-// in the credit ledger. Money = usage x the price per credit of the client's
-// current plan, once prices are set in billingSettings.
+// in the credit ledger. Revenue = credits used x what a credit is worth on the
+// client's plan, in the client's billing currency (USD or KES, lib/pricing.ts).
+// Totals are kept per currency; the USD→KES rate in billingSettings adds a
+// combined USD figure.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_CLIENTS = 500;
@@ -18,8 +21,7 @@ const MAX_STATEMENT_ROWS = 2_000;
 const FORECAST_WINDOW_DAYS = 14;
 export const LOW_BALANCE_DAYS = 7;
 
-type Plan = Doc<"clients">["plan"];
-const PLANS: Plan[] = ["trial", "starter", "growth", "enterprise"];
+export const MAX_USD_TO_KES = 10_000;
 
 // Credits consumed by one ledger row (deductions add, refunds give back).
 export function creditsUsed(entry: Pick<Doc<"creditLedger">, "type" | "amount">): number {
@@ -36,8 +38,12 @@ export function daysUntilEmpty(balance: number, usedInWindow: number, windowDays
   return Math.max(0, Math.floor(balance / perDay));
 }
 
-async function loadPricing(ctx: QueryCtx) {
+async function loadSettings(ctx: QueryCtx) {
   return await ctx.db.query("billingSettings").withIndex("by_key", (q) => q.eq("key", "default")).first();
+}
+
+function currencyOf(client: Pick<Doc<"clients">, "billingCurrency">): BillingCurrency {
+  return client.billingCurrency ?? "USD";
 }
 
 export const overview = query({
@@ -48,8 +54,8 @@ export const overview = query({
     await requireInternalUser(ctx);
     const monthStarts = [...args.monthStarts].sort((a, b) => a - b).slice(-12);
     if (monthStarts.length === 0) throw new ConvexError({ code: "invalid_argument", message: "monthStarts is required." });
-    const pricing = await loadPricing(ctx);
-    const priceFor = (plan: Plan) => pricing?.pricePerCredit[plan] ?? null;
+    const settings = await loadSettings(ctx);
+    const usdToKes = settings?.usdToKes ?? null;
     const forecastFrom = args.now - FORECAST_WINDOW_DAYS * DAY_MS;
     const from = Math.min(monthStarts[0], forecastFrom);
 
@@ -74,15 +80,16 @@ export const overview = query({
           if (row.createdAt >= forecastFrom) lastWindow += used;
         }
         const balance = await getBalance(ctx, client._id);
-        const price = priceFor(client.plan);
         return {
           _id: client._id,
           name: client.name,
           plan: client.plan,
           status: client.status,
+          billingCurrency: currencyOf(client),
           balance,
+          balanceValue: creditsToMoney(balance, currencyOf(client), client.plan),
           creditsByMonth: byMonth.map((value) => Math.max(0, value)),
-          revenueByMonth: price === null ? null : byMonth.map((value) => Math.max(0, value) * price),
+          revenueByMonth: byMonth.map((value) => creditsToMoney(Math.max(0, value), currencyOf(client), client.plan)),
           usedLast14Days: Math.max(0, lastWindow),
           daysLeft: client.status === "active" ? daysUntilEmpty(balance, Math.max(0, lastWindow), FORECAST_WINDOW_DAYS) : null,
           truncated: rows.length === MAX_LEDGER_ROWS_PER_CLIENT,
@@ -112,32 +119,43 @@ export const overview = query({
           const verification = await ctx.db.get(item.verificationId);
           if (!verification || verification.creditsUsed <= 0) return null;
           const client = clientById.get(item.clientId);
-          const price = client ? priceFor(client.plan) : null;
           return {
             reviewId: item._id,
             clientName: client?.name ?? "Unknown client",
             reference: verification.reference,
             type: verification.type,
             credits: verification.creditsUsed,
-            amount: price === null ? null : verification.creditsUsed * price,
+            amount: client ? creditsToMoney(verification.creditsUsed, currencyOf(client), client.plan) : null,
+            currency: client ? currencyOf(client) : ("USD" as BillingCurrency),
             openedAt: item.createdAt,
           };
         }),
       )
     ).filter((row): row is NonNullable<typeof row> => row !== null);
 
-    const totalsByMonth = monthStarts.map((start, index) => ({
-      monthStart: start,
-      credits: perClient.reduce((sum, client) => sum + client.creditsByMonth[index], 0),
-      revenue: perClient.every((client) => client.revenueByMonth !== null)
-        ? perClient.reduce((sum, client) => sum + (client.revenueByMonth?.[index] ?? 0), 0)
-        : null,
-    }));
+    const totalsByMonth = monthStarts.map((start, index) => {
+      const byCurrency = Object.fromEntries(
+        BILLING_CURRENCIES.map((currency) => [
+          currency,
+          Math.round(
+            perClient
+              .filter((client) => client.billingCurrency === currency)
+              .reduce((sum, client) => sum + client.revenueByMonth[index], 0) * 100,
+          ) / 100,
+        ]),
+      ) as Record<BillingCurrency, number>;
+      const kesInUsd = toUsd(byCurrency.KES, "KES", usdToKes);
+      return {
+        monthStart: start,
+        credits: perClient.reduce((sum, client) => sum + client.creditsByMonth[index], 0),
+        revenueByCurrency: byCurrency,
+        // Combined, in USD; null while there is KES revenue and no rate is set.
+        revenue: byCurrency.KES === 0 ? byCurrency.USD : kesInUsd === null ? null : Math.round((byCurrency.USD + kesInUsd) * 100) / 100,
+      };
+    });
 
     return {
-      pricing: pricing
-        ? { currency: pricing.currency, pricePerCredit: pricing.pricePerCredit, updatedAt: pricing.updatedAt }
-        : null,
+      pricing: { currency: "USD", usdToKes, updatedAt: settings?.updatedAt ?? null },
       monthStarts,
       totalsByMonth,
       clients: perClient.sort((a, b) => (b.creditsByMonth.at(-1) ?? 0) - (a.creditsByMonth.at(-1) ?? 0)),
@@ -146,6 +164,12 @@ export const overview = query({
         .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0)),
       unbilled: unbilled.sort((a, b) => a.openedAt - b.openedAt),
       unbilledCredits: unbilled.reduce((sum, row) => sum + row.credits, 0),
+      unbilledByCurrency: Object.fromEntries(
+        BILLING_CURRENCIES.map((currency) => [
+          currency,
+          Math.round(unbilled.filter((row) => row.currency === currency).reduce((sum, row) => sum + (row.amount ?? 0), 0) * 100) / 100,
+        ]),
+      ) as Record<BillingCurrency, number>,
     };
   },
 });
@@ -162,8 +186,9 @@ export const statement = query({
       .query("creditLedger")
       .withIndex("by_client_created_at", (q) => q.eq("clientId", clientId).gte("createdAt", args.from).lt("createdAt", args.to))
       .take(MAX_STATEMENT_ROWS);
-    const pricing = await loadPricing(ctx);
-    const price = pricing?.pricePerCredit[client.plan] ?? null;
+    const settings = await loadSettings(ctx);
+    const usdToKes = settings?.usdToKes ?? null;
+    const currency = currencyOf(client);
     const lines = await Promise.all(
       rows.map(async (row) => {
         const verification = row.verificationId ? await ctx.db.get(row.verificationId as Id<"verifications">) : null;
@@ -179,57 +204,50 @@ export const statement = query({
     );
     const used = rows.reduce((sum, row) => sum + creditsUsed(row), 0);
     return {
-      client: { name: client.name, plan: client.plan },
-      currency: pricing?.currency ?? null,
-      pricePerCredit: price,
-      lines,
+      client: { name: client.name, plan: client.plan, billingCurrency: currency },
+      currency,
+      usdToKes,
+      lines: lines.map((line) => ({ ...line, value: creditsToMoney(line.amount, currency, client.plan) })),
       totals: {
         creditsUsed: Math.max(0, used),
         added: rows.filter((row) => row.type === "allocation" || (row.type === "adjustment" && row.amount > 0)).reduce((sum, row) => sum + row.amount, 0),
-        amountDue: price === null ? null : Math.max(0, used) * price,
+        amountDue: creditsToMoney(Math.max(0, used), currency, client.plan),
       },
       truncated: rows.length === MAX_STATEMENT_ROWS,
     };
   },
 });
 
-export const setPricing = mutation({
-  args: {
-    currency: v.string(),
-    pricePerCredit: v.object({
-      trial: v.optional(v.number()),
-      starter: v.optional(v.number()),
-      growth: v.optional(v.number()),
-      enterprise: v.optional(v.number()),
-    }),
-  },
+// USD → KES rate used to show and charge KES-billed clients.
+export const setExchangeRate = mutation({
+  args: { usdToKes: v.number() },
   handler: async (ctx, args) => {
     const actorId = await requireInternalAdmin(ctx, "write");
-    const currency = args.currency.trim().toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency)) {
-      throw new ConvexError({ code: "invalid_argument", message: "Currency must be a three-letter code, e.g. KES or USD." });
+    if (!Number.isFinite(args.usdToKes) || args.usdToKes <= 0 || args.usdToKes > MAX_USD_TO_KES) {
+      throw new ConvexError({ code: "invalid_argument", message: `The USD → KES rate must be between 0 and ${MAX_USD_TO_KES}.` });
     }
-    for (const plan of PLANS) {
-      const price = args.pricePerCredit[plan];
-      if (price !== undefined && (!Number.isFinite(price) || price < 0 || price > 1_000_000)) {
-        throw new ConvexError({ code: "invalid_argument", message: `The ${plan} price must be between 0 and 1,000,000.` });
-      }
-    }
+    const usdToKes = Math.round(args.usdToKes * 10_000) / 10_000;
     const existing = await ctx.db.query("billingSettings").withIndex("by_key", (q) => q.eq("key", "default")).first();
     const now = Date.now();
-    const next = { key: "default" as const, currency, pricePerCredit: args.pricePerCredit, updatedAt: now, updatedBy: actorId };
-    if (existing) await ctx.db.replace(existing._id, next);
-    else await ctx.db.insert("billingSettings", next);
+    if (existing) await ctx.db.patch(existing._id, { usdToKes, updatedAt: now, updatedBy: actorId });
+    else await ctx.db.insert("billingSettings", { key: "default", usdToKes, updatedAt: now, updatedBy: actorId });
     await recordAudit(ctx, {
       actorId,
       actorType: "internal_admin",
-      action: "billing.pricing_updated",
+      action: "billing.exchange_rate_updated",
       targetType: "billingSettings",
       targetId: "default",
-      metadata: {
-        before: existing ? { currency: existing.currency, pricePerCredit: existing.pricePerCredit } : null,
-        after: { currency, pricePerCredit: args.pricePerCredit },
-      },
+      metadata: { before: existing?.usdToKes ?? null, after: usdToKes },
     });
+  },
+});
+
+// The plans and prices (lib/pricing.ts), for the Back Office price list.
+export const priceList = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireInternalUser(ctx);
+    const settings = await loadSettings(ctx);
+    return { plans: PLANS, usdToKes: settings?.usdToKes ?? null };
   },
 });

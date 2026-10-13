@@ -7,7 +7,7 @@ import { requireClientRole } from "./lib/rbac";
 import {
   assertCreditsForNewVerification,
   assertMediaSize,
-  creditsForType,
+  creditsForVerification,
   verificationTypeLabel,
 } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
@@ -91,7 +91,7 @@ export const createKyi = mutation({
     });
     const investmentAmount = parseInvestmentAmount(args.investmentAmount);
 
-    const creditsUsed = creditsForType("kyi");
+    const creditsUsed = await creditsForVerification(ctx, args.clientId, "kyi");
     await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
 
     const now = Date.now();

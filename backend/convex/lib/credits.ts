@@ -1,6 +1,7 @@
 import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { creditsToMoney, formatMoney } from "./pricing";
 
 type LedgerType = "allocation" | "deduction" | "refund" | "adjustment";
 
@@ -102,12 +103,18 @@ export async function chargeVerification(
     .filter((q) => q.eq(q.field("type"), "deduction"))
     .first();
   if (existing || args.amount <= 0) return false;
+  const client = await ctx.db.get(args.clientId);
+  const credits = Math.abs(args.amount);
+  const currency = client?.billingCurrency ?? "USD";
+  const detail = client
+    ? ` — ${credits} credit${credits === 1 ? "" : "s"}, ${formatMoney(creditsToMoney(credits, currency, client.plan), currency)} on ${client.plan}`
+    : "";
   await recordLedgerEntry(ctx, {
     clientId: args.clientId,
     verificationId: args.verificationId,
     type: "deduction",
-    amount: -Math.abs(args.amount),
-    reason: args.reason,
+    amount: -credits,
+    reason: `${args.reason}${detail}`.slice(0, 500),
   });
   return true;
 }

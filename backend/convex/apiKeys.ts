@@ -23,10 +23,13 @@ export const createClient = mutation({
       v.literal("trial"),
       v.literal("starter"),
       v.literal("growth"),
+      v.literal("business"),
       v.literal("enterprise"),
     ),
     creditLimit: v.number(),
     rpmCap: v.number(),
+    // USD (default) or KES: the price list and the unit credits are counted in.
+    billingCurrency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
   },
   handler: async (ctx, args) => {
     const actorId = await requireInternalAdmin(ctx);
@@ -49,6 +52,7 @@ export const createClient = mutation({
       creditBalance: 0,
       rpmCap: args.rpmCap,
       creditThresholdPct: 80, // Section 1.1 default — override per-client later via a settings mutation
+      billingCurrency: args.billingCurrency ?? "USD",
       createdAt: Date.now(),
     });
     if (args.creditLimit > 0) {
@@ -66,7 +70,7 @@ export const createClient = mutation({
       targetType: "client",
       targetId: clientId,
       clientId,
-      metadata: { name, plan: args.plan, creditLimit: args.creditLimit, rpmCap: args.rpmCap },
+      metadata: { name, plan: args.plan, creditLimit: args.creditLimit, rpmCap: args.rpmCap, billingCurrency: args.billingCurrency ?? "USD" },
     });
     return clientId;
   },
@@ -193,7 +197,7 @@ export type ApiKeyAuthResult =
       ok: true;
       clientId: Id<"clients">;
       apiKeyId: Id<"apiKeys">;
-      plan: "trial" | "starter" | "growth" | "enterprise";
+      plan: "trial" | "starter" | "growth" | "business" | "enterprise";
       environment: "live" | "test";
       rpmCap: number;
     }
