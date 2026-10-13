@@ -182,3 +182,44 @@ test("review ops: an OpenSanctions sanctions hit is still a sanctions match", ()
   assert.equal(reason("Strong OpenSanctions sanctions match requires compliance escalation."), "Sanctions match");
   assert.equal(reason("OpenSanctions risk-list match requires human review."), "PEP / risk list");
 });
+
+// ── Risk and compliance ─────────────────────────────────────────────────────
+
+const compliance = loadWithStubs("backend/convex/backOfficeCompliance.ts");
+
+test("risk: fake faces are found in selfie, KYC video and hosted liveness results", () => {
+  assert.deepEqual(compliance.fakeFaceCatch({ faceCheck: { prediction: "fake", confidencePct: 97 } }), { source: "selfie", confidencePct: 97 });
+  assert.deepEqual(compliance.fakeFaceCatch({ liveness: { deeptrackLive: { prediction: "fake", confidencePct: 92.5 } } }), { source: "video", confidencePct: 92.5 });
+  assert.deepEqual(compliance.fakeFaceCatch({ source: "hosted_capture", liveness: { deeptrackLive: { prediction: "fake" } } }), { source: "video", confidencePct: null });
+  assert.equal(compliance.fakeFaceCatch({ faceCheck: { prediction: "real", confidencePct: 99 } }), null);
+  assert.equal(compliance.fakeFaceCatch({ faceCheck: { error: "upstream_http_error" } }), null);
+  assert.equal(compliance.fakeFaceCatch(null), null);
+});
+
+test("risk: week bucketing", () => {
+  const now = 1_800_000_000_000;
+  assert.equal(compliance.weeksAgo(now - DAY, now), 0);
+  assert.equal(compliance.weeksAgo(now - 8 * DAY, now), 1);
+  assert.equal(compliance.weeksAgo(now - 90 * DAY, now), 12);
+});
+
+test("compliance: reads need an internal role; every write needs internal_admin and is audited", () => {
+  const source = read("backend/convex/backOfficeCompliance.ts");
+  for (const name of ["riskDashboard", "auditLog", "dataRequests"]) {
+    const fn = source.slice(source.indexOf(`export const ${name}`));
+    assert.match(fn.slice(0, 600), /await requireInternalUser\(ctx\)/, name);
+  }
+  for (const [name, action] of [["signOffReport", "compliance_report.signed_off"], ["createDataRequest", "data_request.created"], ["updateDataRequest", "data_request.updated"]]) {
+    const fn = source.slice(source.indexOf(`export const ${name}`));
+    assert.match(fn.slice(0, 500), /await requireInternalAdmin\(ctx, "write"\)/, name);
+    assert.ok(fn.includes(`action: "${action}"`), `${name} audited as ${action}`);
+  }
+});
+
+test("compliance: a report is signed off once, only when completed, with the export hash recorded", () => {
+  const source = read("backend/convex/backOfficeCompliance.ts");
+  const fn = source.slice(source.indexOf("export const signOffReport"));
+  assert.match(fn, /if \(report\.status !== "completed"\)/);
+  assert.match(fn, /if \(report\.signedOffAt\) throw/);
+  assert.match(fn, /metadata: \{ exportHash: report\.exportHash/);
+});

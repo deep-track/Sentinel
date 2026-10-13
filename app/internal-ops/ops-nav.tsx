@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowLeft, Building2, ClipboardCheck, Gauge, HeartPulse, Radar, Receipt, ShieldAlert, type LucideIcon } from "lucide-react";
+import { Activity, ArrowLeft, Building2, ClipboardCheck, FileCheck2, Gauge, HeartPulse, Radar, Receipt, ShieldAlert, ShieldX, type LucideIcon } from "lucide-react";
 import { cn } from "@/backend/lib/utils";
 
 type NavItem = { title: string; url: string; icon: LucideIcon };
@@ -30,6 +30,8 @@ const SECTIONS: Array<{ label: string; items: NavItem[] }> = [
       { title: "Review queue", url: "/internal-ops/review-queue", icon: ClipboardCheck },
       { title: "Review operations", url: "/internal-ops/review-ops", icon: Gauge },
       { title: "Screening monitor", url: "/internal-ops/monitoring", icon: ShieldAlert },
+      { title: "Risk", url: "/internal-ops/risk", icon: ShieldX },
+      { title: "Compliance", url: "/internal-ops/compliance", icon: FileCheck2 },
     ],
   },
 ];
