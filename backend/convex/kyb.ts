@@ -4,7 +4,7 @@ import { internalAction, internalQuery, mutation, query } from "./_generated/ser
 import type { Doc } from "./_generated/dataModel";
 import { buildVerificationReference } from "./lib/crypto";
 import { requireClientRole } from "./lib/rbac";
-import { assertCreditsForNewVerification, creditsForType } from "./lib/verificationTypes";
+import { assertCreditsForNewVerification, creditsForVerification } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
 
 const MAX_DIRECTORS = 50;
@@ -43,7 +43,7 @@ export const createKyb = mutation({
       throw new ConvexError({ code: "invalid_argument", message: `At most ${MAX_DIRECTORS} directors/UBOs can be submitted.` });
     }
 
-    const creditsUsed = creditsForType("kyb");
+    const creditsUsed = await creditsForVerification(ctx, args.clientId, "kyb");
     await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
 
     const now = Date.now();

@@ -3,6 +3,7 @@ import type { Doc } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { getBalance } from "./lib/credits";
 import { requireClientRole } from "./lib/rbac";
+import { CREDIT_VALUE, PLAN_BONUS, creditsToMoney, priceList } from "./lib/pricing";
 
 // Read caps so the portal stays within Convex query limits as data grows.
 // When a cap is hit the figures cover the newest rows only (`truncated`).
@@ -95,8 +96,22 @@ export const overview = query({
         status: client.status,
         creditLimit: client.creditLimit,
         creditThresholdPct: client.creditThresholdPct,
+        billingCurrency: client.billingCurrency ?? "USD",
       },
-      credits: { balance: await getBalance(ctx, args.clientId), usedThisMonth: creditsUsedThisMonth },
+      credits: await (async () => {
+        const balance = await getBalance(ctx, args.clientId);
+        const currency = client.billingCurrency ?? "USD";
+        return {
+          balance,
+          usedThisMonth: creditsUsedThisMonth,
+          currency,
+          balanceValue: creditsToMoney(balance, currency, client.plan),
+          usedThisMonthValue: creditsToMoney(creditsUsedThisMonth, currency, client.plan),
+          creditPrice: CREDIT_VALUE[currency],
+          planBonus: PLAN_BONUS[currency][client.plan],
+          prices: priceList(client.plan, currency),
+        };
+      })(),
       scans: {
         thisMonth: monthRows.length,
         today: monthRows.filter((row) => row.createdAt >= args.dayStart).length,

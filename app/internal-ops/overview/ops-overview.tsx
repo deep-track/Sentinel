@@ -48,6 +48,8 @@ export type ClientSummary = {
   balance: number;
   usedThisMonth: number;
   usagePct: number | null;
+  billingCurrency: "USD" | "KES";
+  balanceValue: number;
   createdAt: number;
 };
 

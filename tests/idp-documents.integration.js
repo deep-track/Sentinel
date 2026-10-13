@@ -308,7 +308,7 @@ test("IDP wiring: API route, Node action with Textract, credits, KYI retired, si
   assert.match(documents, /assertMediaSize\(\{ documentFrontBase64, documentBackBase64 \}\)/);
 
   assert.match(read("backend/convex/http.ts"), /path: "\/v1\/verify\/document",\s*method: "POST"/);
-  assert.match(read("backend/convex/lib/verificationTypes.ts"), /case "document": return 1;/);
+  assert.match(read("backend/convex/documents.ts"), /await creditsForVerification\(ctx, args\.clientId, "document", input\.documentKind\)/);
   assert.match(read("backend/convex/schema.ts"), /v\.literal\("document"\), \/\/ IDP/);
   assert.match(read("backend/convex/kyi.ts"), /KYI has been retired\. Use IDP document verification instead\./);
   const sidebar = read("components/app-sidebar.tsx");

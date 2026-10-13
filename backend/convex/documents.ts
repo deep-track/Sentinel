@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireClientRole } from "./lib/rbac";
 import { buildVerificationReference } from "./lib/crypto";
-import { assertCreditsForNewVerification, assertMediaSize, creditsForType } from "./lib/verificationTypes";
+import { assertCreditsForNewVerification, assertMediaSize, creditsForVerification } from "./lib/verificationTypes";
 import { chargeVerification } from "./lib/credits";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 import { DEFAULT_POA_MAX_AGE_DAYS } from "./lib/documentChecks";
@@ -109,7 +109,7 @@ async function createDocumentVerification(
 ) {
   const input = normalizeDocumentInput(args);
   await requireActiveClient(ctx, args.clientId);
-  const creditsUsed = creditsForType("document");
+  const creditsUsed = await creditsForVerification(ctx, args.clientId, "document", input.documentKind);
   await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
   const now = Date.now();
   const reference = buildVerificationReference();

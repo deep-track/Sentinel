@@ -23,40 +23,53 @@ import {
   TopBar,
 } from "@/components/sentinel/ui";
 import { PLAN_LABELS, formatNumber, typeLabel, type Plan } from "@/components/sentinel/format";
+import {
+  BILLING_CURRENCIES,
+  CREDIT_VALUE,
+  PLAN_BONUS,
+  PLAN_PREPAY,
+  SERVICE_LABELS,
+  SERVICES,
+  planCredits,
+  priceList,
+  type BillingCurrency,
+} from "@/backend/convex/lib/pricing";
 
-type Prices = Partial<Record<Plan, number>>;
+type Currency = BillingCurrency;
 
 type BillingOverview = {
-  pricing: { currency: string; pricePerCredit: Prices; updatedAt: number } | null;
+  pricing: { currency: "USD"; usdToKes: number | null; updatedAt: number | null };
   monthStarts: number[];
-  totalsByMonth: Array<{ monthStart: number; credits: number; revenue: number | null }>;
+  totalsByMonth: Array<{ monthStart: number; credits: number; revenueByCurrency: Record<Currency, number>; revenue: number | null }>;
   clients: Array<{
     _id: string;
     name: string;
     plan: Plan;
     status: string;
+    billingCurrency: Currency;
     balance: number;
+    balanceValue: number;
     creditsByMonth: number[];
-    revenueByMonth: number[] | null;
+    revenueByMonth: number[];
     usedLast14Days: number;
     daysLeft: number | null;
   }>;
   lowBalance: Array<{ _id: string; name: string; plan: Plan; balance: number; usedLast14Days: number; daysLeft: number | null }>;
-  unbilled: Array<{ reviewId: string; clientName: string; reference: string; type: string; credits: number; amount: number | null; openedAt: number }>;
+  unbilled: Array<{ reviewId: string; clientName: string; reference: string; type: string; credits: number; amount: number | null; currency: Currency; openedAt: number }>;
   unbilledCredits: number;
+  unbilledByCurrency: Record<Currency, number>;
 };
 
 type Statement = {
-  client: { name: string; plan: Plan };
-  currency: string | null;
-  pricePerCredit: number | null;
-  lines: Array<{ createdAt: number; type: string; amount: number; reason: string; reference: string | null; verificationType: string | null }>;
-  totals: { creditsUsed: number; added: number; amountDue: number | null };
+  client: { name: string; plan: Plan; billingCurrency: Currency };
+  currency: Currency;
+  lines: Array<{ createdAt: number; type: string; amount: number; value: number; reason: string; reference: string | null; verificationType: string | null }>;
+  totals: { creditsUsed: number; added: number; amountDue: number };
   truncated: boolean;
 };
 
 const MONTHS = 6;
-const PLANS: Plan[] = ["trial", "starter", "growth", "enterprise"];
+const PAID_PLANS: Plan[] = ["starter", "growth", "business", "enterprise"];
 
 function monthStartsEndingAt(now: number, count: number): number[] {
   const date = new Date(now);
@@ -97,20 +110,20 @@ export function Billing({ canWrite }: { canWrite: boolean }) {
     bounds && monthStarts ? { now: bounds.now, monthStarts } : "skip",
   ) as BillingOverview | undefined;
 
-  const currency = data?.pricing?.currency ?? null;
   const thisMonth = data ? data.totalsByMonth.at(-1) : undefined;
   const lastMonth = data ? data.totalsByMonth.at(-2) : undefined;
   const runningOut = data?.lowBalance.filter((client) => (client.daysLeft ?? Infinity) <= 7).length ?? 0;
-  const unbilledAmount = data?.unbilled.every((row) => row.amount !== null)
-    ? data.unbilled.reduce((sum, row) => sum + (row.amount ?? 0), 0)
-    : null;
+  const byCurrency = (amounts: Record<Currency, number> | undefined) =>
+    amounts
+      ? BILLING_CURRENCIES.filter((code) => amounts[code] > 0).map((code) => money(amounts[code], code)).join(" + ") || money(0, "USD")
+      : "—";
 
   return (
     <SentinelCanvas className="flex min-h-screen flex-col">
       <TopBar>
         <h1 className="text-[15px] font-semibold">Revenue &amp; billing</h1>
         <span className="text-[11px] text-sentinel-subtle">
-          {currency ? `Prices in ${currency}` : "Prices not set: showing credits only"}
+          USD and KES price lists · USD→KES {data?.pricing.usdToKes ?? "rate not set"}
         </span>
       </TopBar>
 
@@ -130,8 +143,8 @@ export function Billing({ canWrite }: { canWrite: boolean }) {
               />
               <StatTile
                 label="Revenue this month"
-                value={thisMonth?.revenue !== null && thisMonth?.revenue !== undefined ? money(thisMonth.revenue, currency) : "—"}
-                note={currency ? "usage × current plan price" : "set prices below"}
+                value={byCurrency(thisMonth?.revenueByCurrency)}
+                note={thisMonth?.revenue !== null && thisMonth?.revenue !== undefined ? `≈ ${money(thisMonth.revenue, "USD")} combined` : "set the USD→KES rate for a combined total"}
                 tone="blue"
               />
               <StatTile
@@ -143,20 +156,20 @@ export function Billing({ canWrite }: { canWrite: boolean }) {
               <StatTile
                 label="Unbilled work"
                 value={formatNumber(data.unbilledCredits)}
-                note={unbilledAmount !== null && currency ? `credits · ${money(unbilledAmount, currency)}` : "credits held in review"}
+                note={`credits · ${byCurrency(data.unbilledByCurrency)}`}
                 tone={data.unbilledCredits > 0 ? "amber" : undefined}
               />
             </div>
 
             <Panel>
-              <PanelHeader icon={BarChart3} title="Usage by month" hint={currency ? `credits · revenue in ${currency}` : "credits"} />
-              <MonthlyBars totals={data.totalsByMonth} currency={currency} />
+              <PanelHeader icon={BarChart3} title="Usage by month" hint="credits · combined revenue in USD" />
+              <MonthlyBars totals={data.totalsByMonth} />
             </Panel>
 
             <Panel>
               <PanelHeader icon={Receipt} title="Revenue by client" hint="this month vs last month" />
               <DataTable
-                head={["Client", "Plan", "This month", "Last month", "Change", "Revenue this month", "Balance"]}
+                head={["Client", "Plan", "Credits this month", "Last month", "Change", "Revenue this month", "Balance"]}
                 empty={data.clients.length === 0 ? <EmptyState>No client accounts yet.</EmptyState> : null}
               >
                 {data.clients.map((client) => {
@@ -169,8 +182,10 @@ export function Billing({ canWrite }: { canWrite: boolean }) {
                       <Cell>{formatNumber(current)}</Cell>
                       <Cell className="text-sentinel-muted">{formatNumber(previous)}</Cell>
                       <Cell className="text-sentinel-muted">{change(current, previous)}</Cell>
-                      <Cell>{money(client.revenueByMonth?.at(-1) ?? null, currency)}</Cell>
-                      <Cell className="text-sentinel-muted">{formatNumber(client.balance)}</Cell>
+                      <Cell>{money(client.revenueByMonth.at(-1) ?? 0, client.billingCurrency)}</Cell>
+                      <Cell className="text-sentinel-muted">
+                        {formatNumber(client.balance)} · {money(client.balanceValue, client.billingCurrency)}
+                      </Cell>
                     </Row>
                   );
                 })}
@@ -211,7 +226,7 @@ export function Billing({ canWrite }: { canWrite: boolean }) {
                       <Cell className="font-mono text-[11px] text-sentinel-muted">{row.reference}</Cell>
                       <Cell className="text-sentinel-muted">{typeLabel(row.type)}</Cell>
                       <Cell>{formatNumber(row.credits)}</Cell>
-                      <Cell>{money(row.amount, currency)}</Cell>
+                      <Cell>{money(row.amount, row.currency)}</Cell>
                       <Cell className="text-sentinel-muted">
                         <ClientDate value={row.openedAt} format="MMM d" />
                       </Cell>
@@ -222,7 +237,7 @@ export function Billing({ canWrite }: { canWrite: boolean }) {
             </div>
 
             <div className="grid gap-3.5 lg:grid-cols-[1fr_2fr]">
-              <PricingPanel pricing={data.pricing} canWrite={canWrite} />
+              <PricingPanel usdToKes={data.pricing.usdToKes} canWrite={canWrite} />
               <StatementPanel clients={data.clients} monthStarts={data.monthStarts} />
             </div>
           </>
@@ -232,7 +247,7 @@ export function Billing({ canWrite }: { canWrite: boolean }) {
   );
 }
 
-function MonthlyBars({ totals, currency }: { totals: BillingOverview["totalsByMonth"]; currency: string | null }) {
+function MonthlyBars({ totals }: { totals: BillingOverview["totalsByMonth"] }) {
   const max = Math.max(1, ...totals.map((row) => row.credits));
   return (
     <div className="flex items-end gap-3 px-4 pb-3 pt-5" role="img" aria-label="Credits used per month">
@@ -246,40 +261,28 @@ function MonthlyBars({ totals, currency }: { totals: BillingOverview["totalsByMo
             />
           </div>
           <span className="text-[10px] text-sentinel-subtle">{monthLabel(row.monthStart)}</span>
-          {currency && row.revenue !== null ? (
-            <span className="text-[10px] text-sentinel-muted">{money(row.revenue, currency)}</span>
-          ) : null}
+          {row.revenue !== null ? <span className="text-[10px] text-sentinel-muted">{money(row.revenue, "USD")}</span> : null}
         </div>
       ))}
     </div>
   );
 }
 
-function PricingPanel({ pricing, canWrite }: { pricing: BillingOverview["pricing"]; canWrite: boolean }) {
-  const setPricing = useMutation(anyApi.backOfficeBilling.setPricing);
-  const [currency, setCurrency] = useState(pricing?.currency ?? "KES");
-  const [prices, setPrices] = useState<Record<Plan, string>>(() =>
-    Object.fromEntries(PLANS.map((plan) => [plan, pricing?.pricePerCredit[plan]?.toString() ?? ""])) as Record<Plan, string>,
-  );
+function PricingPanel({ usdToKes, canWrite }: { usdToKes: number | null; canWrite: boolean }) {
+  const setExchangeRate = useMutation(anyApi.backOfficeBilling.setExchangeRate);
+  const [currency, setCurrency] = useState<Currency>("KES");
+  const [rate, setRate] = useState(usdToKes?.toString() ?? "");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    setCurrency(pricing?.currency ?? "KES");
-    setPrices(Object.fromEntries(PLANS.map((plan) => [plan, pricing?.pricePerCredit[plan]?.toString() ?? ""])) as Record<Plan, string>);
-  }, [pricing]);
+  useEffect(() => setRate(usdToKes?.toString() ?? ""), [usdToKes]);
 
-  async function save() {
+  async function saveRate() {
     setSaving(true);
     try {
-      const pricePerCredit: Prices = {};
-      for (const plan of PLANS) {
-        const raw = prices[plan].trim();
-        if (raw) pricePerCredit[plan] = Number(raw);
-      }
-      await setPricing({ currency, pricePerCredit });
-      toast.success("Prices saved.");
+      await setExchangeRate({ usdToKes: Number(rate) });
+      toast.success("Exchange rate saved.");
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not save prices."));
+      toast.error(getErrorMessage(error, "Could not save the exchange rate."));
     } finally {
       setSaving(false);
     }
@@ -290,40 +293,84 @@ function PricingPanel({ pricing, canWrite }: { pricing: BillingOverview["pricing
 
   return (
     <Panel>
-      <PanelHeader icon={Tags} title="Price per credit" hint={pricing ? "used for all revenue figures" : "not set yet"} />
-      <div className="space-y-2.5 p-3.5 text-[12px]">
+      <PanelHeader
+        icon={Tags}
+        title="Price list"
+        hint="lib/pricing.ts"
+        action={
+          <select
+            className="rounded border border-sentinel-line bg-sentinel-raised px-2 py-1 text-[12px]"
+            value={currency}
+            onChange={(event) => setCurrency(event.target.value as Currency)}
+            aria-label="Currency"
+          >
+            {BILLING_CURRENCIES.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+        }
+      />
+      <div className="overflow-x-auto px-3.5 pt-2.5 text-[11px]">
+        <table className="w-full">
+          <thead className="text-sentinel-subtle">
+            <tr>
+              <th className="py-1 pr-2 text-left font-medium">Per check</th>
+              {PAID_PLANS.map((plan) => (
+                <th key={plan} className="py-1 pr-2 text-right font-medium">
+                  {PLAN_LABELS[plan]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {SERVICES.map((service) => (
+              <tr key={service} className="border-t border-sentinel-line">
+                <td className="py-1 pr-2">{SERVICE_LABELS[service]}</td>
+                {PAID_PLANS.map((plan) => {
+                  const row = priceList(plan, currency).find((item) => item.service === service)!;
+                  return (
+                    <td key={plan} className="py-1 pr-2 text-right" title={`${row.credits} credit${row.credits === 1 ? "" : "s"}`}>
+                      {money(row.amount, currency)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            <tr className="border-t border-sentinel-line text-sentinel-subtle">
+              <td className="py-1 pr-2">Annual prepay → credits</td>
+              {PAID_PLANS.map((plan) => (
+                <td key={plan} className="py-1 pr-2 text-right">
+                  {money(PLAN_PREPAY[currency][plan], currency)} → {formatNumber(planCredits(plan, currency))}
+                  {PLAN_BONUS[currency][plan] ? ` (+${Math.round(PLAN_BONUS[currency][plan] * 100)}%)` : ""}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+        <p className="mt-1.5 text-[10px] text-sentinel-subtle">
+          1 credit = {money(CREDIT_VALUE[currency], currency)}. Prices shown are per check after any plan bonus; Trial uses
+          Starter prices.
+        </p>
+      </div>
+      <div className="space-y-2 p-3.5 text-[12px]">
         <label className="block">
-          <span className="text-sentinel-subtle">Currency</span>
-          <input className={inputClass} value={currency} maxLength={3} disabled={!canWrite} onChange={(event) => setCurrency(event.target.value.toUpperCase())} />
+          <span className="text-sentinel-subtle">USD → KES rate (for combined revenue only)</span>
+          <input className={inputClass} inputMode="decimal" placeholder="e.g. 129" value={rate} disabled={!canWrite} onChange={(event) => setRate(event.target.value)} />
         </label>
-        {PLANS.map((plan) => (
-          <label key={plan} className="block">
-            <span className="text-sentinel-subtle">{PLAN_LABELS[plan]}</span>
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              placeholder="not set"
-              value={prices[plan]}
-              disabled={!canWrite}
-              onChange={(event) => setPrices((current) => ({ ...current, [plan]: event.target.value }))}
-            />
-          </label>
-        ))}
         {canWrite ? (
           <button
             type="button"
-            onClick={save}
-            disabled={saving}
+            onClick={saveRate}
+            disabled={saving || !rate.trim()}
             className="w-full rounded bg-sentinel-blue px-2 py-1.5 text-[12px] font-medium text-white disabled:opacity-60"
           >
-            Save prices
+            Save rate
           </button>
         ) : (
-          <p className="text-[11px] text-sentinel-subtle">Only internal administrators can change prices.</p>
+          <p className="text-[11px] text-sentinel-subtle">Only internal administrators can change the rate.</p>
         )}
-        <p className="text-[10px] text-sentinel-subtle">
-          Revenue uses each client&apos;s current plan price for every month shown; changes are audited.
-        </p>
       </div>
     </Panel>
   );
@@ -341,11 +388,12 @@ function StatementPanel({ clients, monthStarts }: { clients: BillingOverview["cl
 
   function downloadCsv() {
     if (!statement) return;
-    const header = ["Date", "Type", "Credits", "Scan ID", "Verification type", "Reason"];
+    const header = ["Date", "Type", "Credits", `Amount (${statement.currency})`, "Scan ID", "Verification type", "Reason"];
     const lines = statement.lines.map((line) => [
       new Date(line.createdAt).toISOString(),
       line.type,
       line.amount,
+      line.value,
       line.reference,
       line.verificationType,
       line.reason,
@@ -353,9 +401,9 @@ function StatementPanel({ clients, monthStarts }: { clients: BillingOverview["cl
     const summary = [
       [],
       ["Credits used", statement.totals.creditsUsed],
-      ["Price per credit", statement.pricePerCredit ?? ""],
-      ["Amount due", statement.totals.amountDue ?? ""],
-      ["Currency", statement.currency ?? ""],
+      ["Amount", statement.totals.amountDue],
+      ["Currency", statement.currency],
+      ["Plan", statement.client.plan],
     ];
     const csv = [header, ...lines, ...summary].map((row) => row.map((value) => csvCell(value as string | number | null)).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -414,12 +462,12 @@ function StatementPanel({ clients, monthStarts }: { clients: BillingOverview["cl
               {formatNumber(statement.totals.creditsUsed)}
             </span>
             <span>
-              <span className="text-sentinel-subtle">Amount due </span>
+              <span className="text-sentinel-subtle">Amount </span>
               {money(statement.totals.amountDue, statement.currency)}
             </span>
           </div>
           <DataTable
-            head={["Date", "Type", "Credits", "Scan ID", "Reason"]}
+            head={["Date", "Type", "Credits", "Amount", "Scan ID", "Reason"]}
             empty={statement.lines.length === 0 ? <EmptyState>No credit activity in this month.</EmptyState> : null}
           >
             {statement.lines.map((line, index) => (
@@ -429,6 +477,7 @@ function StatementPanel({ clients, monthStarts }: { clients: BillingOverview["cl
                 </Cell>
                 <Cell className="text-sentinel-muted capitalize">{line.type}</Cell>
                 <Cell className={line.amount < 0 ? "text-sentinel-text" : "text-sentinel-green-text"}>{formatNumber(line.amount)}</Cell>
+                <Cell className="text-sentinel-muted">{money(line.value, statement.currency)}</Cell>
                 <Cell className="font-mono text-[11px] text-sentinel-muted">{line.reference ?? "—"}</Cell>
                 <Cell className="text-sentinel-muted">{line.reason}</Cell>
               </Row>

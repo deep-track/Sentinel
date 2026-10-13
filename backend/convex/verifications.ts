@@ -9,7 +9,7 @@ import { chargeVerification } from "./lib/credits";
 import {
   assertCreditsForNewVerification,
   assertMediaSize,
-  creditsForType,
+  creditsForVerification,
 } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 
@@ -214,7 +214,7 @@ async function createIdpVerification(
     livenessFramesBase64: input.livenessFramesBase64,
   });
 
-  const creditsUsed = creditsForType("idp");
+  const creditsUsed = await creditsForVerification(ctx, params.clientId, "idp");
   await assertCreditsForNewVerification(ctx, params.clientId, creditsUsed);
 
   const now = Date.now();

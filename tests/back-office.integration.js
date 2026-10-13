@@ -81,17 +81,17 @@ test("billing: run-out forecast from the recent daily rate", () => {
   assert.equal(billing.daysUntilEmpty(10, 28, 14), 5);
 });
 
-test("billing: reads need an internal role; pricing needs internal_admin, is validated and audited", () => {
+test("billing: reads need an internal role; the exchange rate needs internal_admin, is validated and audited", () => {
   const source = read("backend/convex/backOfficeBilling.ts");
-  for (const name of ["overview", "statement"]) {
+  for (const name of ["overview", "statement", "priceList"]) {
     const fn = source.slice(source.indexOf(`export const ${name}`));
     assert.match(fn.slice(0, 400), /await requireInternalUser\(ctx\)/, name);
   }
-  const setPricing = source.slice(source.indexOf("export const setPricing"));
-  assert.match(setPricing.slice(0, 500), /await requireInternalAdmin\(ctx, "write"\)/);
-  assert.match(setPricing, /\/\^\[A-Z\]\{3\}\$\//, "three-letter currency");
-  assert.match(setPricing, /action: "billing\.pricing_updated"/);
-  assert.match(setPricing, /before: existing \?/, "before/after values are audited");
+  const setRate = source.slice(source.indexOf("export const setExchangeRate"));
+  assert.match(setRate.slice(0, 500), /await requireInternalAdmin\(ctx, "write"\)/);
+  assert.match(setRate, /args\.usdToKes <= 0 \|\| args\.usdToKes > MAX_USD_TO_KES/);
+  assert.match(setRate, /action: "billing\.exchange_rate_updated"/);
+  assert.match(setRate, /before: existing\?\.usdToKes \?\? null/, "before/after values are audited");
 });
 
 test("billing: unbilled work = open review items with no deduction yet", () => {

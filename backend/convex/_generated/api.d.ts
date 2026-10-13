@@ -52,6 +52,7 @@ import type * as lib_documentChecks from "../lib/documentChecks.js";
 import type * as lib_documentPipeline from "../lib/documentPipeline.js";
 import type * as lib_documentVision from "../lib/documentVision.js";
 import type * as lib_openSanctions from "../lib/openSanctions.js";
+import type * as lib_pricing from "../lib/pricing.js";
 import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_rbac from "../lib/rbac.js";
 import type * as lib_riskEngine from "../lib/riskEngine.js";
@@ -122,6 +123,7 @@ declare const fullApi: ApiFromModules<{
   "lib/documentPipeline": typeof lib_documentPipeline;
   "lib/documentVision": typeof lib_documentVision;
   "lib/openSanctions": typeof lib_openSanctions;
+  "lib/pricing": typeof lib_pricing;
   "lib/rateLimits": typeof lib_rateLimits;
   "lib/rbac": typeof lib_rbac;
   "lib/riskEngine": typeof lib_riskEngine;

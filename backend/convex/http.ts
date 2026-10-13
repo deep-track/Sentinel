@@ -695,11 +695,12 @@ http.route({
   method: "GET",
   handler: apiAction("GET /v1/credits", async (ctx, request, auth) => {
 
-    const balance = await ctx.runQuery(internal.creditLedger._getBalance, {
+    // `balance` stays in credits for existing integrations; 1 credit = $0.01.
+    const summary = await ctx.runQuery(internal.creditLedger._getCreditSummary, {
       clientId: auth.clientId,
     });
 
-    return json({ balance });
+    return json(summary);
   }),
 });
 

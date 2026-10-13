@@ -30,6 +30,7 @@ import {
   formatNumber,
 } from "@/components/sentinel/format";
 import type { ClientSummary } from "../overview/ops-overview";
+import { PLAN_BONUS, PLAN_PREPAY, planCredits, type BillingCurrency } from "@/backend/convex/lib/pricing";
 
 type ClientDetail = ClientSummary & {
   ledger: Array<{ _id: string; type: string; amount: number; reason: string; createdAt: number }>;
@@ -318,6 +319,7 @@ function EditClientForm({ client }: { client: ClientDetail }) {
     creditLimit: String(client.creditLimit),
     rpmCap: String(client.rpmCap),
     creditThresholdPct: String(client.creditThresholdPct),
+    billingCurrency: client.billingCurrency,
     reason: "",
   });
   const [pending, setPending] = useState(false);
@@ -336,9 +338,10 @@ function EditClientForm({ client }: { client: ClientDetail }) {
             creditLimit: String(client.creditLimit),
             rpmCap: String(client.rpmCap),
             creditThresholdPct: String(client.creditThresholdPct),
+            billingCurrency: client.billingCurrency,
           },
     );
-  }, [client.name, client.plan, client.status, client.creditLimit, client.rpmCap, client.creditThresholdPct]);
+  }, [client.name, client.plan, client.status, client.creditLimit, client.rpmCap, client.creditThresholdPct, client.billingCurrency]);
 
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((current) => ({ ...current, [key]: event.target.value }));
@@ -356,6 +359,7 @@ function EditClientForm({ client }: { client: ClientDetail }) {
         creditLimit: Number(form.creditLimit),
         rpmCap: Number(form.rpmCap),
         creditThresholdPct: Number(form.creditThresholdPct),
+        billingCurrency: form.billingCurrency,
         reason: form.reason,
       })) as { changed: string[] };
       setMessage(
@@ -396,6 +400,12 @@ function EditClientForm({ client }: { client: ClientDetail }) {
                 {clientStatusBadge(status).label}
               </option>
             ))}
+          </select>
+        </Field>
+        <Field label="Billing currency" htmlFor="client-currency" hint="Can only change while the balance is 0.">
+          <select id="client-currency" className={inputClass} value={form.billingCurrency} onChange={set("billingCurrency")}>
+            <option value="USD">USD — international price list</option>
+            <option value="KES">KES — Kenyan price list</option>
           </select>
         </Field>
         <Field label="Monthly credit limit" htmlFor="client-limit" hint="Used for usage % and alerts. Doesn't add credits.">
@@ -502,7 +512,11 @@ function AdjustCreditsForm({ client }: { client: ClientDetail }) {
 
 function CreateClientPanel({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const createClient = useMutation(anyApi.apiKeys.createClient);
-  const [form, setForm] = useState({ name: "", plan: "trial" as Plan, creditLimit: "100", rpmCap: "60" });
+  const [form, setForm] = useState({ name: "", plan: "trial" as Plan, billingCurrency: "KES" as BillingCurrency, creditLimit: "100", rpmCap: "60" });
+  // Pre-fill the credits a paid plan's annual prepayment loads.
+  useEffect(() => {
+    if (form.plan !== "trial") setForm((current) => ({ ...current, creditLimit: String(planCredits(current.plan, current.billingCurrency)) }));
+  }, [form.plan, form.billingCurrency]);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<Message>(null);
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -516,6 +530,7 @@ function CreateClientPanel({ onClose, onCreated }: { onClose: () => void; onCrea
       const id = (await createClient({
         name: form.name,
         plan: form.plan,
+        billingCurrency: form.billingCurrency,
         creditLimit: Number(form.creditLimit),
         rpmCap: Number(form.rpmCap),
       })) as string;
@@ -552,7 +567,21 @@ function CreateClientPanel({ onClose, onCreated }: { onClose: () => void; onCrea
             ))}
           </select>
         </Field>
-        <Field label="Starting credits / limit" htmlFor="new-client-limit" hint="Allocated now and used as the monthly limit.">
+        <Field label="Billing currency" htmlFor="new-client-currency" hint="Kenyan entities: KES. Everyone else: USD.">
+          <select id="new-client-currency" className={inputClass} value={form.billingCurrency} onChange={set("billingCurrency")}>
+            <option value="USD">USD — international price list</option>
+            <option value="KES">KES — Kenyan price list</option>
+          </select>
+        </Field>
+        <Field
+          label="Starting credits / limit"
+          htmlFor="new-client-limit"
+          hint={
+            form.plan === "trial"
+              ? "Trial credits, allocated now."
+              : `${PLAN_PREPAY[form.billingCurrency][form.plan].toLocaleString()} ${form.billingCurrency} prepay${PLAN_BONUS[form.billingCurrency][form.plan] ? ` + ${Math.round(PLAN_BONUS[form.billingCurrency][form.plan] * 100)}% bonus` : ""}.`
+          }
+        >
           <input id="new-client-limit" type="number" min={0} step={1} className={inputClass} value={form.creditLimit} onChange={set("creditLimit")} required />
         </Field>
         <Field label="Requests per minute" htmlFor="new-client-rpm">

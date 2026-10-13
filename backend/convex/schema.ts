@@ -34,6 +34,7 @@ export default defineSchema({
       v.literal("trial"),
       v.literal("starter"),
       v.literal("growth"),
+      v.literal("business"),
       v.literal("enterprise"),
     ),
     status: v.union(
@@ -49,6 +50,9 @@ export default defineSchema({
     creditThresholdPct: v.number(), // alert fires when credits are low
     webhookUrl: v.optional(v.string()),
     webhookSecret: v.optional(v.string()), //verify a webhook 
+    // Currency the client is billed and shown amounts in (lib/pricing.ts).
+    // Absent = USD. The ledger is always in credits = US cents.
+    billingCurrency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
     createdAt: v.number(),
   }),
 
@@ -156,13 +160,12 @@ export default defineSchema({
   // plan; unset prices make the billing screens show credits only.
   billingSettings: defineTable({
     key: v.literal("default"),
-    currency: v.string(), // ISO 4217, e.g. "KES"
-    pricePerCredit: v.object({
-      trial: v.optional(v.number()),
-      starter: v.optional(v.number()),
-      growth: v.optional(v.number()),
-      enterprise: v.optional(v.number()),
-    }),
+    // Legacy (before plan pricing): a flat price per credit. Unused now that
+    // credits are US cents; kept optional so existing rows still validate.
+    currency: v.optional(v.string()),
+    pricePerCredit: v.optional(v.any()),
+    // USD → KES rate for clients billed in KES (lib/pricing.ts).
+    usdToKes: v.optional(v.number()),
     updatedAt: v.number(),
     updatedBy: v.string(),
   }).index("by_key", ["key"]),

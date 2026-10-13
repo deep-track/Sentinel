@@ -84,7 +84,7 @@ export function formatAge(ms: number): string {
   return `${Math.floor(ms / 86_400_000)}d`;
 }
 
-export const PLAN_LABELS = { trial: "Trial", starter: "Starter", growth: "Growth", enterprise: "Enterprise" } as const;
+export const PLAN_LABELS = { trial: "Trial", starter: "Starter", growth: "Growth", business: "Business", enterprise: "Enterprise" } as const;
 export type Plan = keyof typeof PLAN_LABELS;
 
 export type ClientStatus = "active" | "suspended" | "trial_expired";

@@ -9,6 +9,7 @@ import { getBalance, recordLedgerEntry } from "./lib/credits";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
 import { latencyStats } from "./portal";
 import { createdTime } from "./userProfiles";
+import { creditsToMoney } from "./lib/pricing";
 
 // Internal (Sentinel staff) client management and the cross-client ops
 // overview. Reads need an internal role; writes need internal_admin and are
@@ -25,6 +26,7 @@ const planValidator = v.union(
   v.literal("trial"),
   v.literal("starter"),
   v.literal("growth"),
+  v.literal("business"),
   v.literal("enterprise"),
 );
 const clientStatusValidator = v.union(v.literal("active"), v.literal("suspended"), v.literal("trial_expired"));
@@ -61,6 +63,8 @@ async function clientSummary(ctx: QueryCtx, client: ClientDoc, monthStart: numbe
     usedThisMonth,
     // Share of the plan's credit limit consumed this month (null without a limit).
     usagePct: client.creditLimit > 0 ? Math.round((usedThisMonth / client.creditLimit) * 1000) / 10 : null,
+    billingCurrency: client.billingCurrency ?? "USD",
+    balanceValue: creditsToMoney(balance, client.billingCurrency ?? "USD", client.plan),
     createdAt: createdTime(client),
   };
 }
@@ -263,6 +267,7 @@ export const updateClient = mutation({
     creditLimit: v.optional(v.number()),
     rpmCap: v.optional(v.number()),
     creditThresholdPct: v.optional(v.number()),
+    billingCurrency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -271,7 +276,18 @@ export const updateClient = mutation({
     const client = await ctx.db.get(args.clientId);
     if (!client) throw new ConvexError({ code: "not_found", message: "Client not found." });
 
-    const patch: Partial<Pick<ClientDoc, "name" | "plan" | "status" | "creditLimit" | "rpmCap" | "creditThresholdPct">> = {};
+    const patch: Partial<Pick<ClientDoc, "name" | "plan" | "status" | "creditLimit" | "rpmCap" | "creditThresholdPct" | "billingCurrency">> = {};
+    // Credits are counted in the billing currency (lib/pricing.ts), so it can
+    // only change while the client has no credits.
+    if (args.billingCurrency !== undefined && args.billingCurrency !== (client.billingCurrency ?? "USD")) {
+      if ((await getBalance(ctx, args.clientId)) !== 0) {
+        throw new ConvexError({
+          code: "invalid_argument",
+          message: "The billing currency can only change while the balance is zero. Adjust the balance to 0 first.",
+        });
+      }
+      patch.billingCurrency = args.billingCurrency;
+    }
     if (args.name !== undefined) {
       const name = args.name.trim();
       if (!name || name.length > 200) throw new ConvexError({ code: "invalid_argument", message: "Client name must be 1–200 characters." });
