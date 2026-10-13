@@ -17,6 +17,7 @@ import type * as backOfficeBilling from "../backOfficeBilling.js";
 import type * as backOfficeClients from "../backOfficeClients.js";
 import type * as backOfficeCompliance from "../backOfficeCompliance.js";
 import type * as backOfficeHealth from "../backOfficeHealth.js";
+import type * as backOfficeQuality from "../backOfficeQuality.js";
 import type * as backOfficeReviews from "../backOfficeReviews.js";
 import type * as clients from "../clients.js";
 import type * as complianceReports from "../complianceReports.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   backOfficeClients: typeof backOfficeClients;
   backOfficeCompliance: typeof backOfficeCompliance;
   backOfficeHealth: typeof backOfficeHealth;
+  backOfficeQuality: typeof backOfficeQuality;
   backOfficeReviews: typeof backOfficeReviews;
   clients: typeof clients;
   complianceReports: typeof complianceReports;
