@@ -1,4 +1,4 @@
-import { Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/backend/lib/utils";
@@ -6,9 +6,11 @@ import { cn } from "@/backend/lib/utils";
 // Sentinel brand kit: near-black surfaces, the three-bar blue mark, and
 // Space Grotesk. Colors are the `sentinel-*` tokens in tailwind.config.ts.
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+// Space Grotesk (SIL OFL 1.1, see fonts/OFL.txt), self-hosted so builds don't
+// depend on downloading it from Google Fonts. Variable font: weights 300–700.
+const spaceGrotesk = localFont({
+  src: "./fonts/space-grotesk-latin-variable.woff2",
+  weight: "300 700",
   variable: "--font-space-grotesk",
   display: "swap",
 });
