@@ -12,6 +12,10 @@ export const OPENSANCTIONS_DATASET = "default";
 export const OPENSANCTIONS_MATCH_THRESHOLD = 0.7;
 // A sanctions-topic match at or above this score is a hard stop ("reject").
 export const OPENSANCTIONS_STRONG_MATCH_SCORE = 0.9;
+// PEP and other risk-list matches need a closer name match than sanctions
+// before they hold a screening: a 0.7 PEP hit is usually a different person
+// with a similar name ("Utkin" for "Putin"), and each one costs a review.
+export const OPENSANCTIONS_NON_SANCTION_MIN_SCORE = 0.8;
 export const OPENSANCTIONS_RESULT_LIMIT = 10;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -35,7 +39,9 @@ export type OpenSanctionsMatch = {
   countries: string[];
 };
 
-export type OpenSanctionsCategory = "sanction" | "pep" | "other";
+// "none" = no risk topic at all: enrichment records such as company
+// registries (ext_* datasets) or reference data, not a risk list.
+export type OpenSanctionsCategory = "sanction" | "pep" | "other" | "none";
 
 // "screened" is the only status that counts as coverage.
 export type OpenSanctionsOutcome =
@@ -155,14 +161,21 @@ export async function matchOpenSanctions(
 export function categorize(match: OpenSanctionsMatch): OpenSanctionsCategory {
   if (match.topics.some((topic) => SANCTION_TOPICS.has(topic))) return "sanction";
   if (match.topics.some((topic) => PEP_TOPICS.has(topic))) return "pep";
-  return "other";
+  return match.topics.length > 0 ? "other" : "none";
 }
 
-// Only results the API flags as matches count; they are already filtered by
-// the cutoff, so this is a guard against API-side default changes.
+// The matches that affect the verdict and are stored. Only results the API
+// flags as matches count (already filtered by the cutoff; this guards against
+// API-side default changes). Sanctions count from 0.7; PEP and other risk
+// lists from 0.8; records with no risk topic never count.
 export function relevantMatches(matches: OpenSanctionsMatch[]): OpenSanctionsMatch[] {
   return matches
-    .filter((match) => match.match && match.score >= OPENSANCTIONS_MATCH_THRESHOLD)
+    .filter((match) => {
+      if (!match.match || match.score < OPENSANCTIONS_MATCH_THRESHOLD) return false;
+      const category = categorize(match);
+      if (category === "none") return false;
+      return category === "sanction" || match.score >= OPENSANCTIONS_NON_SANCTION_MIN_SCORE;
+    })
     .sort((left, right) => right.score - left.score);
 }
 
