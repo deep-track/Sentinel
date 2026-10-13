@@ -3,7 +3,8 @@
 // Selfie photos go to POST /v1/image/predict as multipart "file" with an
 // X-API-Key header. No imports, so tests can transpile and evaluate this file.
 
-export const DEEPTRACK_LIVE_DEFAULT_BASE_URL = "https://facedetectionsystem-staging.onrender.com";
+// There is no default service URL: DEEPTRACK_LIVE_BASE_URL must be set in
+// the Convex deployment (the old Render staging service is no longer used).
 export const DEEPTRACK_LIVE_IMAGE_PATH = "/v1/image/predict";
 
 // A "fake" prediction at or above this confidence rejects outright. Below

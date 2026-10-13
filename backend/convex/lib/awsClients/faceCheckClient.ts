@@ -1,6 +1,5 @@
 import { UpstreamServiceError, invalidResponse } from "./internalFetch";
 import {
-  DEEPTRACK_LIVE_DEFAULT_BASE_URL,
   DEEPTRACK_LIVE_IMAGE_PATH,
   decodeSelfieImage,
   parseDeeptrackLiveImageResponse,
@@ -9,13 +8,19 @@ import {
 
 export type FaceCheckRequest = { selfieBase64: string };
 
-// Render free/starter instances can cold-start, so allow longer than the
+// The model service can be slow to warm up, so allow longer than the
 // internal services.
 const TIMEOUT_MS = 45_000;
 const LOGGED_BODY_LIMIT = 300;
 
 function baseUrl(): string {
-  const raw = process.env.DEEPTRACK_LIVE_BASE_URL?.trim() || DEEPTRACK_LIVE_DEFAULT_BASE_URL;
+  const raw = process.env.DEEPTRACK_LIVE_BASE_URL?.trim();
+  if (!raw) {
+    throw new UpstreamServiceError(
+      "upstream_misconfigured",
+      "Missing required env var DEEPTRACK_LIVE_BASE_URL: set it in the Convex deployment's environment variables.",
+    );
+  }
   let url: URL;
   try {
     url = new URL(raw);

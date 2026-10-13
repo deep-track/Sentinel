@@ -5,7 +5,6 @@ import type { Doc } from "./_generated/dataModel";
 import { recordAudit } from "./auditLog";
 import { loadWatchlistCoverage } from "./amlPersistence";
 import { SOURCE_KEYS, SOURCE_LABELS } from "./lib/amlMatching";
-import { DEEPTRACK_LIVE_DEFAULT_BASE_URL } from "./lib/deeptrackLive";
 import { OPENSANCTIONS_BASE_URL } from "./lib/openSanctions";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
 
@@ -32,6 +31,7 @@ export const PROBE_LABELS: Record<ProbeService, string> = {
 const CONFIG: Array<{ key: string; label: string; purpose: string; required: boolean }> = [
   { key: "OPENSANCTIONS_API_KEY", label: "OpenSanctions API key", purpose: "AML screening", required: true },
   { key: "WATCHLIST_UN_CONSOLIDATED_URL", label: "UN watchlist URL", purpose: "AML screening", required: true },
+  { key: "DEEPTRACK_LIVE_BASE_URL", label: "DeepTrack Live URL", purpose: "Selfie and video liveness", required: true },
   { key: "DEEPTRACK_LIVE_API_KEY", label: "DeepTrack Live API key", purpose: "Selfie and video liveness", required: true },
   { key: "SENTINEL_INTERNAL_API_BASE_URL", label: "Scanning service URL", purpose: "Document scan, IPRS", required: true },
   { key: "SENTINEL_INTERNAL_API_TOKEN", label: "Scanning service token", purpose: "Document scan, IPRS", required: true },
@@ -88,9 +88,11 @@ export const runHealthChecks = internalAction({
     const results: ProbeResult[] = [];
 
     // DeepTrack Live: with a key, the usage endpoint proves the key works too.
-    const dtBase = (process.env.DEEPTRACK_LIVE_BASE_URL?.trim() || DEEPTRACK_LIVE_DEFAULT_BASE_URL).replace(/\/$/, "");
+    const dtBase = process.env.DEEPTRACK_LIVE_BASE_URL?.trim().replace(/\/$/, "");
     const dtKey = process.env.DEEPTRACK_LIVE_API_KEY?.trim();
-    if (dtKey) {
+    if (!dtBase) {
+      results.push({ service: "deeptrack_live", ok: false, error: "DEEPTRACK_LIVE_BASE_URL is not set" });
+    } else if (dtKey) {
       results.push(await probe("deeptrack_live", `${dtBase}/v1/client/usage/me`, { "X-API-Key": dtKey }, (s) => s >= 200 && s < 300, httpProblem));
     } else {
       const reach = await probe("deeptrack_live", `${dtBase}/`, {}, (s) => s < 500, httpProblem);

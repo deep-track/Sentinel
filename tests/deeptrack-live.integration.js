@@ -100,3 +100,15 @@ test("face check client sends X-API-Key and fails closed without a key", () => {
   assert.match(client, /upstream_misconfigured/);
   assert.match(client, /form\.append\("file"/);
 });
+
+test("DeepTrack Live has no default service URL", () => {
+  assert.equal(live.DEEPTRACK_LIVE_DEFAULT_BASE_URL, undefined);
+  const client = read("backend/convex/lib/awsClients/faceCheckClient.ts");
+  assert.match(client, /Missing required env var DEEPTRACK_LIVE_BASE_URL/);
+  const health = read("backend/convex/backOfficeHealth.ts");
+  assert.match(health, /error: "DEEPTRACK_LIVE_BASE_URL is not set"/);
+  assert.match(health, /key: "DEEPTRACK_LIVE_BASE_URL", label: "DeepTrack Live URL"/);
+  for (const file of ["backend/convex/lib/deeptrackLive.ts", "backend/convex/lib/awsClients/faceCheckClient.ts", "backend/convex/backOfficeHealth.ts"]) {
+    assert.doesNotMatch(read(file), /onrender\.com/, file);
+  }
+});
