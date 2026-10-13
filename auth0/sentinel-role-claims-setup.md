@@ -43,6 +43,19 @@ An authenticated user with no approved role should still be able to authenticate
 
 The action emits only the allowlisted roles. The Convex authorization helper (`backend/convex/lib/rbac.ts`) and the Next.js helper (`backend/lib/roles.ts`) independently validate the token claim and do not accept a role supplied in request JSON. Keep the allowlist in this Action in sync with both files. Auth0 role assignment and Action deployment should be limited to authorized tenant administrators and recorded in the compliance change log.
 
+## Refresh tokens for the Convex ID token
+
+Sentinel requests `offline_access` (`backend/lib/auth0.ts`) so the session holds a refresh token. `/api/auth/token` uses it to renew the ID token that Convex verifies once it expires, without a redirect. The post-login Action above also runs on the refresh grant, so the renewed ID token keeps the role, company and `org_id` claims.
+
+On the Sentinel application in Auth0 (Applications → Sentinel):
+
+- Advanced Settings → Grant Types: enable **Refresh Token**.
+- Refresh Token Rotation: turn on **Allow Refresh Token Rotation** and set a **Rotation Overlap Period** of about 30 seconds. Two tabs, or two serverless instances, can refresh with the same token at once; with no overlap, Auth0's reuse detection revokes the whole token family and the user falls back to a redirect through `/auth/login`.
+- Refresh Token Expiration: set the absolute and inactivity lifetimes no longer than the Sentinel session lifetime.
+- Sentinel requests no API `audience`. If one is added later, also enable **Allow Offline Access** on that API (Applications → APIs → Access Settings).
+
+Sessions created before this change have no refresh token. They keep using the redirect fallback until the user's next login.
+
 ## References
 
 [1]: https://auth0.com/docs/secure/tokens/json-web-tokens/create-custom-claims "Auth0: Create Custom Claims"
