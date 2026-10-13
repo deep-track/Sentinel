@@ -111,6 +111,21 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"])
     .index("by_provider_message", ["providerMessageId"]),
+  // Back Office pricing: one row (key "default"). Price per credit for each
+  // plan; unset prices make the billing screens show credits only.
+  billingSettings: defineTable({
+    key: v.literal("default"),
+    currency: v.string(), // ISO 4217, e.g. "KES"
+    pricePerCredit: v.object({
+      trial: v.optional(v.number()),
+      starter: v.optional(v.number()),
+      growth: v.optional(v.number()),
+      enterprise: v.optional(v.number()),
+    }),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_key", ["key"]),
+
   // Back Office service health: one row per scheduled probe of an external
   // dependency (every 15 min, kept 7 days).
   serviceHealthChecks: defineTable({
