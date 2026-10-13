@@ -273,6 +273,11 @@ export default defineSchema({
       v.literal("resolved"),
     ),
     assignedTo: v.optional(v.string()),
+    // Display names captured when the item was assigned / resolved, so the
+    // Back Office can show people instead of sign-in IDs.
+    assignedToName: v.optional(v.string()),
+    assignedAt: v.optional(v.number()),
+    resolvedByName: v.optional(v.string()),
     resolutionAction: v.optional(
       v.union(
         v.literal("confirm"),

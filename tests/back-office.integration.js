@@ -138,3 +138,47 @@ test("client health: reads need an internal role and test calls are left out of 
   assert.match(query.slice(0, 400), /await requireInternalUser\(ctx\)/);
   assert.match(query, /if \(isSandbox\(row\)\) continue;/);
 });
+
+// ── Review operations ───────────────────────────────────────────────────────
+
+const reviews = loadWithStubs("backend/convex/backOfficeReviews.ts");
+const HOUR = 60 * 60 * 1000;
+
+test("review ops: deadlines by priority", () => {
+  const now = 1_800_000_000_000;
+  assert.equal(reviews.isOverdue({ priority: "high", createdAt: now - 5 * HOUR }, now), true);
+  assert.equal(reviews.isOverdue({ priority: "high", createdAt: now - 3 * HOUR }, now), false);
+  assert.equal(reviews.isOverdue({ priority: "normal", createdAt: now - 30 * HOUR, resolvedAt: now - 10 * HOUR }, now), false, "resolved within 24 h");
+  assert.equal(reviews.isOverdue({ priority: "low", createdAt: now - 80 * HOUR }, now), true);
+});
+
+test("review ops: hold reasons from real production trigger texts", () => {
+  const reason = (triggerReason, triggerType = "auto_escalation") => reviews.holdReason({ triggerType, triggerReason });
+  assert.equal(reason("Scan service infrastructure failure"), "Service outage");
+  assert.equal(reason("Watchlist unavailable or stale (UN Consolidated unavailable) — held for manual review. No match found on OFAC SDN, but screening is incomplete."), "Service outage");
+  assert.equal(reason("Liveness not collected; presenter not verified against the document."), "Liveness not collected");
+  assert.equal(reason("liveness below threshold or deepfake flagged"), "Liveness or face check");
+  assert.equal(reason("document authenticity below threshold or flags present"), "Document authenticity");
+  assert.equal(reason("IPRS partial match"), "Identity registry (IPRS)");
+  assert.equal(reason("Exact or normalized sanctions-list match requires compliance escalation."), "Sanctions match");
+  assert.equal(reason("OpenSanctions politically exposed person (PEP) match requires enhanced due diligence."), "PEP / risk list");
+  assert.equal(reason("anything", "client_dispute"), "Client dispute");
+});
+
+test("review ops: assignment rules and audit; reviewer names captured on resolve", () => {
+  const source = read("backend/convex/backOfficeReviews.ts");
+  const assign = source.slice(source.indexOf("export const assignReviewItem"));
+  assert.match(assign, /await requireInternalUser\(ctx, "write"\)/, "view-only users can't assign");
+  assert.match(assign, /if \(!admin && \(!ownsOrFree \|\| typeof args\.to === "object"\)\)/, "non-admins only take free items or release their own");
+  assert.match(assign, /action: "review\.assigned"/);
+  const resolve = read("backend/convex/reviewQueue.ts");
+  assert.match(resolve, /resolvedByName: params\.reviewerName/);
+  assert.match(resolve, /const reviewerName = displayName\(await ctx\.auth\.getUserIdentity\(\)\)/);
+});
+
+test("review ops: an OpenSanctions sanctions hit is still a sanctions match", () => {
+  const reason = (triggerReason) => reviews.holdReason({ triggerType: "auto_escalation", triggerReason });
+  assert.equal(reason("Possible OpenSanctions sanctions match requires human identity resolution."), "Sanctions match");
+  assert.equal(reason("Strong OpenSanctions sanctions match requires compliance escalation."), "Sanctions match");
+  assert.equal(reason("OpenSanctions risk-list match requires human review."), "PEP / risk list");
+});

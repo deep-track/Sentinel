@@ -149,6 +149,13 @@ function feedbackLabelFor(
   return null;
 }
 
+// A reviewer's display name from their sign-in identity (name, else email).
+export function displayName(identity: { name?: unknown; email?: unknown } | null): string | undefined {
+  const name = typeof identity?.name === "string" && identity.name.trim() ? identity.name.trim() : null;
+  const email = typeof identity?.email === "string" && identity.email.trim() ? identity.email.trim() : null;
+  return (name ?? email ?? undefined)?.slice(0, 120);
+}
+
 // Shared resolution logic behind reviewQueue.resolve (the only manual-decision path).
 //
 // Section 11.2's three-action resolution: Confirm / Keep verdict / Escalate.
@@ -159,6 +166,7 @@ export async function resolveReviewItem(
   ctx: MutationCtx,
   params: {
     reviewerId: string;
+    reviewerName?: string;
     reviewRow: Doc<"reviewQueue">;
     action: ReviewAction;
     notes?: string;
@@ -235,6 +243,7 @@ export async function resolveReviewItem(
     resolutionAction: action,
     resolutionNotes: notes,
     resolvedBy: reviewerId,
+    resolvedByName: params.reviewerName,
     resolvedAt: now,
   });
 
@@ -299,6 +308,7 @@ export const resolve = mutation({
   },
   handler: async (ctx, args) => {
     const reviewerId = await requireInternalUser(ctx);
+    const reviewerName = displayName(await ctx.auth.getUserIdentity());
 
     const reviewRow = await ctx.db.get(args.reviewId);
     if (!reviewRow) {
@@ -307,6 +317,7 @@ export const resolve = mutation({
 
     return await resolveReviewItem(ctx, {
       reviewerId,
+      reviewerName,
       reviewRow,
       action: args.action,
       notes: args.notes,
