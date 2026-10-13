@@ -25,6 +25,7 @@ import {
   fetchArticleText,
   gdeltProvider,
   screenAdverseMediaMany,
+  WEB_SEARCH_PROVIDER,
   type AdverseMediaOutcome,
 } from "./lib/adverseMedia";
 import { MAX_EXTERNAL_REF_LENGTH, enrolMonitoredSubject } from "./lib/amlMonitoringStore";
@@ -432,12 +433,13 @@ function finalDecision(candidates: Array<Candidate<Entry>>, coverage: Coverage) 
   };
 }
 
-// Adverse media runs when ANTHROPIC_API_KEY is set (it classifies the
-// articles). ADVERSE_MEDIA_PROVIDER=none turns it off; the default searches
-// GDELT. Unlike the sanctions sources, an adverse media outage doesn't hold
-// a screening for review: it is reported in coverage.adverseMedia.
+// Adverse media runs when ANTHROPIC_API_KEY is set. ADVERSE_MEDIA_PROVIDER:
+// "claude_web_search" (default) searches with Claude's web search, "gdelt"
+// uses GDELT's news index, "none" turns it off. Unlike the sanctions
+// sources, an adverse media outage doesn't hold a screening for review: it
+// is reported in coverage.adverseMedia.
 async function screenAdverseMedia(subjects: ScreeningSubject[]): Promise<AdverseMediaOutcome[]> {
-  const providerName = process.env.ADVERSE_MEDIA_PROVIDER?.trim().toLowerCase() || "gdelt";
+  const providerName = process.env.ADVERSE_MEDIA_PROVIDER?.trim().toLowerCase() || WEB_SEARCH_PROVIDER;
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   return screenAdverseMediaMany(
     subjects.map((subject) => ({
@@ -451,7 +453,7 @@ async function screenAdverseMedia(subjects: ScreeningSubject[]): Promise<Adverse
       jurisdiction: subject.jurisdiction,
     })),
     {
-      provider: providerName === "none" ? null : gdeltProvider(),
+      provider: providerName === "none" ? null : providerName === "gdelt" ? gdeltProvider() : WEB_SEARCH_PROVIDER,
       client: apiKey ? new Anthropic({ apiKey }) : null,
       fetchArticle: (url) => fetchArticleText(url),
       onError: (error) =>
