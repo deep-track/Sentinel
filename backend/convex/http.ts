@@ -15,7 +15,7 @@ import { mapTwilioDeliveryStatus, verifyTwilioSignature } from "./lib/twilio";
 import { callbackTokenMatches, mapAfricasTalkingDeliveryStatus } from "./lib/africasTalking";
 import { MAX_MEDIA_BASE64_CHARS } from "./lib/verificationTypes";
 import type { IdpInput } from "./verifications";
-import { MAX_COUNTRY_LENGTH, MAX_SUBJECT_NAME_LENGTH } from "./aml";
+import { MAX_ALIASES, MAX_COUNTRY_LENGTH, MAX_IDENTIFIER_LENGTH, MAX_SUBJECT_NAME_LENGTH, type AmlSubjectDetails } from "./aml";
 
 const http = httpRouter();
 
@@ -250,9 +250,14 @@ function amlScreeningSummary(result: unknown) {
     reason?: unknown;
     matches?: Array<Record<string, unknown>>;
     coverage?: { checkedSources?: Array<{ sourceKey?: unknown; stale?: unknown }>; openSanctions?: unknown };
+    categories?: unknown;
   };
   return {
     reason: typeof r.reason === "string" ? r.reason : null,
+    // Hits per category (sanctions, pep, special_interest, fitness_probity,
+    // adverse_media, insolvency) and the most severe PEP class; null on
+    // screenings from before categories existed.
+    categories: r.categories && typeof r.categories === "object" ? r.categories : null,
     sources: {
       watchlists: (r.coverage?.checkedSources ?? []).map((source) => ({
         source: source.sourceKey ?? null,
@@ -269,6 +274,9 @@ function amlScreeningSummary(result: unknown) {
       riskLevel: match.riskLevel ?? null,
       matchedCountry: match.matchedCountry ?? null,
       topics: Array.isArray(match.topics) ? match.topics : [],
+      categories: Array.isArray(match.categories) ? match.categories : [],
+      pepClass: typeof match.pepClass === "number" ? match.pepClass : null,
+      birthDateMatch: typeof match.birthDateMatch === "string" ? match.birthDateMatch : null,
     })),
   };
 }
@@ -325,8 +333,17 @@ http.route({
   }),
 });
 
-type AmlBody = { subjectName: string; entityType: "individual" | "entity"; country?: string };
+type AmlBody = AmlSubjectDetails & { subjectName: string; entityType: "individual" | "entity"; country?: string };
 const AML_ENTITY_TYPES = ["individual", "entity"] as const;
+// Optional string fields and their maximum lengths. Whether each applies to
+// the entity type, and the date format, are checked in aml.normalizeAmlRequest.
+const AML_OPTIONAL_TEXT: Array<[keyof AmlSubjectDetails, number]> = [
+  ["dateOfBirth", 10],
+  ["nationality", MAX_COUNTRY_LENGTH],
+  ["idNumber", MAX_IDENTIFIER_LENGTH],
+  ["registrationNumber", MAX_IDENTIFIER_LENGTH],
+  ["jurisdiction", MAX_COUNTRY_LENGTH],
+];
 
 function parseAmlBody(body: unknown): Parsed<AmlBody> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -349,6 +366,19 @@ function parseAmlBody(body: unknown): Parsed<AmlBody> {
   ) {
     invalid.push("country");
   }
+  for (const [field, max] of AML_OPTIONAL_TEXT) {
+    const value = b[field];
+    if (value !== undefined && value !== null && (typeof value !== "string" || value.trim().length > max)) invalid.push(field);
+  }
+  if (
+    b.aliases !== undefined &&
+    b.aliases !== null &&
+    (!Array.isArray(b.aliases) ||
+      b.aliases.length > MAX_ALIASES ||
+      b.aliases.some((alias) => typeof alias !== "string" || alias.trim().length > MAX_SUBJECT_NAME_LENGTH))
+  ) {
+    invalid.push("aliases");
+  }
   if (invalid.length > 0) {
     return {
       ok: false,
@@ -359,6 +389,12 @@ function parseAmlBody(body: unknown): Parsed<AmlBody> {
             subjectName: `string of at most ${MAX_SUBJECT_NAME_LENGTH} characters`,
             entityType: AML_ENTITY_TYPES,
             country: `optional string of at most ${MAX_COUNTRY_LENGTH} characters (ISO code or name)`,
+            aliases: `optional array of at most ${MAX_ALIASES} names`,
+            dateOfBirth: "optional, individuals only: YYYY, YYYY-MM or YYYY-MM-DD",
+            nationality: "optional, individuals only: ISO code or name",
+            idNumber: `optional, individuals only: national ID or passport number, at most ${MAX_IDENTIFIER_LENGTH} characters`,
+            registrationNumber: `optional, entities only: company registration number, at most ${MAX_IDENTIFIER_LENGTH} characters`,
+            jurisdiction: "optional, entities only: country of incorporation (ISO code or name)",
           },
         },
         400,
@@ -366,9 +402,15 @@ function parseAmlBody(body: unknown): Parsed<AmlBody> {
     };
   }
   const country = typeof b.country === "string" && b.country.trim() ? b.country.trim() : undefined;
+  const details: AmlSubjectDetails = {};
+  for (const [field] of AML_OPTIONAL_TEXT) {
+    const value = b[field];
+    if (typeof value === "string" && value.trim()) details[field] = value.trim() as never;
+  }
+  if (Array.isArray(b.aliases) && b.aliases.length > 0) details.aliases = (b.aliases as string[]).map((alias) => alias.trim());
   return {
     ok: true,
-    value: { subjectName: (b.subjectName as string).trim(), entityType: b.entityType as AmlBody["entityType"], country },
+    value: { subjectName: (b.subjectName as string).trim(), entityType: b.entityType as AmlBody["entityType"], country, ...details },
   };
 }
 

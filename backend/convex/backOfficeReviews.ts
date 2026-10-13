@@ -45,7 +45,9 @@ export function holdReason(item: Pick<Doc<"reviewQueue">, "triggerType" | "trigg
   if (reason.includes("iprs")) return "Identity registry (IPRS)";
   // PEP first, and "sanction" as a whole word only: "OpenSanctions PEP match"
   // is a PEP hold, not a sanctions one.
-  if (/\bpep\b|politically exposed|risk-list|risk list/.test(reason)) return "PEP / risk list";
+  if (/\bpep\b|politically exposed|risk-list|risk list|special interest|fitness and probity|insolvency|adverse media/.test(reason)) {
+    return "PEP / risk list";
+  }
   if (/\bsanctions?\b|watchlist|ofac|terror/.test(reason)) return "Sanctions match";
   return "Other";
 }
