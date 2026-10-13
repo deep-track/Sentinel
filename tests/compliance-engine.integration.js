@@ -426,3 +426,25 @@ test("OpenSanctions combine: stricter verdict wins and outages never pass", () =
   assert.equal(partial.verdict, "review");
   assert.equal(partial.complete, false);
 });
+
+const readSource = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+
+test("a missing watchlist URL setting is recorded on the source and shown in Ops", () => {
+  const watchlists = readSource("backend/convex/watchlists.ts");
+  assert.match(watchlists, /resolveSourceUrl\(ctx, "UN_CONSOLIDATED", "WATCHLIST_UN_CONSOLIDATED_URL"\)/);
+  assert.match(watchlists, /resolveSourceUrl\(ctx, "OFAC_SDN", "WATCHLIST_OFAC_SDN_URL", DEFAULT_OFAC_URL\)/);
+  assert.match(watchlists, /export const _recordConfigError = internalMutation/);
+  const resolver = watchlists.slice(watchlists.indexOf("async function resolveSourceUrl"));
+  assert.ok(
+    resolver.indexOf("internal.watchlists._recordConfigError") < resolver.indexOf("throw new Error("),
+    "the error is recorded before the action fails",
+  );
+  assert.match(readSource("backend/convex/amlPersistence.ts"), /if \(source\?\.lastError\) lastErrors\[sourceKey\] = source\.lastError/);
+  assert.match(readSource("backend/convex/admin.ts"), /withLastError\(.*coverage\.lastErrors\[key\]\)/);
+});
+
+test("admin.getClient treats a malformed ?client= id as not found", () => {
+  const admin = readSource("backend/convex/admin.ts");
+  assert.match(admin, /export const getClient = query\(\{[\s\S]*?clientId: v\.string\(\)/);
+  assert.match(admin, /ctx\.db\.normalizeId\("clients", args\.clientId\)/);
+});

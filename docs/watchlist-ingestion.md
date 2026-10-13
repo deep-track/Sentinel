@@ -26,10 +26,12 @@ WATCHLIST_OFAC_SDN_URL=https://www.treasury.gov/ofac/downloads/sdn.xml
 The UN source URL must be configured because the Security Council can change its published file location:
 
 ```text
-WATCHLIST_UN_CONSOLIDATED_URL=https://<approved-un-consolidated-xml-url>
+WATCHLIST_UN_CONSOLIDATED_URL=https://scsanctions.un.org/resources/xml/en/consolidated.xml
 ```
 
-The value must be an HTTPS URL. Missing or invalid configuration causes the job to fail and records the failure; it does not activate an empty list.
+This is the official UN feed and is set on the production deployment (`robust-parakeet-542`) as of 12 October 2026. It answers with a redirect to a short-lived signed download URL, which `fetch` follows; the UN parser was checked against it (1,010 records). It was unset until then, so UN ingestion never ran in production.
+
+The value must be an HTTPS URL. Missing or invalid configuration causes the job to fail without activating anything: the error is written to the source's `lastError`, and the Sentinel Ops overview shows it in the "watchlist unavailable" alert.
 
 ## Convex cron implementation
 
@@ -71,17 +73,20 @@ AML screening (`aml.runScreening`) checks every subject against both the Sentine
 
 ## Validation and deployment
 
-The implementation was validated with:
+Production is the Convex deployment `robust-parakeet-542`. Vercel does not deploy Convex functions, so after a merge to `main`:
 
 ```bash
-CONVEX_DEPLOYMENT=insightful-lark-924 npx convex codegen
-npm run typecheck
-npm run build
-git diff --check
-CONVEX_DEPLOYMENT=insightful-lark-924 npx convex deploy
+CONVEX_DEPLOYMENT=prod:robust-parakeet-542 npx convex deploy --dry-run
+CONVEX_DEPLOYMENT=prod:robust-parakeet-542 npx convex deploy
 ```
 
-The Convex deployment completed successfully for the Deeptrack `platform` production deployment. The next operational validation is to configure `WATCHLIST_UN_CONSOLIDATED_URL`, run each action against approved fixtures or source data, inspect the version and entry counts, and verify that a failed import leaves the prior active version untouched.
+To load a list immediately instead of waiting for its nightly run (on Windows PowerShell, set `$env:CONVEX_DEPLOYMENT` first and use `npx.cmd`):
+
+```bash
+CONVEX_DEPLOYMENT=prod:robust-parakeet-542 npx convex run watchlists:ingestUn
+```
+
+As of 12 October 2026 production holds OFAC SDN (19,416 records, refreshed daily) and UN Consolidated (1,010 records). Remaining validation: confirm that a failed import leaves the prior active version untouched.
 
 ## References
 

@@ -28,11 +28,14 @@ export async function loadWatchlistCoverage(ctx: QueryCtx, now: number) {
   }> = [];
   const missing: SourceKey[] = [];
   const stale: SourceKey[] = [];
+  // The last ingestion error per source, for the Ops alerts.
+  const lastErrors: Partial<Record<SourceKey, string>> = {};
   for (const sourceKey of SOURCE_KEYS) {
     const source = await ctx.db
       .query("watchlistSources")
       .withIndex("by_source_key", (q) => q.eq("sourceKey", sourceKey))
       .first();
+    if (source?.lastError) lastErrors[sourceKey] = source.lastError;
     const active = await ctx.db
       .query("watchlistVersions")
       .withIndex("by_source_and_status", (q) => q.eq("sourceKey", sourceKey).eq("status", "active"))
@@ -53,7 +56,7 @@ export async function loadWatchlistCoverage(ctx: QueryCtx, now: number) {
       stale: isStale,
     });
   }
-  return { versions, missing, stale };
+  return { versions, missing, stale, lastErrors };
 }
 
 export const getActiveVersions = internalQuery({
