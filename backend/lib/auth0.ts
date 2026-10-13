@@ -111,7 +111,9 @@ export function getAuth0(): {
 				clientId: auth0ClientId as string,
 				clientSecret: auth0ClientSecret as string,
 				authorizationParameters: {
-					scope: "openid profile email",
+					// offline_access gets a refresh token so /api/auth/token can renew the
+					// ID token Convex uses without sending the browser back to Auth0.
+					scope: "openid profile email offline_access",
 				},
 				beforeSessionSaved,
 			});
