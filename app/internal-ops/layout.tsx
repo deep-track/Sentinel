@@ -47,7 +47,7 @@ export default async function InternalOpsLayout({
         <div className="w-1 flex-shrink-0 bg-sentinel-amber" aria-hidden="true" />
         <aside className="flex w-[208px] flex-col gap-1 overflow-y-auto border-r border-sentinel-line px-2.5 py-4">
           <div className="mb-2.5">
-            <SentinelLogo caption="Sentinel Ops · internal" />
+            <SentinelLogo caption="Sentinel Back Office · internal" />
           </div>
           <div className="mb-2.5 flex items-center gap-1.5 rounded-md border border-sentinel-amber-bg bg-sentinel-amber-deep px-2 py-1.5">
             <AlertTriangle className="h-3 w-3 flex-shrink-0 text-sentinel-amber" aria-hidden="true" />
