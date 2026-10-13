@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation } from "convex/react";
 import { anyApi } from "convex/server";
 import { Loader2 } from "lucide-react";
@@ -385,7 +386,17 @@ export function AMLScreeningForm({ clientId, canSubmit }: { clientId: string; ca
                       </div>
                     ) : null}
                   </div>
-                  <span className={`shrink-0 font-medium ${outcome.className}`}>{outcome.label}</span>
+                  {row.status === "completed" || row.status === "failed" ? (
+                    <Link
+                      href={`/aml-check/${row._id}`}
+                      className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-muted ${outcome.className}`}
+                      title="Open the full screening report"
+                    >
+                      {outcome.label} · View report
+                    </Link>
+                  ) : (
+                    <span className={`shrink-0 font-medium ${outcome.className}`}>{outcome.label}</span>
+                  )}
                 </div>
               );
             })
