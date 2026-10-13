@@ -49,6 +49,11 @@ type Result = {
   forensics?: { fileTypes: string[]; software: string[]; metadataAvailable?: boolean };
   vision?: { model: string; summary: string; signals: Array<{ signal: string; confidence: string; evidence: string }> };
   ocr?: { status: string; provider: string | null; averageConfidence: number | null; checked: string[]; missing: string[] };
+  contentCredentials?: {
+    status: string;
+    matches: number;
+    findings: Array<{ manifestId: string; similarityScore: number | null; digitalSourceType: string; claimGenerator: string | null; edited: boolean }>;
+  };
 };
 
 type Report = {
@@ -89,6 +94,14 @@ const SEVERITY_STYLE: Record<Flag["severity"], string> = {
   high: "border-orange-300 bg-orange-50 text-orange-700",
   medium: "border-amber-300 bg-amber-50 text-amber-800",
   low: "border-slate-300 bg-slate-50 text-slate-600",
+};
+
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  ai_generated: "AI-generated",
+  ai_composite: "Partly AI-generated",
+  digital_capture: "Camera capture",
+  other: "Other source",
+  unknown: "Source not stated",
 };
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -380,6 +393,22 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
                 : result.ocr?.status === "unavailable"
                   ? "Not run: AWS Textract was unavailable."
                   : "—"}
+        </Row>
+        <Row label="Content credentials (C2PA)">
+          {result.contentCredentials?.status === "checked"
+            ? result.contentCredentials.matches
+              ? result.contentCredentials.findings
+                  .map(
+                    (finding) =>
+                      `${SOURCE_TYPE_LABELS[finding.digitalSourceType] ?? finding.digitalSourceType}${finding.claimGenerator ? ` by ${finding.claimGenerator}` : ""}${finding.edited ? ", edited" : ""}${finding.similarityScore !== null ? ` (${finding.similarityScore}% match)` : ""}`,
+                  )
+                  .join("; ") || `${result.contentCredentials.matches} registered credential(s) matched`
+              : "Looked up by watermark and fingerprint in a C2PA registry: no registered credential matched."
+            : result.contentCredentials?.status === "unavailable"
+              ? "Registry lookup was unavailable."
+              : result.contentCredentials?.status === "unsupported_file"
+                ? "The registry doesn't accept this file type."
+                : "Registry lookup not configured. Embedded credentials are still checked under file forensics."}
         </Row>
         <Row label="Pages submitted">{input.pages ?? 1}</Row>
       </Section>

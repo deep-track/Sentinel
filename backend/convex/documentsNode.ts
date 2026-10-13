@@ -7,6 +7,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { decodeBase64, DocumentPipelineError, runDocumentPipeline, type OcrProvider } from "./lib/documentPipeline";
 import { DocumentVisionError } from "./lib/documentVision";
+import { c2paConfigFromEnv, lookupContentCredentials } from "./lib/c2paResolution";
 
 // IDP pipeline action (Node runtime for the AWS SDK). Reads the document with
 // Claude, cross-checks it with Amazon Textract OCR when AWS is configured,
@@ -17,6 +18,11 @@ import { DocumentVisionError } from "./lib/documentVision";
 //   AWS_TEXTRACT_REGION (or AWS_REGION),
 //   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY  optional; without them the OCR
 //                                             cross-check is reported as not configured
+//   C2PA_RESOLUTION_URL                       optional: a C2PA Soft Binding Resolution
+//                                             API (e.g. https://c2pa.trufo.ai/v1)
+//   C2PA_TOKEN_URL, C2PA_CLIENT_ID,
+//   C2PA_CLIENT_SECRET, C2PA_SCOPE, C2PA_ALG  optional: OAuth client credentials and
+//                                             the soft binding algorithm, if the service needs them
 
 const internalApi: any = internal;
 
@@ -87,6 +93,15 @@ export const processDocument = internalAction({
         {
           client: new Anthropic({ apiKey }),
           ocr: textractOcr(),
+          contentCredentials: (() => {
+            const config = c2paConfigFromEnv(process.env);
+            return config
+              ? (bytes: Uint8Array, mediaType: string) =>
+                  lookupContentCredentials(config, bytes, mediaType, {
+                    onError: (error) => console.error("[IDP] C2PA lookup problem", error instanceof Error ? error.message.slice(0, 200) : "unknown"),
+                  })
+              : null;
+          })(),
           onError: (stage, error) => console.error(`[IDP] ${stage} unavailable`, error instanceof Error ? error.message.slice(0, 200) : "unknown"),
         },
       );

@@ -23,6 +23,7 @@ import {
   type PoaFields,
 } from "./documentChecks";
 import { readIdentityDocument, readProofOfAddress, type DocumentImage, type DocumentKind, type VisionResult } from "./documentVision";
+import type { C2paManifestFinding, C2paOutcome } from "./c2paResolution";
 
 export type OcrResult = { provider: "aws_textract"; text: string; averageConfidence: number | null; lineCount: number };
 
@@ -39,9 +40,13 @@ export type PipelineInput = {
   now?: number;
 };
 
+// Looks the image up in a C2PA soft binding resolution service.
+export type ContentCredentialsLookup = (bytes: Uint8Array, mediaType: string) => Promise<C2paOutcome>;
+
 export type PipelineDeps = {
   client: Anthropic;
   ocr: OcrProvider | null;
+  contentCredentials?: ContentCredentialsLookup | null;
   onError?: (stage: string, error: unknown) => void;
 };
 
@@ -70,6 +75,7 @@ export type PipelineResult = {
   forensics: { fileTypes: string[]; software: string[]; metadataAvailable: boolean };
   vision: { model: string; summary: string; signals: VisionResult<unknown>["signals"] };
   ocr: { status: "checked" | "not_configured" | "unavailable" | "unsupported_file"; provider: string | null; averageConfidence: number | null; checked: string[]; missing: string[] };
+  contentCredentials: { status: "checked" | "not_configured" | "unavailable" | "unsupported_file"; matches: number; findings: C2paManifestFinding[] };
   checks: Array<{ name: string; status: "passed" | "failed" | "not_applicable"; detail?: string }>;
 };
 
@@ -134,8 +140,16 @@ export async function runDocumentPipeline(input: PipelineInput, deps: PipelineDe
       return "unavailable";
     }
   })();
-  const [vision, ocr] = await Promise.all([visionPromise, ocrPromise]);
+  // C2PA soft binding lookup (watermark / fingerprint), in parallel too.
+  const c2paPromise: Promise<C2paOutcome> = deps.contentCredentials
+    ? deps.contentCredentials(input.front, images[0].mediaType).catch((error) => {
+        deps.onError?.("content_credentials", error);
+        return { status: "unavailable" as const };
+      })
+    : Promise.resolve({ status: "not_configured" as const });
+  const [vision, ocr, c2pa] = await Promise.all([visionPromise, ocrPromise, c2paPromise]);
   flags.push(...vision.flags);
+  if (c2pa.status === "checked") flags.push(...c2pa.flags);
 
   const checks: PipelineResult["checks"] = [];
   let identity: PipelineResult["identity"];
@@ -201,6 +215,14 @@ export async function runDocumentPipeline(input: PipelineInput, deps: PipelineDe
     ocrSummary = { status: ocr, provider: null, averageConfidence: null, checked: [], missing: [] };
   }
 
+  if (c2pa.status === "checked") {
+    checks.push({
+      name: "No AI or edit record in content credential registries",
+      status: c2pa.flags.length ? "failed" : "passed",
+      detail: c2pa.matches ? `${c2pa.matches} registered credential${c2pa.matches === 1 ? "" : "s"} matched` : "No registered credential matched",
+    });
+  }
+
   const fileFlags = forensics.flatMap((page) => page.flags);
   checks.unshift({
     name: "File metadata clean",
@@ -226,6 +248,10 @@ export async function runDocumentPipeline(input: PipelineInput, deps: PipelineDe
     },
     vision: { model: vision.model, summary: vision.summary, signals: vision.signals },
     ocr: ocrSummary,
+    contentCredentials:
+      c2pa.status === "checked"
+        ? { status: "checked", matches: c2pa.matches, findings: c2pa.findings }
+        : { status: c2pa.status, matches: 0, findings: [] },
     checks,
   };
 }

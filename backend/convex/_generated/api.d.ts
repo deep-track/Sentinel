@@ -44,6 +44,7 @@ import type * as lib_awsClients_faceCheckClient from "../lib/awsClients/faceChec
 import type * as lib_awsClients_internalFetch from "../lib/awsClients/internalFetch.js";
 import type * as lib_awsClients_iprsClient from "../lib/awsClients/iprsClient.js";
 import type * as lib_awsClients_livenessClient from "../lib/awsClients/livenessClient.js";
+import type * as lib_c2paResolution from "../lib/c2paResolution.js";
 import type * as lib_credits from "../lib/credits.js";
 import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_deeptrackLive from "../lib/deeptrackLive.js";
@@ -113,6 +114,7 @@ declare const fullApi: ApiFromModules<{
   "lib/awsClients/internalFetch": typeof lib_awsClients_internalFetch;
   "lib/awsClients/iprsClient": typeof lib_awsClients_iprsClient;
   "lib/awsClients/livenessClient": typeof lib_awsClients_livenessClient;
+  "lib/c2paResolution": typeof lib_c2paResolution;
   "lib/credits": typeof lib_credits;
   "lib/crypto": typeof lib_crypto;
   "lib/deeptrackLive": typeof lib_deeptrackLive;
