@@ -223,3 +223,32 @@ test("compliance: a report is signed off once, only when completed, with the exp
   assert.match(fn, /if \(report\.signedOffAt\) throw/);
   assert.match(fn, /metadata: \{ exportHash: report\.exportHash/);
 });
+
+// ── Model and data quality ──────────────────────────────────────────────────
+
+const qualityModule = loadWithStubs("backend/convex/backOfficeQuality.ts");
+
+test("quality: DeepTrack Live checks are read from every result shape", () => {
+  assert.deepEqual(qualityModule.liveChecks({ faceCheck: { prediction: "real", confidencePct: 96 } }, {}), [{ kind: "selfie", outcome: "real", confidencePct: 96 }]);
+  assert.deepEqual(qualityModule.liveChecks({ faceCheck: { error: "upstream_http_error" } }, {}), [{ kind: "selfie", outcome: "error", confidencePct: null }]);
+  assert.deepEqual(
+    qualityModule.liveChecks({ liveness: { decision: "review", deeptrackLive: { prediction: "uncertain", confidencePct: 55 } } }, { livenessMediaType: "mp4" }),
+    [{ kind: "video", outcome: "uncertain", confidencePct: 55 }],
+  );
+  assert.deepEqual(qualityModule.liveChecks({ source: "hosted_capture", liveness: { error: "upstream_timeout" } }, {}), [{ kind: "video", outcome: "error", confidencePct: null }]);
+});
+
+test("quality: a liveness error on JPEG frames is the internal service's, not DeepTrack Live's", () => {
+  assert.deepEqual(qualityModule.liveChecks({ liveness: { error: "upstream_misconfigured" } }, { livenessMediaType: "jpeg_frames" }), []);
+  assert.deepEqual(qualityModule.liveChecks({ docScan: { error: "x" }, iprs: { status: "MATCH" } }, {}), []);
+  assert.deepEqual(qualityModule.liveChecks(null, null), []);
+});
+
+test("back office nav lists every page, and every page exists", () => {
+  const nav = read("app/internal-ops/ops-nav.tsx");
+  const urls = [...nav.matchAll(/url: "(\/internal-ops\/[a-z-]+)"/g)].map((match) => match[1]);
+  assert.ok(urls.length >= 11, `nav has ${urls.length} pages`);
+  for (const url of urls) {
+    assert.ok(fs.existsSync(path.join(__dirname, "..", "app", ...url.slice(1).split("/"), "page.tsx")), `${url} has a page`);
+  }
+});
