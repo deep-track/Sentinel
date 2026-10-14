@@ -217,7 +217,7 @@ test("monitoring wiring: enrolment, schedule, baseline, alerts and API", () => {
     /if \(!args\.monitoring && \(args\.complete \?\? args\.chargeCredits \?\? true\)\) \{\s*const \{ screening \} = await loadClientSettings\(ctx, args\.clientId\);\s*await setBaselineFromEnrolment\(ctx, args\.verificationId, args\.matches, monitoringIntervalMs\(screening\.monitoringFrequency\)\)/,
   );
   // Re-screens follow each client's rules and frequency.
-  assert.match(monitoring, /internalApi\.aml\._screeningRules, \{ clientIds: due\.map\(\(subject\) => subject\.clientId\) \}/);
+  assert.match(monitoring, /internalApi\.aml\._screeningRules, \{\s*clientIds: due\.map\(\(subject\) => subject\.clientId\),/);
   assert.match(monitoring, /nextScreenAt: now \+ monitoringIntervalMs\(screening\.monitoringFrequency\)/);
 
   assert.match(read("backend/convex/crons.ts"), /crons\.interval\("re-screen monitored AML subjects", \{ minutes: 15 \}, internal\.amlMonitoring\.runDue/);
