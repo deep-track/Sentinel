@@ -262,7 +262,7 @@ export const getByVerification = query({
   handler: async (ctx, args) => {
     const verification = await ctx.db.get(args.verificationId);
     if (!verification) return null;
-    await requireClientRole(ctx, verification.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    await requireClientRole(ctx, verification.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     return await ctx.db.query("kyiRecords").withIndex("by_verification", (q) => q.eq("verificationId", args.verificationId)).unique();
   },
 });

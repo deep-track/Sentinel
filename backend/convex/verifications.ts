@@ -12,6 +12,7 @@ import {
   creditsForVerification,
 } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
+import { queueReview } from "./clientReviews";
 
 const verificationType = v.union(
   v.literal("idp"),
@@ -278,7 +279,7 @@ export const create = mutation({
     input: idpInput,
   },
   handler: async (ctx, args) => {
-    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     if (args.type !== "idp") {
       throw new ConvexError({ code: "invalid_argument", message: DEDICATED_CREATE_PATH[args.type] });
     }
@@ -302,7 +303,7 @@ export const createKyc = mutation({
     livenessFramesBase64: v.optional(v.string()), livenessMediaType: v.optional(livenessMediaType),
   },
   handler: async (ctx, args) => {
-    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     requireText({ documentFrontUrl: args.documentFrontUrl, selfieUrl: args.selfieUrl, selfieBase64: args.selfieBase64 });
     // The selfie goes to DeepTrack Live for a fake-face check (not a face
     // match against the document). It is size-checked and never stored.
@@ -484,14 +485,12 @@ export const _completeWithReview = internalMutation({
       updatedAt: now,
       completedAt: now,
     });
-    await ctx.db.insert("reviewQueue", {
+    await queueReview(ctx, {
       verificationId: args.id,
       clientId: args.clientId,
       triggerType: args.triggerType,
       triggerReason: args.triggerReason,
       priority: args.priority,
-      status: "pending",
-      createdAt: now,
     });
     if (args.notifyWebhook) {
       await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, { verificationId: args.id });

@@ -18,11 +18,11 @@ import { TypographyP, TypographySmall } from "@/components/ui/typography";
 import { TeamSwitcher } from "@/components/team-switcher";
 import {
 	type AppRole,
-	isInternalAdminRole,
 	isInternalOpsRole,
 } from "@/backend/lib/roles";
 import {
 	Building2,
+	ClipboardCheck,
 	CreditCard,
 	Fingerprint,
 	Home,
@@ -33,19 +33,13 @@ import {
 	Shield,
 	ShieldCheck,
 	FileScan,
-	User2,
 	Webhook,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRouter } from "next/navigation";
 import React from "react";
 import { Toaster } from "react-hot-toast";
-
-// Member management is only available to Sentinel internal administrators
-// (memberships.listForClient requires requireInternalAdmin).
-const ADMIN_ROUTES = ["/members"];
 
 const getMainItems = () => [
 	{ title: "Overview", url: "/dashboard", icon: Home },
@@ -55,6 +49,7 @@ const getMainItems = () => [
 	{ title: "Documents (IDP)", url: "/idp", icon: FileScan },
 	{ title: "AML Screening", url: "/aml-check", icon: Shield },
 	{ title: "Liveness", url: "/liveness", icon: Fingerprint },
+	{ title: "Reviews", url: "/reviews", icon: ClipboardCheck },
 ];
 
 const developerItems = [
@@ -96,7 +91,7 @@ function NavSection({
 							<Link
 								href={item.url}
 								className={`flex items-center gap-2 px-4 py-2 rounded-xl hover:text-white transition-colors ${
-									pathname === item.url ? "bg-black text-white" : ""
+									pathname === item.url || pathname.startsWith(`${item.url}/`) ? "bg-black text-white" : ""
 								}`}
 							>
 								<div className="p-2 rounded-xl bg-primary text-primary-foreground">
@@ -114,12 +109,11 @@ function NavSection({
 
 export function AppSidebar({ role }: Props) {
 	const pathname = usePathname();
-	const router = useRouter();
 
-	const canManageMembers = isInternalAdminRole(role);
 	const mainItems = getMainItems();
-	// Overview, Client Portal, then Sentinel Back Office (internal roles only) and
-	// Members (internal admins only) ahead of the verification products.
+	// Overview, Client Portal, then Sentinel Back Office (internal roles only)
+	// ahead of the verification products. Team members are managed in
+	// Settings → Team.
 	const extraItems: typeof mainItems = [];
 	// Sentinel Back Office is restricted to internal (DeepTrack staff) roles and must
 	// never be visible to client users. Backend enforcement lives in
@@ -127,16 +121,7 @@ export function AppSidebar({ role }: Props) {
 	if (isInternalOpsRole(role)) {
 		extraItems.push({ title: "Sentinel Back Office", url: "/internal-ops", icon: Radar });
 	}
-	if (canManageMembers) {
-		extraItems.push({ title: "Members", url: "/members", icon: User2 });
-	}
 	mainItems.splice(2, 0, ...extraItems);
-
-	React.useEffect(() => {
-		if (!canManageMembers && ADMIN_ROUTES.some((route) => pathname.startsWith(route))) {
-			router.push("/dashboard");
-		}
-	}, [canManageMembers, pathname, router]);
 
 	return (
 		<>

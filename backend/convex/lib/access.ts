@@ -19,6 +19,7 @@ export const customerMembership = v.object({
   role: v.union(
     v.literal("client_admin"),
     v.literal("compliance_analyst"),
+    v.literal("reviewer"),
     v.literal("developer"),
     v.literal("viewer"),
   ),
@@ -27,6 +28,7 @@ export const customerMembership = v.object({
 type ClientRole =
   | "client_admin"
   | "compliance_analyst"
+  | "reviewer"
   | "developer"
   | "viewer";
 
@@ -34,6 +36,7 @@ export function normalizeClientRole(value: unknown): ClientRole | null {
   switch (String(value)) {
     case "client_admin":
     case "compliance_analyst":
+    case "reviewer":
     case "developer":
     case "viewer":
       return value as ClientRole;

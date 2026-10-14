@@ -10,6 +10,7 @@
  *   https://deeptrack.io/roles      string[]  canonical role claim
  *   https://deeptrack.io/role       string    legacy: highest-privilege role
  *   https://deeptrack.io/companyId  string    only when app_metadata.companyId is set
+ *   https://deeptrack.io/mfa        boolean   ID token only: the login used MFA
  *
  * The allowlist must stay in sync with backend/convex/lib/rbac.ts and
  * backend/lib/roles.ts.
@@ -55,4 +56,20 @@ exports.onExecutePostLogin = async (event, api) => {
     api.idToken.setCustomClaim(`${namespace}/companyId`, companyId.trim());
     api.accessToken.setCustomClaim(`${namespace}/companyId`, companyId.trim());
   }
+
+  // MFA. A client organization can require two-step sign-in (Sentinel
+  // Settings → Security); the portal then sends the user back through
+  // /auth/login with the multi-factor acr_values, and this enforces it. No
+  // token is issued until the challenge is passed. The mfa claim tells the
+  // portal the login used MFA (refreshed ID tokens don't always carry
+  // `amr`). Needs at least one MFA factor enabled in the tenant (Security →
+  // Multi-factor Auth).
+  const MFA_ACR = "http://schemas.openid.net/pape/policies/2007/06/multi-factor";
+  const requested = String(event.transaction?.acr_values ?? "").split(" ").includes(MFA_ACR);
+  if (requested) {
+    api.multifactor.enable("any", { allowRememberBrowser: false });
+  }
+  const usedMfa = Array.isArray(event.authentication?.methods)
+    && event.authentication.methods.some((method) => method && method.name === "mfa");
+  api.idToken.setCustomClaim(`${namespace}/mfa`, usedMfa || requested);
 };

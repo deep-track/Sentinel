@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import Anthropic from "@anthropic-ai/sdk";
-import { internalAction, internalMutation, mutation } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery, mutation } from "./_generated/server";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -29,6 +29,7 @@ import {
   type AdverseMediaOutcome,
 } from "./lib/adverseMedia";
 import { MAX_EXTERNAL_REF_LENGTH, enrolMonitoredSubject } from "./lib/amlMonitoringStore";
+import { DEFAULTS, loadClientSettings, monitoringIntervalMs, type ScreeningRules } from "./lib/clientSettings";
 import {
   OPENSANCTIONS_STRONG_MATCH_SCORE,
   OpenSanctionsRequestError,
@@ -150,7 +151,11 @@ async function createAmlVerification(
 ) {
   const { subjectName, country, details } = normalizeAmlRequest(args);
   const externalRef = optionalText(args.externalRef, "Customer reference", MAX_EXTERNAL_REF_LENGTH);
-  if (externalRef && !args.monitor) invalid("A customer reference is only used with monitor: true.");
+  // Without an explicit choice, the client's default (Settings → Screening
+  // rules) decides whether the subject is monitored.
+  const settings = await loadClientSettings(ctx, args.clientId);
+  const monitor = args.monitor ?? settings.screening.monitoringDefault;
+  if (externalRef && !monitor) invalid("A customer reference is only used with monitor: true.");
   await requireActiveClient(ctx, args.clientId);
   const creditsUsed = await creditsForVerification(ctx, args.clientId, "aml");
   // Balance check in the same transaction as the insert.
@@ -175,7 +180,7 @@ async function createAmlVerification(
     country,
     ...details,
   });
-  const monitoring = args.monitor
+  const monitoring = monitor
     ? await enrolMonitoredSubject(ctx, {
         clientId: args.clientId,
         subjectName,
@@ -185,6 +190,7 @@ async function createAmlVerification(
         externalRef,
         verificationId,
         enrolledBy: args.actor.actorId,
+        intervalMs: monitoringIntervalMs(settings.screening.monitoringFrequency),
       })
     : null;
   await recordAudit(ctx, {
@@ -211,6 +217,7 @@ export const submit = mutation({
     const { userId, role } = await requireClientRole(ctx, args.clientId, [
       "client_admin",
       "compliance_analyst",
+      "reviewer",
       "developer",
     ]);
     const { verificationId } = await createAmlVerification(ctx, {
@@ -484,7 +491,31 @@ export type ScreeningOutcome = {
 // Screens subjects against the Sentinel-owned watchlists and OpenSanctions.
 // The watchlist entries are read once for the whole batch, so ongoing
 // monitoring can re-screen many subjects in one pass.
-export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[]): Promise<ScreeningOutcome[]> {
+// Applies a client's screening rules (Settings → Screening rules) to one
+// subject's raw results: hits under the client's match threshold don't
+// count, and adverse media is limited to the categories they screen for.
+export function applyScreeningRules<C extends { nameScore: number }>(
+  candidates: C[],
+  openSanctions: OpenSanctionsOutcome,
+  media: AdverseMediaOutcome,
+  rules: ScreeningRules = DEFAULTS.screening,
+): { candidates: C[]; openSanctions: OpenSanctionsOutcome; media: AdverseMediaOutcome } {
+  const threshold = rules.matchThreshold;
+  const categories = rules.adverseMediaCategories;
+  return {
+    candidates: candidates.filter((candidate) => candidate.nameScore >= threshold),
+    openSanctions:
+      openSanctions.status === "screened"
+        ? { ...openSanctions, matches: openSanctions.matches.filter((match) => Math.round(match.score * 100) >= threshold) }
+        : openSanctions,
+    media:
+      media.status === "screened" && categories
+        ? { ...media, hits: media.hits.filter((hit) => hit.riskTypes.some((type) => categories.includes(type))) }
+        : media,
+  };
+}
+
+export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[], rules?: ScreeningRules[]): Promise<ScreeningOutcome[]> {
   // Both run alongside the local watchlist scan; neither rejects.
   const openSanctionsPromise = screenOpenSanctions(subjects);
   const adverseMediaPromise = screenAdverseMedia(subjects);
@@ -512,13 +543,14 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
   const adverseMediaOutcomes = await adverseMediaPromise;
 
   return subjects.map((_, index) => {
-    const subjectCandidates = candidates[index].sort(compareCandidates);
-    const openSanctions = openSanctionsOutcomes[index];
+    const ruled = applyScreeningRules(candidates[index], openSanctionsOutcomes[index], adverseMediaOutcomes[index], rules?.[index]);
+    const subjectCandidates = ruled.candidates.sort(compareCandidates);
+    const openSanctions = ruled.openSanctions;
     // Decide on ALL candidates, then keep only the strongest for storage.
     const decision = combineWithOpenSanctions(finalDecision(subjectCandidates, coverage), openSanctions);
     const stored = subjectCandidates.slice(0, MATCH_LIMIT);
     const openSanctionsMatches = openSanctions.status === "screened" ? relevantMatches(openSanctions.matches) : [];
-    const adverseMedia = adverseMediaOutcomes[index];
+    const adverseMedia = ruled.media;
     const mediaHits = adverseMedia.status === "screened" ? adverseMedia.hits.slice(0, MATCH_LIMIT) : [];
     const hasAnyMatch = stored.length > 0 || openSanctionsMatches.length > 0 || mediaHits.length > 0;
     // Adverse media can only make a verdict stricter (pass → review).
@@ -604,6 +636,18 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
   });
 }
 
+// Each client's screening rules, in the order asked.
+export const _screeningRules = internalQuery({
+  args: { clientIds: v.array(v.id("clients")) },
+  handler: async (ctx, args): Promise<ScreeningRules[]> =>
+    await Promise.all(
+      args.clientIds.map(async (clientId) => {
+        const { screening } = await loadClientSettings(ctx, clientId);
+        return { matchThreshold: screening.matchThreshold, adverseMediaCategories: screening.adverseMediaCategories };
+      }),
+    ),
+});
+
 export const runScreening = internalAction({
   args: {
     verificationId: v.id("verifications"),
@@ -617,7 +661,8 @@ export const runScreening = internalAction({
     await ctx.runMutation(internalApi.verifications._markProcessing, { id: args.verificationId });
     try {
       const { verificationId, clientId, ...subject } = args;
-      const [outcome] = await screenSubjects(ctx, [subject]);
+      const rules: ScreeningRules[] = await ctx.runQuery(internalApi.aml._screeningRules, { clientIds: [clientId] });
+      const [outcome] = await screenSubjects(ctx, [subject], rules);
       await ctx.runMutation(internalApi.amlPersistence.complete, {
         verificationId,
         clientId,

@@ -10,6 +10,8 @@ import { chargeVerification } from "./lib/credits";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 import { DEFAULT_POA_MAX_AGE_DAYS } from "./lib/documentChecks";
 import { withoutMedia } from "./verifications";
+import { queueReview } from "./clientReviews";
+import { applyDocumentRules, loadClientSettings } from "./lib/clientSettings";
 
 // IDP — Intelligent Document Processing. Verifies an identity document
 // (passport, national ID, driver's licence, residence permit) or a proof of
@@ -107,7 +109,13 @@ async function createDocumentVerification(
   ctx: MutationCtx,
   args: DocumentInput & { clientId: Id<"clients">; actor: { actorId: string; actorType: AuditActorType } },
 ) {
-  const input = normalizeDocumentInput(args);
+  // A request without its own age limit uses the client's (Settings →
+  // Screening rules).
+  const settings = await loadClientSettings(ctx, args.clientId);
+  const input = normalizeDocumentInput({
+    ...args,
+    maxDocumentAgeDays: args.maxDocumentAgeDays ?? (args.documentKind === "proof_of_address" ? settings.screening.poaMaxAgeDays : undefined),
+  });
   await requireActiveClient(ctx, args.clientId);
   const creditsUsed = await creditsForVerification(ctx, args.clientId, "document", input.documentKind);
   await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
@@ -159,7 +167,7 @@ async function createDocumentVerification(
 export const submit = mutation({
   args: { clientId: v.id("clients"), ...documentInputValidator },
   handler: async (ctx, args) => {
-    const { userId, role } = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    const { userId, role } = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     const { clientId, ...input } = args;
     const { verificationId } = await createDocumentVerification(ctx, {
       ...input,
@@ -234,23 +242,34 @@ export const _complete = internalMutation({
     const verification = await ctx.db.get(args.verificationId);
     if (!verification || verification.status === "completed") return;
     const now = Date.now();
+    // The client's IDP rules (Settings → Screening rules): AI-generated or
+    // fraud rejections may go to review instead, and a proof of address type
+    // they don't accept can't pass.
+    const settings = await loadClientSettings(ctx, verification.clientId);
+    const ruled = applyDocumentRules(args.verdict, args.result ?? {}, settings.screening);
+    const verdict = ruled.verdict;
+    const reason = ruled.notes.length ? `${args.reason} ${ruled.notes.join(" ")}` : args.reason;
     await ctx.db.patch(args.verificationId, {
       status: "completed",
-      verdict: args.verdict,
+      verdict,
       confidence: Math.max(0, Math.min(1, 1 - args.riskScore / 100)),
-      result: { ...args.result, reason: args.reason, riskScore: args.riskScore },
+      result: {
+        ...args.result,
+        reason,
+        riskScore: args.riskScore,
+        ...(verdict !== args.verdict ? { pipelineVerdict: args.verdict } : {}),
+        ...(ruled.notes.length ? { clientRules: ruled.notes } : {}),
+      },
       updatedAt: now,
       completedAt: now,
     });
-    if (args.verdict !== "pass") {
-      await ctx.db.insert("reviewQueue", {
+    if (verdict !== "pass") {
+      await queueReview(ctx, {
         verificationId: args.verificationId,
         clientId: verification.clientId,
         triggerType: "auto_escalation",
-        triggerReason: args.reason.slice(0, 1000),
-        priority: args.verdict === "reject" ? "high" : "normal",
-        status: "pending",
-        createdAt: now,
+        triggerReason: reason.slice(0, 1000),
+        priority: verdict === "reject" || args.verdict === "reject" ? "high" : "normal",
       });
     }
     if (args.chargeCredits) {
@@ -258,7 +277,7 @@ export const _complete = internalMutation({
         clientId: verification.clientId,
         verificationId: args.verificationId,
         amount: verification.creditsUsed,
-        reason: `IDP document verification: ${args.verdict}`,
+        reason: `IDP document verification: ${verdict}`,
       });
     }
     await recordAudit(ctx, {
@@ -269,7 +288,8 @@ export const _complete = internalMutation({
       targetId: args.verificationId,
       clientId: verification.clientId,
       metadata: {
-        verdict: args.verdict,
+        verdict,
+        ...(verdict !== args.verdict ? { pipelineVerdict: args.verdict } : {}),
         riskScore: args.riskScore,
         documentKind: (verification.input as { documentKind?: string } | null)?.documentKind ?? null,
         flags: ((args.result as { flags?: Array<{ code: string }> } | null)?.flags ?? []).map((flag) => flag.code).slice(0, 30),
@@ -281,7 +301,7 @@ export const _complete = internalMutation({
 
 // ── Portal ─────────────────────────────────────────────────────────────────
 
-const READ_ROLES = ["client_admin", "compliance_analyst", "developer", "viewer"] as const;
+const READ_ROLES = ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"] as const;
 
 export const listForClient = query({
   args: { clientId: v.id("clients"), limit: v.optional(v.number()) },

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireClientRole } from "./lib/rbac";
 import { withoutMedia } from "./verifications";
+import { REGULATOR_LABELS, loadClientSettings } from "./lib/clientSettings";
 
 // Everything the client-facing AML screening report needs for one
 // screening (app/(platform)/aml-check/[id]): the verification with its full
@@ -9,7 +10,7 @@ import { withoutMedia } from "./verifications";
 // screening enrolled it or is one of its alerts) and the client's name.
 // Any member of the client can read it, like the screening itself.
 
-const REPORT_ROLES = ["client_admin", "compliance_analyst", "developer", "viewer"] as const;
+const REPORT_ROLES = ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"] as const;
 
 export const forClient = query({
   // A plain string, so a mistyped link shows "not found" instead of an error.
@@ -44,9 +45,22 @@ export const forClient = query({
             .unique()
         : null);
 
+    // The organization's profile and logo (Settings → Organization) for the
+    // report header.
+    const { profile } = await loadClientSettings(ctx, verification.clientId);
+    const logoUrl = profile.logoStorageId ? await ctx.storage.getUrl(profile.logoStorageId) : null;
+
     return {
       verification: withoutMedia(verification),
       clientName: client?.name ?? null,
+      organization: {
+        legalName: profile.legalName ?? null,
+        registrationNumber: profile.registrationNumber ?? null,
+        regulator: profile.regulator ? (profile.regulator === "other" ? profile.regulatorOther ?? null : REGULATOR_LABELS[profile.regulator]) : null,
+        licenceNumber: profile.licenceNumber ?? null,
+        complianceContact: profile.complianceContactName ?? null,
+        logoUrl,
+      },
       review: review
         ? {
             status: review.status,
@@ -58,6 +72,13 @@ export const forClient = query({
             resolutionNotes: review.resolutionNotes ?? null,
             resolvedAt: review.resolvedAt ?? null,
             resolvedByName: review.resolvedByName ?? null,
+            reviewId: review._id,
+            decisionSource: review.decisionSource ?? null,
+            reasonCode: review.reasonCode ?? null,
+            recommendation: review.recommendation
+              ? { action: review.recommendation.action, byName: review.recommendation.byName ?? null, reasonCode: review.recommendation.reasonCode ?? null, at: review.recommendation.at }
+              : null,
+            approvedByName: review.approvedByName ?? null,
           }
         : null,
       monitoring:

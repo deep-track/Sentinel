@@ -48,7 +48,7 @@ function rateLimited(retryAfterMs: number | undefined, message: string): ConvexE
 export const submit = mutation({
   args: { clientId: v.id("clients"), contact: v.string(), method: deliveryMethod },
   handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     if (args.method === "email") {
       throw new ConvexError({ code: "unsupported", message: "Email delivery is not available. Use SMS or WhatsApp." });
     }
@@ -306,7 +306,7 @@ export const applyCallback = internalMutation({
 export const list = query({
   args: { clientId: v.id("clients"), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     const limit = Math.min(Math.max(Math.floor(args.limit ?? 50), 1), 100);
     return await ctx.db.query("livenessRequests").withIndex("by_client", (q) => q.eq("clientId", args.clientId)).order("desc").take(limit);
   },
@@ -317,7 +317,7 @@ export const status = query({
   handler: async (ctx, args) => {
     const request = await ctx.db.get(args.requestId);
     if (!request) return null;
-    await requireClientRole(ctx, request.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    await requireClientRole(ctx, request.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     return request;
   },
 });

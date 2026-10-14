@@ -50,6 +50,7 @@ export type ClientSummary = {
   usagePct: number | null;
   billingCurrency: "USD" | "KES";
   balanceValue: number;
+  seatLimit: number | null;
   createdAt: number;
 };
 

@@ -193,10 +193,13 @@ test("monitoring alerts use their own webhook event", () => {
 
 test("monitoring wiring: enrolment, schedule, baseline, alerts and API", () => {
   const aml = read("backend/convex/aml.ts");
-  assert.match(aml, /const monitoring = args\.monitor\s*\? await enrolMonitoredSubject\(ctx,/);
+  // Without an explicit monitor flag the client's default (Settings) decides.
+  assert.match(aml, /const monitor = args\.monitor \?\? settings\.screening\.monitoringDefault;/);
+  assert.match(aml, /const monitoring = monitor\s*\? await enrolMonitoredSubject\(ctx,/);
+  assert.match(aml, /intervalMs: monitoringIntervalMs\(settings\.screening\.monitoringFrequency\)/);
   assert.match(aml, /A customer reference is only used with monitor: true\./);
   assert.match(aml, /\/\/ Test-mode keys never enrol subjects for monitoring\./);
-  assert.match(aml, /export async function screenSubjects\(ctx: ActionCtx, subjects: ScreeningSubject\[\]\)/);
+  assert.match(aml, /export async function screenSubjects\(ctx: ActionCtx, subjects: ScreeningSubject\[\], rules\?: ScreeningRules\[\]\)/);
 
   const monitoring = read("backend/convex/amlMonitoring.ts");
   assert.match(monitoring, /if \(!outcome\.complete\) \{\s*\/\/ A list or OpenSanctions was unavailable: keep the baseline, retry soon\./);
@@ -209,7 +212,13 @@ test("monitoring wiring: enrolment, schedule, baseline, alerts and API", () => {
 
   const persistence = read("backend/convex/amlPersistence.ts");
   assert.match(persistence, /action: args\.monitoring \? "aml\.monitoring_alert" : "aml\.screened"/);
-  assert.match(persistence, /if \(!args\.monitoring && \(args\.complete \?\? args\.chargeCredits \?\? true\)\) \{\s*await setBaselineFromEnrolment/);
+  assert.match(
+    persistence,
+    /if \(!args\.monitoring && \(args\.complete \?\? args\.chargeCredits \?\? true\)\) \{\s*const \{ screening \} = await loadClientSettings\(ctx, args\.clientId\);\s*await setBaselineFromEnrolment\(ctx, args\.verificationId, args\.matches, monitoringIntervalMs\(screening\.monitoringFrequency\)\)/,
+  );
+  // Re-screens follow each client's rules and frequency.
+  assert.match(monitoring, /internalApi\.aml\._screeningRules, \{ clientIds: due\.map\(\(subject\) => subject\.clientId\) \}/);
+  assert.match(monitoring, /nextScreenAt: now \+ monitoringIntervalMs\(screening\.monitoringFrequency\)/);
 
   assert.match(read("backend/convex/crons.ts"), /crons\.interval\("re-screen monitored AML subjects", \{ minutes: 15 \}, internal\.amlMonitoring\.runDue/);
   assert.equal(store.RESCREEN_INTERVAL_MS, 24 * 60 * 60 * 1000);

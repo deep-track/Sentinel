@@ -5,16 +5,16 @@ import { randomKeySegment } from "./lib/crypto";
 import { assertSafeWebhookUrl } from "./lib/urlSafety";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
 
-// Only an active Client Admin can register/rotate its webhook: the endpoint
-// receives every verification result, so it is an admin-level setting.
-// The URL must be public https (see lib/urlSafety.ts).
+// An active Client Admin or Developer can register/rotate its webhook: the
+// endpoint receives every verification result, so it is a privileged
+// setting. The URL must be public https (see lib/urlSafety.ts).
 export const registerWebhook = mutation({
   args: {
     clientId: v.id("clients"),
     webhookUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    const actor = await requireClientRole(ctx, args.clientId, ["client_admin"]);
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "developer"]);
     const webhookUrl = assertSafeWebhookUrl(args.webhookUrl);
     const client = await ctx.db.get(args.clientId);
     const webhookSecret = randomKeySegment(32);

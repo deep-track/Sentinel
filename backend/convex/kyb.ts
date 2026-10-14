@@ -32,7 +32,7 @@ export const createKyb = mutation({
   },
   handler: async (ctx, args) => {
     // Also rejects inactive clients (write role set).
-    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     if (!args.businessName.trim() || !args.registrationNumber.trim() || !args.registrationDocUrl.trim()) {
       throw new ConvexError({ code: "invalid_argument", message: "Business name, registration number, and registration document are required." });
     }
@@ -156,7 +156,7 @@ export const getDirectors = query({
   handler: async (ctx, args) => {
     const verification = await ctx.db.get(args.kybVerificationId);
     if (!verification) return [];
-    await requireClientRole(ctx, verification.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    await requireClientRole(ctx, verification.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     return await ctx.db
       .query("kybDirectors")
       .withIndex("by_kyb_verification", (q) => q.eq("kybVerificationId", args.kybVerificationId))

@@ -3,7 +3,8 @@ import { ConvexError } from "convex/values";
 import { httpAction } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { authenticateApiKey, type ApiKeyAuthResult } from "./apiKeys";
+import { authenticateApiKey, keyAllowsRoute, scopeForRoute, type ApiKeyAuthResult } from "./apiKeys";
+import { ipAllowed } from "./lib/clientSettings";
 import {
   checkApiRateLimit,
   checkAuthFailureBudget,
@@ -42,9 +43,13 @@ function rateLimited(retryAfterMs: number) {
 // only once that key has failed repeatedly. The LAST X-Forwarded-For hop is
 // used because a proxy appends the address it saw, while earlier hops are
 // caller-controlled.
-function authFailureKey(request: Request): string {
+function requestIp(request: Request): string | null {
   const forwarded = request.headers.get("x-forwarded-for")?.split(",").pop()?.trim();
-  const ip = forwarded || request.headers.get("x-real-ip")?.trim();
+  return forwarded || request.headers.get("x-real-ip")?.trim() || null;
+}
+
+function authFailureKey(request: Request): string {
+  const ip = requestIp(request);
   if (ip) return `ip:${ip}`;
   const header = request.headers.get("Authorization") ?? "";
   const prefix = parseApiKeyPrefix(header.replace(/^Bearer\s+/i, "").trim());
@@ -112,6 +117,19 @@ function apiAction(route: string, handler: (ctx: ActionCtx, request: Request, au
       return authResult.response;
     }
     const { auth } = authResult;
+    // The key's scopes (Settings → Developers) and, when the client applies
+    // it to the API, their IP allowlist (Settings → Security).
+    if (!keyAllowsRoute(auth.scopes, route)) {
+      const denied = json({ error: `This API key can't call ${route}. Give it the "${scopeForRoute(route)}" scope or use another key.` }, 403);
+      await logClientError(ctx, auth, route, 403);
+      return denied;
+    }
+    const ipRules: string[] = await ctx.runQuery(internal.apiKeys._apiIpRules, { clientId: auth.clientId });
+    if (ipRules.length > 0 && !ipAllowed(requestIp(request), ipRules)) {
+      const denied = json({ error: "Requests from this IP address aren't allowed for your organization." }, 403);
+      await logClientError(ctx, auth, route, 403);
+      return denied;
+    }
     let response: Response;
     try {
       response = await handler(ctx, request, auth);

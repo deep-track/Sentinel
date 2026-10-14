@@ -21,9 +21,9 @@ import {
 import { getErrorMessage } from "@/modules/shared/errors";
 import { validateWebhookUrl } from "@/modules/shared/webhook-url";
 
-// NOTE: the backend only supports ONE webhook URL per client
-// (clients.registerWebhook) — there's no per-event subscription concept and
-// all terminal verification outcomes go to that single URL.
+// NOTE: the backend supports ONE webhook URL per client
+// (clients.registerWebhook); which events go to it is chosen separately
+// (webhooks.setEvents, components/developers/webhooks-panel.tsx).
 //
 // webhookSecret is only ever returned by this one call — there is no query
 // to retrieve it again later, and registering rotates (invalidates) the

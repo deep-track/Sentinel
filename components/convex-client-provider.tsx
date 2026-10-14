@@ -99,9 +99,12 @@ function useAuthFromAuth0() {
 // Saves the signed-in user's own name and email (from the verified ID token)
 // so the Back Office can show names instead of Auth0 user ids. Once per page
 // load; the mutation skips the write when nothing changed.
+// It also accepts any team invitations waiting for this (verified) email, so
+// an existing user invited to another organization gets it right away.
 function RecordUserProfile() {
   const { isAuthenticated } = useConvexAuth();
   const recordMine = useMutation(anyApi.userProfiles.recordMine);
+  const acceptMyInvites = useMutation(anyApi.team.acceptMyInvites);
   const [recorded, setRecorded] = useState(false);
   useEffect(() => {
     if (!isAuthenticated || recorded) return;
@@ -109,7 +112,10 @@ function RecordUserProfile() {
     recordMine({}).catch(() => {
       // Display names only; never block the page.
     });
-  }, [isAuthenticated, recorded, recordMine]);
+    acceptMyInvites({}).catch(() => {
+      // Retried on the next page load.
+    });
+  }, [isAuthenticated, recorded, recordMine, acceptMyInvites]);
   return null;
 }
 

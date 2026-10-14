@@ -1,5 +1,13 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  dataSettingsValidator,
+  notificationSettingsValidator,
+  profileSettingsValidator,
+  reviewSettingsValidator,
+  screeningSettingsValidator,
+  securitySettingsValidator,
+} from "./lib/clientSettings";
 
 export default defineSchema({
   clientMembers: defineTable({
@@ -8,16 +16,81 @@ export default defineSchema({
     role: v.union(
       v.literal("client_admin"),
       v.literal("compliance_analyst"),
+      v.literal("reviewer"),
       v.literal("developer"),
       v.literal("viewer"),
     ),
     isActive: v.boolean(),
     invitedBy: v.optional(v.string()),
+    // Review queues this member is assigned cases from by round-robin
+    // (lib/clientSettings.ts QUEUES). Absent or empty = every queue.
+    queues: v.optional(v.array(v.string())),
+    deactivatedAt: v.optional(v.number()),
+    deactivatedBy: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_client", ["clientId"])
     .index("by_user", ["userId"])
     .index("by_client_and_user", ["clientId", "userId"]),
+
+  // Pending team invitations (team.ts). The invitee becomes a member the
+  // first time they sign in with this verified email (team.acceptMyInvites).
+  // The Auth0 invitation email is sent by the portal's server action
+  // (app/(platform)/settings/team/actions.ts).
+  teamInvites: defineTable({
+    clientId: v.id("clients"),
+    email: v.string(), // lower-cased
+    role: v.union(
+      v.literal("client_admin"),
+      v.literal("compliance_analyst"),
+      v.literal("reviewer"),
+      v.literal("developer"),
+      v.literal("viewer"),
+    ),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("revoked")),
+    invitedBy: v.string(),
+    invitedByName: v.optional(v.string()),
+    auth0InvitationId: v.optional(v.string()),
+    emailStatus: v.optional(v.union(v.literal("sent"), v.literal("failed"))),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+    acceptedBy: v.optional(v.string()),
+    revokedAt: v.optional(v.number()),
+    revokedBy: v.optional(v.string()),
+  })
+    .index("by_client_and_status", ["clientId", "status"])
+    .index("by_email_and_status", ["email", "status"]),
+
+  // A client's own settings (lib/clientSettings.ts): one row per client,
+  // one optional object per Settings section.
+  clientSettings: defineTable({
+    clientId: v.id("clients"),
+    review: v.optional(reviewSettingsValidator),
+    screening: v.optional(screeningSettingsValidator),
+    notifications: v.optional(notificationSettingsValidator),
+    security: v.optional(securitySettingsValidator),
+    data: v.optional(dataSettingsValidator),
+    profile: v.optional(profileSettingsValidator),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_client", ["clientId"]),
+
+  // In-app notifications per user (notifications.ts); emailed too when the
+  // event's settings ask for it and email is configured.
+  notifications: defineTable({
+    clientId: v.id("clients"),
+    userId: v.string(),
+    event: v.string(),
+    title: v.string(),
+    body: v.string(),
+    link: v.optional(v.string()),
+    readAt: v.optional(v.number()),
+    emailStatus: v.optional(v.union(v.literal("queued"), v.literal("sent"), v.literal("skipped"), v.literal("failed"))),
+    createdAt: v.number(),
+  })
+    .index("by_user_and_created_at", ["userId", "createdAt"])
+    .index("by_user_and_read_at", ["userId", "readAt"]),
 
   // Display name and email per Auth0 user id, written by each user for
   // themselves on sign-in (userProfiles.recordMine).
@@ -26,6 +99,8 @@ export default defineSchema({
     name: v.optional(v.string()),
     email: v.optional(v.string()),
     updatedAt: v.number(),
+    // Last time the user opened the portal (written at most hourly).
+    lastSeenAt: v.optional(v.number()),
   }).index("by_user_id", ["userId"]),
 
   clients: defineTable({
@@ -53,6 +128,13 @@ export default defineSchema({
     // Currency the client is billed and shown amounts in (lib/pricing.ts).
     // Absent = USD. The ledger is always in credits = US cents.
     billingCurrency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
+    // Webhook events the client receives (absent = all of them).
+    webhookEvents: v.optional(v.array(v.string())),
+    // Most active members plus pending invites; set by DeepTrack. Absent = no limit.
+    seatLimit: v.optional(v.number()),
+    // When the low-credit notification last went out; cleared once the
+    // balance is topped up above the warning level again.
+    lowCreditNotifiedAt: v.optional(v.number()),
     createdAt: v.number(),
   }),
 
@@ -64,6 +146,16 @@ export default defineSchema({
     revoked: v.boolean(),
     createdAt: v.number(),
     lastUsedAt: v.optional(v.number()),
+    // Display name chosen by the client.
+    label: v.optional(v.string()),
+    // API scopes (apiKeys.ts API_SCOPES). Absent = every scope (keys created
+    // before scopes existed).
+    scopes: v.optional(v.array(v.string())),
+    // A rotated key keeps working until this time, so the client can deploy
+    // the new key first.
+    expiresAt: v.optional(v.number()),
+    rotatedTo: v.optional(v.id("apiKeys")),
+    createdBy: v.optional(v.string()),
   })
     .index("by_prefix", ["prefix"])
     .index("by_client", ["clientId"]),
@@ -397,6 +489,34 @@ export default defineSchema({
     resolutionNotes: v.optional(v.string()),
     resolvedBy: v.optional(v.string()),
     escalated: v.optional(v.boolean()),
+    // ── The client team's own review (clientReviews.ts) ──
+    // Category and deadline under the client's rules, set when queued.
+    caseCategory: v.optional(v.string()),
+    queue: v.optional(v.string()),
+    dueAt: v.optional(v.number()),
+    clientAssignedTo: v.optional(v.string()),
+    clientAssignedToName: v.optional(v.string()),
+    clientAssignedAt: v.optional(v.number()),
+    // A first decision waiting for a second person (four-eyes).
+    recommendation: v.optional(
+      v.object({
+        action: v.union(v.literal("approve"), v.literal("reject")),
+        reasonCode: v.optional(v.string()),
+        notes: v.optional(v.string()),
+        by: v.string(),
+        byName: v.optional(v.string()),
+        role: v.string(),
+        at: v.number(),
+      }),
+    ),
+    clientEscalatedAt: v.optional(v.number()),
+    clientEscalatedBy: v.optional(v.string()),
+    overdueNotifiedAt: v.optional(v.number()),
+    // Who made the final decision: the client's team or DeepTrack.
+    decisionSource: v.optional(v.union(v.literal("client"), v.literal("deeptrack"))),
+    reasonCode: v.optional(v.string()),
+    approvedBy: v.optional(v.string()),
+    approvedByName: v.optional(v.string()),
     createdAt: v.number(),
     resolvedAt: v.optional(v.number()),
   })
