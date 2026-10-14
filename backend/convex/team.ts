@@ -6,7 +6,8 @@ import { requireClientRole } from "./lib/rbac";
 import type { ClientRole } from "./lib/rbac";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
 import { displayName } from "./reviewQueue";
-import { CLIENT_ROLES, QUEUES, REVIEW_WORK_ROLES, emailAllowed, loadClientSettings } from "./lib/clientSettings";
+import { CLIENT_ROLES, QUEUES, REVIEW_WORK_ROLES, emailAllowed, emailDomain, loadClientSettings } from "./lib/clientSettings";
+import { SSO_CLAIM } from "./sso";
 
 // Team management for a client's own Admin (Settings → Team): invite
 // members, change roles, choose their review queues, deactivate, reactivate
@@ -268,9 +269,14 @@ export const acceptMyInvites = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity || identity.emailVerified !== true || typeof identity.email !== "string") return { accepted: 0 };
+    if (!identity || typeof identity.email !== "string") return { accepted: 0 };
     const email = identity.email.trim().toLowerCase();
     const now = Date.now();
+    // Signed in through a client's SSO connection: their identity provider
+    // vouches for the email, and the client may give them a role without an
+    // invite (just-in-time membership).
+    const provisioned = await provisionFromSso(ctx, identity, email, now);
+    if (identity.emailVerified !== true) return { accepted: provisioned };
     const invites = (
       await ctx.db
         .query("teamInvites")
@@ -313,9 +319,48 @@ export const acceptMyInvites = mutation({
       });
       accepted += 1;
     }
-    return { accepted };
+    return { accepted: accepted + provisioned };
   },
 });
+
+async function provisionFromSso(ctx: MutationCtx, identity: { subject: string; [key: string]: unknown }, email: string, now: number): Promise<number> {
+  const connection = identity[SSO_CLAIM];
+  if (typeof connection !== "string" || !connection) return 0;
+  const row = await ctx.db
+    .query("clientSettings")
+    .withIndex("by_sso_connection", (q) => q.eq("ssoConnectionName", connection))
+    .unique();
+  const sso = row?.sso;
+  if (!row || !sso || sso.status !== "connected" || !sso.jitRole || !sso.domains.includes(emailDomain(email))) return 0;
+  const client = await ctx.db.get(row.clientId);
+  if (!client || client.status !== "active") return 0;
+  const existing = await ctx.db
+    .query("clientMembers")
+    .withIndex("by_client_and_user", (q) => q.eq("clientId", row.clientId).eq("userId", identity.subject))
+    .unique();
+  // Someone the Admin deactivated stays deactivated.
+  if (existing) return 0;
+  const seats = await seatUsage(ctx, row.clientId, now);
+  if (seats.limit !== null && seats.used >= seats.limit) return 0;
+  const membershipId = await ctx.db.insert("clientMembers", {
+    clientId: row.clientId,
+    userId: identity.subject,
+    role: sso.jitRole,
+    isActive: true,
+    invitedBy: "sso",
+    createdAt: now,
+  });
+  await recordAudit(ctx, {
+    actorId: identity.subject,
+    actorType: "client_user",
+    action: "team.sso_provisioned",
+    targetType: "user",
+    targetId: identity.subject,
+    clientId: row.clientId,
+    metadata: { membershipId, email, role: sso.jitRole, connection },
+  });
+  return 1;
+}
 
 // ── Members ─────────────────────────────────────────────────────────────────
 

@@ -75,6 +75,7 @@ import type * as portal from "../portal.js";
 import type * as regulatorPack from "../regulatorPack.js";
 import type * as reviewQueue from "../reviewQueue.js";
 import type * as settings from "../settings.js";
+import type * as sso from "../sso.js";
 import type * as strReports from "../strReports.js";
 import type * as team from "../team.js";
 import type * as userProfiles from "../userProfiles.js";
@@ -156,6 +157,7 @@ declare const fullApi: ApiFromModules<{
   regulatorPack: typeof regulatorPack;
   reviewQueue: typeof reviewQueue;
   settings: typeof settings;
+  sso: typeof sso;
   strReports: typeof strReports;
   team: typeof team;
   userProfiles: typeof userProfiles;
