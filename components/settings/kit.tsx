@@ -58,6 +58,9 @@ export type ResolvedSettings = {
     complianceContactName?: string;
     complianceContactEmail?: string;
     complianceContactPhone?: string;
+    city?: string;
+    goamlEntityId?: string;
+    goamlBranch?: string;
     logoStorageId?: string;
   };
 };

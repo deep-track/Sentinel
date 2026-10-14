@@ -222,6 +222,10 @@ export const profileSettingsValidator = v.object({
   complianceContactName: v.optional(v.string()),
   complianceContactEmail: v.optional(v.string()),
   complianceContactPhone: v.optional(v.string()),
+  city: v.optional(v.string()),
+  // goAML reporting entity id and branch, assigned by the FRC (STR exports).
+  goamlEntityId: v.optional(v.string()),
+  goamlBranch: v.optional(v.string()),
   logoStorageId: v.optional(v.id("_storage")),
 });
 
