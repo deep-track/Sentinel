@@ -141,6 +141,7 @@ export const NOTIFICATION_EVENTS = [
   "case_escalated",
   "monitoring_alert",
   "low_credit",
+  "webhook_failing",
 ] as const;
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
@@ -154,6 +155,7 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEvent, { label: strin
   case_escalated: { label: "Case escalated", detail: "A team member escalated a case for a senior decision." },
   monitoring_alert: { label: "Monitoring alert", detail: "Ongoing monitoring found a new or more severe hit." },
   low_credit: { label: "Low credits", detail: "The credit balance fell below the warning level." },
+  webhook_failing: { label: "Webhook paused", detail: "A webhook endpoint kept failing and was paused." },
 };
 
 // Events sent to the people named by the event itself, not to roles.
@@ -177,6 +179,7 @@ export const notificationSettingsValidator = v.object({
       case_escalated: v.optional(eventSettings),
       monitoring_alert: v.optional(eventSettings),
       low_credit: v.optional(eventSettings),
+      webhook_failing: v.optional(eventSettings),
     }),
   ),
   // Warn when the balance falls to this many credits. Unset = the plan's
@@ -344,6 +347,7 @@ export const DEFAULTS: ResolvedSettings = {
       case_escalated: { enabled: true, email: true, roles: ["client_admin", "reviewer"] },
       monitoring_alert: { enabled: true, email: true, roles: ["client_admin", "reviewer", "compliance_analyst"] },
       low_credit: { enabled: true, email: true, roles: ["client_admin"] },
+      webhook_failing: { enabled: true, email: true, roles: ["client_admin", "developer"] },
     },
     lowCreditBalance: null,
   },
