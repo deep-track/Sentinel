@@ -40,6 +40,9 @@ const ACTION_LABELS: Record<string, string> = {
   "team.member_deactivated": "Deactivated a member",
   "team.member_reactivated": "Reactivated a member",
   "team.member_removed": "Removed a member",
+  "client.created": "Account opened (DeepTrack)",
+  "client.updated": "Account settings changed (DeepTrack)",
+  "client.credits_adjusted": "Credits added or adjusted (DeepTrack)",
   "membership.created": "Added a member (DeepTrack)",
   "membership.updated": "Updated a member (DeepTrack)",
   "membership.deactivated": "Deactivated a member (DeepTrack)",
@@ -84,13 +87,18 @@ type Row = {
 function detail(row: Row): string {
   const meta = row.metadata ?? {};
   const parts: string[] = [];
-  for (const key of ["email", "role", "reasonCode", "notes", "reference", "verdict", "finalVerdict"]) {
+  for (const key of ["email", "role", "reasonCode", "reason", "notes", "reference", "verdict", "finalVerdict"]) {
     const value = meta[key];
     if (typeof value === "string" && value) parts.push(`${key === "reasonCode" ? "reason" : key}: ${value}`);
   }
+  if (typeof meta.amount === "number") parts.push(`${meta.amount > 0 ? "+" : ""}${meta.amount.toLocaleString("en-US")} credits`);
   const before = meta.before as unknown;
   const after = meta.after as unknown;
-  if (typeof before === "string" && typeof after === "string") parts.push(`${before} → ${after}`);
+  if ((typeof before === "string" || typeof before === "number") && (typeof after === "string" || typeof after === "number")) parts.push(`${before} → ${after}`);
+  else if (before && after && typeof before === "object" && typeof after === "object") {
+    const changed = Object.keys(after as Record<string, unknown>).map((key) => `${key}: ${String((before as Record<string, unknown>)[key])} → ${String((after as Record<string, unknown>)[key])}`);
+    if (changed.length && changed.length <= 4 && !row.action.startsWith("settings.")) parts.push(changed.join(", "));
+  }
   return parts.join(" · ").slice(0, 300);
 }
 
