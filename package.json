@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "vercel-build": "node scripts/vercel-build.mjs",
     "typecheck": "tsc --noEmit",
     "start": "next start -p ${PORT:-3000}",
     "lint": "next lint",
