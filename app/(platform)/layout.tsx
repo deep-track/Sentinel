@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { getCurrentUser, sessionUsedMfa } from "@/backend/lib/auth";
+import { getCurrentUser, sessionConnection, sessionUsedMfa } from "@/backend/lib/auth";
 import { getAuth0 } from "@/backend/lib/auth0";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import { anyApi } from "convex/server";
@@ -23,7 +23,11 @@ const MFA_LOGIN_URL = `/auth/login?${new URLSearchParams({
   returnTo: "/dashboard",
 })}`;
 
-type Gate = { requireMfa: boolean; sessionTimeoutMinutes: number; ipAllowlist: string[] };
+type Gate = { requireMfa: boolean; sessionTimeoutMinutes: number; ipAllowlist: string[]; sso?: { connectionName: string } | null };
+
+function ssoLoginUrl(connection: string) {
+  return `/auth/login?${new URLSearchParams({ connection, prompt: "login", returnTo: "/dashboard" })}`;
+}
 
 export default async function Layout({
   children,
@@ -88,6 +92,16 @@ export default async function Layout({
         />
       );
     }
+  }
+  if (active && gate.sso && (await sessionConnection()) !== gate.sso.connectionName) {
+    return (
+      <SecurityBlock
+        title="Sign in with your company account"
+        body={`${active.clientName} requires single sign-on. Sign in again with your company account to continue.`}
+        action={{ label: "Sign in with your company account", href: ssoLoginUrl(gate.sso.connectionName) }}
+        others={others}
+      />
+    );
   }
   if (active && gate.requireMfa && !(await sessionUsedMfa())) {
     return (

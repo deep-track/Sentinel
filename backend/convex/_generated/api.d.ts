@@ -71,6 +71,7 @@ import type * as orgSettings from "../orgSettings.js";
 import type * as portal from "../portal.js";
 import type * as reviewQueue from "../reviewQueue.js";
 import type * as settings from "../settings.js";
+import type * as sso from "../sso.js";
 import type * as team from "../team.js";
 import type * as userProfiles from "../userProfiles.js";
 import type * as verifications from "../verifications.js";
@@ -147,6 +148,7 @@ declare const fullApi: ApiFromModules<{
   portal: typeof portal;
   reviewQueue: typeof reviewQueue;
   settings: typeof settings;
+  sso: typeof sso;
   team: typeof team;
   userProfiles: typeof userProfiles;
   verifications: typeof verifications;

@@ -4,6 +4,7 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { isInternalAdmin, requireClientRole } from "./lib/rbac";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
+import { ssoRequirement } from "./sso";
 import { RISK_TYPES, RISK_TYPE_LABELS } from "./lib/adverseMedia";
 import { POA_DOCUMENT_TYPES } from "./lib/documentChecks";
 import {
@@ -223,9 +224,20 @@ export const gate = query({
   args: { clientId: v.id("clients") },
   handler: async (ctx, args) => {
     await requireClientRole(ctx, args.clientId, ALL_ROLES);
-    if (await isInternalAdmin(ctx)) return { requireMfa: false, sessionTimeoutMinutes: 0, ipAllowlist: [] as string[] };
+    if (await isInternalAdmin(ctx)) return { requireMfa: false, sessionTimeoutMinutes: 0, ipAllowlist: [] as string[], sso: null };
     const { security } = await loadClientSettings(ctx, args.clientId);
-    return { requireMfa: security.requireMfa, sessionTimeoutMinutes: security.sessionTimeoutMinutes, ipAllowlist: security.ipAllowlist };
+    const row = await ctx.db
+      .query("clientSettings")
+      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .unique();
+    const identity = await ctx.auth.getUserIdentity();
+    return {
+      requireMfa: security.requireMfa,
+      sessionTimeoutMinutes: security.sessionTimeoutMinutes,
+      ipAllowlist: security.ipAllowlist,
+      // Members at the client's SSO domains must sign in through it.
+      sso: ssoRequirement(row?.sso, typeof identity?.email === "string" ? identity.email : null),
+    };
   },
 });
 

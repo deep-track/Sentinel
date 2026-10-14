@@ -11,6 +11,8 @@
  *   https://deeptrack.io/role       string    legacy: highest-privilege role
  *   https://deeptrack.io/companyId  string    only when app_metadata.companyId is set
  *   https://deeptrack.io/mfa        boolean   ID token only: the login used MFA
+ *   https://deeptrack.io/connection string    ID token only: the Auth0 connection
+ *                                             signed in with (client SSO)
  *
  * The allowlist must stay in sync with backend/convex/lib/rbac.ts and
  * backend/lib/roles.ts.
@@ -72,4 +74,10 @@ exports.onExecutePostLogin = async (event, api) => {
   const usedMfa = Array.isArray(event.authentication?.methods)
     && event.authentication.methods.some((method) => method && method.name === "mfa");
   api.idToken.setCustomClaim(`${namespace}/mfa`, usedMfa || requested);
+
+  // Which connection the user signed in with, so Sentinel can enforce a
+  // client's single sign-on and add SSO users to their team.
+  if (event.connection && typeof event.connection.name === "string") {
+    api.idToken.setCustomClaim(`${namespace}/connection`, event.connection.name);
+  }
 };

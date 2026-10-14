@@ -1,6 +1,7 @@
 import type { SessionData } from "@auth0/nextjs-auth0/types";
 import { decodeJwt } from "jose";
 import {
+	CONNECTION_CLAIM,
 	MFA_CLAIM,
 	getAuth0,
 	getCompanyIdClaimName,
@@ -128,6 +129,23 @@ export async function sessionUsedMfa(): Promise<boolean> {
 		return claims.sub === session.user.sub && claimsShowMfa(claims);
 	} catch {
 		return false;
+	}
+}
+
+/** The Auth0 connection the current session signed in with, if known. */
+export async function sessionConnection(): Promise<string | null> {
+	const session = await getValidatedSession();
+	if (!session) return null;
+	const fromUser = (session.user as Record<string, unknown>)[CONNECTION_CLAIM];
+	if (typeof fromUser === "string") return fromUser;
+	const idToken = session.tokenSet?.idToken;
+	if (!idToken) return null;
+	try {
+		const claims = decodeJwt(idToken) as Record<string, unknown>;
+		const value = claims.sub === session.user.sub ? claims[CONNECTION_CLAIM] : null;
+		return typeof value === "string" ? value : null;
+	} catch {
+		return null;
 	}
 }
 

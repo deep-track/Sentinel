@@ -72,9 +72,31 @@ export default defineSchema({
     security: v.optional(securitySettingsValidator),
     data: v.optional(dataSettingsValidator),
     profile: v.optional(profileSettingsValidator),
+    // Single sign-on (sso.ts): the client's Auth0 enterprise connection.
+    // Secrets live only in Auth0, never here.
+    sso: v.optional(
+      v.object({
+        status: v.union(v.literal("pending"), v.literal("connected")),
+        provider: v.union(v.literal("entra_id"), v.literal("google_workspace"), v.literal("saml"), v.literal("oidc")),
+        connectionName: v.string(),
+        connectionId: v.optional(v.string()),
+        domains: v.array(v.string()),
+        // Members at these domains must sign in through the connection.
+        enforce: v.boolean(),
+        // Role given to someone who signs in through SSO without an invite
+        // (absent = they need an invite).
+        jitRole: v.optional(v.union(v.literal("compliance_analyst"), v.literal("reviewer"), v.literal("developer"), v.literal("viewer"))),
+        connectedAt: v.optional(v.number()),
+        connectedBy: v.optional(v.string()),
+      }),
+    ),
+    // sso.connectionName when connected, for finding the client on sign-in.
+    ssoConnectionName: v.optional(v.string()),
     updatedAt: v.number(),
     updatedBy: v.string(),
-  }).index("by_client", ["clientId"]),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_sso_connection", ["ssoConnectionName"]),
 
   // In-app notifications per user (notifications.ts); emailed too when the
   // event's settings ask for it and email is configured.
