@@ -75,6 +75,8 @@ type Report = {
     result?: {
       reason?: string;
       matches?: Match[];
+      // Hits left out because they were cleared for this customer before.
+      suppressedMatches?: Array<{ source: string; sourceRecordId: string; entityName: string; clearedAt: number; clearedByName: string | null; reasonCode: string | null }>;
       categories?: Partial<Record<RiskCategory, { hits: number; highestPepClass?: PepClass | null }>>;
       coverage?: {
         checkedSources?: Array<{ sourceKey: string; fetchedAt: number; stale: boolean }>;
@@ -550,6 +552,18 @@ export function AmlReport({ verificationId }: { verificationId: string }) {
           </p>
         ) : null}
       </Section>
+
+      {result.suppressedMatches?.length ? (
+        <Section title="Previously cleared hits" hint="Left out of this result: a reviewer cleared them for this customer before, and they haven't become more severe.">
+          {result.suppressedMatches.map((hit) => (
+            <Row key={`${hit.source}:${hit.sourceRecordId}`} label={hit.entityName}>
+              {SOURCE_LABELS[hit.source] ?? hit.source} · cleared <ClientDate value={hit.clearedAt} format="PP" />
+              {hit.clearedByName ? ` by ${hit.clearedByName}` : ""}
+              {hit.reasonCode ? ` (${hit.reasonCode})` : ""}
+            </Row>
+          ))}
+        </Section>
+      ) : null}
 
       <Section title="Findings" hint={matches.length ? `${matches.length} match${matches.length === 1 ? "" : "es"}, grouped by category.` : undefined}>
         {verification.status !== "completed" ? (

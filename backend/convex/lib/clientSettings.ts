@@ -3,6 +3,7 @@ import type { Infer } from "convex/values";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { ClientRole } from "./rbac";
+import type { ClearedHit } from "./amlClearedMatches";
 
 // A client's own settings (Settings in the client portal), managed by its
 // Admin: the review workflow, screening rules, notifications, security, data
@@ -129,6 +130,9 @@ export const screeningSettingsValidator = v.object({
   poaMaxAgeDays: v.optional(v.number()),
   // Proof of address types accepted (lib/documentChecks.ts POA_DOCUMENT_TYPES).
   acceptedPoaDocuments: v.optional(v.array(v.string())),
+  // Don't raise an AML hit again for a customer it was cleared for
+  // (lib/amlClearedMatches.ts), unless it became more severe.
+  rememberClearedMatches: v.optional(v.boolean()),
 });
 
 export const NOTIFICATION_EVENTS = [
@@ -278,6 +282,7 @@ export type ResolvedSettings = {
     documentFraudAction: "reject" | "review";
     poaMaxAgeDays: number;
     acceptedPoaDocuments: string[] | null; // null = every recognised type
+    rememberClearedMatches: boolean;
   };
   notifications: {
     events: Record<NotificationEvent, { enabled: boolean; email: boolean; roles: ClientRole[] }>;
@@ -335,6 +340,7 @@ export const DEFAULTS: ResolvedSettings = {
     documentFraudAction: "reject",
     poaMaxAgeDays: 90,
     acceptedPoaDocuments: null,
+    rememberClearedMatches: true,
   },
   notifications: {
     events: {
@@ -687,7 +693,10 @@ function roleName(role: DecisionRole): string {
 
 // ── Screening rules (aml.ts) ────────────────────────────────────────────────
 
-export type ScreeningRules = Pick<ResolvedSettings["screening"], "matchThreshold" | "adverseMediaCategories">;
+export type ScreeningRules = Pick<ResolvedSettings["screening"], "matchThreshold" | "adverseMediaCategories"> & {
+  // Hits cleared for this customer before (false-positive memory).
+  cleared?: ClearedHit[];
+};
 
 export function monitoringIntervalMs(frequency: ResolvedSettings["screening"]["monitoringFrequency"]): number {
   const day = 24 * 60 * 60 * 1000;

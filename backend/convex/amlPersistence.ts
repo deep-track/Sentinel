@@ -9,6 +9,7 @@ import { summarizeCategories } from "./lib/amlCategories";
 import { setBaselineFromEnrolment } from "./lib/amlMonitoringStore";
 import { queueReview } from "./clientReviews";
 import { loadClientSettings, monitoringIntervalMs } from "./lib/clientSettings";
+import { noteSuppressed } from "./amlCleared";
 import type { MutationCtx } from "./_generated/server";
 import type { Infer } from "convex/values";
 
@@ -156,6 +157,21 @@ const completeArgs = {
       escalated: v.array(monitoredHitSummaryValidator),
     }),
   ),
+  // Hits left out because a reviewer cleared them for this customer before
+  // (false-positive memory), and the customer they were cleared for.
+  suppressed: v.optional(
+    v.array(
+      v.object({
+        source: v.string(),
+        sourceRecordId: v.string(),
+        entityName: v.string(),
+        clearedAt: v.number(),
+        clearedByName: v.union(v.string(), v.null()),
+        reasonCode: v.union(v.string(), v.null()),
+      }),
+    ),
+  ),
+  subjectKey: v.optional(v.string()),
   coverage: v.optional(
     v.object({
       checked: v.array(
@@ -248,8 +264,11 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
     result: {
       provider: "sentinel_watchlists",
       subjectName: args.subjectName,
-      reason: args.reason,
+      reason: args.suppressed?.length
+        ? `${args.reason} ${args.suppressed.length} hit${args.suppressed.length === 1 ? " was" : "s were"} left out: already cleared for this customer.`
+        : args.reason,
       matches: args.matches,
+      ...(args.suppressed?.length ? { suppressedMatches: args.suppressed } : {}),
       ...(args.monitoring ? { monitoring: args.monitoring } : {}),
       categories: summarizeCategories(
         args.matches.map((match) => ({ categories: match.categories ?? [], pepClass: match.pepClass ?? null })),
@@ -273,6 +292,9 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
     updatedAt: now,
     completedAt: now,
   });
+  if (args.suppressed?.length) {
+    await noteSuppressed(ctx, args.clientId, args.subjectKey ?? null, args.suppressed.map((hit) => `${hit.source}:${hit.sourceRecordId}`));
+  }
   for (const match of args.matches) {
     await ctx.db.insert("flaggedEntities", {
       entityName: match.entityName,

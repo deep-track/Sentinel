@@ -30,6 +30,8 @@ import {
 } from "./lib/adverseMedia";
 import { MAX_EXTERNAL_REF_LENGTH, enrolMonitoredSubject } from "./lib/amlMonitoringStore";
 import { DEFAULTS, loadClientSettings, monitoringIntervalMs, type ScreeningRules } from "./lib/clientSettings";
+import { hitKey as clearedKey, stillCleared, subjectKeyFor } from "./lib/amlClearedMatches";
+import { clearedHitsFor } from "./amlCleared";
 import {
   OPENSANCTIONS_STRONG_MATCH_SCORE,
   OpenSanctionsRequestError,
@@ -167,7 +169,7 @@ async function createAmlVerification(
     type: "aml",
     status: "queued",
     creditsUsed,
-    input: { subjectName, entityType: args.entityType, country: country ?? null, ...details },
+    input: { subjectName, entityType: args.entityType, country: country ?? null, ...details, ...(externalRef ? { externalRef } : {}) },
     reference,
     createdAt: now,
     updatedAt: now,
@@ -179,6 +181,7 @@ async function createAmlVerification(
     entityType: args.entityType,
     country,
     ...details,
+    ...(externalRef ? { externalRef } : {}),
   });
   const monitoring = monitor
     ? await enrolMonitoredSubject(ctx, {
@@ -486,33 +489,81 @@ export type ScreeningOutcome = {
   };
   matches: Array<Record<string, unknown> & { source: string; sourceRecordId: string }>;
   candidateCount: number;
+  // Hits left out because they were cleared for this customer before.
+  suppressed: SuppressedMatch[];
 };
 
 // Screens subjects against the Sentinel-owned watchlists and OpenSanctions.
 // The watchlist entries are read once for the whole batch, so ongoing
 // monitoring can re-screen many subjects in one pass.
+export type SuppressedMatch = {
+  source: string;
+  sourceRecordId: string;
+  entityName: string;
+  clearedAt: number;
+  clearedByName: string | null;
+  reasonCode: string | null;
+};
+
 // Applies a client's screening rules (Settings → Screening rules) to one
 // subject's raw results: hits under the client's match threshold don't
-// count, and adverse media is limited to the categories they screen for.
-export function applyScreeningRules<C extends { nameScore: number }>(
+// count, adverse media is limited to the categories they screen for, and
+// hits already cleared for this customer (false-positive memory) are left
+// out unless they've become more severe. Left-out cleared hits are returned
+// so the report can show them.
+export function applyScreeningRules<C extends { nameScore: number; sourceKey: string; sourceRecordId: string; primaryName: string }>(
   candidates: C[],
   openSanctions: OpenSanctionsOutcome,
   media: AdverseMediaOutcome,
   rules: ScreeningRules = DEFAULTS.screening,
-): { candidates: C[]; openSanctions: OpenSanctionsOutcome; media: AdverseMediaOutcome } {
+): { candidates: C[]; openSanctions: OpenSanctionsOutcome; media: AdverseMediaOutcome; suppressed: SuppressedMatch[] } {
   const threshold = rules.matchThreshold;
   const categories = rules.adverseMediaCategories;
-  return {
-    candidates: candidates.filter((candidate) => candidate.nameScore >= threshold),
+  const cleared = new Map((rules.cleared ?? []).map((hit) => [hit.key, hit]));
+  const suppressed: SuppressedMatch[] = [];
+  const isCleared = (source: string, sourceRecordId: string, entityName: string, current: Parameters<typeof stillCleared>[0]) => {
+    const hit = cleared.get(clearedKey(source, sourceRecordId));
+    if (!hit || !stillCleared(current, hit)) return false;
+    suppressed.push({ source, sourceRecordId, entityName, clearedAt: hit.clearedAt, clearedByName: hit.clearedByName ?? null, reasonCode: hit.reasonCode ?? null });
+    return true;
+  };
+  const result = {
+    candidates: candidates.filter(
+      (candidate) =>
+        candidate.nameScore >= threshold &&
+        !isCleared(candidate.sourceKey, candidate.sourceRecordId, candidate.primaryName, {
+          categories: ["sanctions"],
+          riskLevel: candidate.nameScore >= STRONG_MATCH_THRESHOLD ? "critical" : "high",
+        }),
+    ),
     openSanctions:
       openSanctions.status === "screened"
-        ? { ...openSanctions, matches: openSanctions.matches.filter((match) => Math.round(match.score * 100) >= threshold) }
+        ? {
+            ...openSanctions,
+            matches: openSanctions.matches.filter(
+              (match) =>
+                Math.round(match.score * 100) >= threshold &&
+                !isCleared("OPENSANCTIONS", match.id, match.caption, {
+                  categories: riskCategories(match),
+                  pepClass: pepClass(match),
+                  riskLevel: categorize(match) === "sanction" && match.score >= OPENSANCTIONS_STRONG_MATCH_SCORE ? "critical" : "high",
+                }),
+            ),
+          }
         : openSanctions,
     media:
-      media.status === "screened" && categories
-        ? { ...media, hits: media.hits.filter((hit) => hit.riskTypes.some((type) => categories.includes(type))) }
+      media.status === "screened"
+        ? {
+            ...media,
+            hits: media.hits.filter(
+              (hit) =>
+                (!categories || hit.riskTypes.some((type) => categories.includes(type))) &&
+                !isCleared("ADVERSE_MEDIA", hit.url, hit.title, { categories: ["adverse_media"], riskLevel: "high" }),
+            ),
+          }
         : media,
   };
+  return { ...result, suppressed };
 }
 
 export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[], rules?: ScreeningRules[]): Promise<ScreeningOutcome[]> {
@@ -632,18 +683,25 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
         })),
       ],
       candidateCount: subjectCandidates.length,
+      suppressed: ruled.suppressed,
     };
   });
 }
 
-// Each client's screening rules, in the order asked.
+// Each subject's screening rules (its client's), in the order asked, with
+// the hits already cleared for that customer when the client remembers them.
 export const _screeningRules = internalQuery({
-  args: { clientIds: v.array(v.id("clients")) },
+  args: { clientIds: v.array(v.id("clients")), subjectKeys: v.optional(v.array(v.union(v.string(), v.null()))) },
   handler: async (ctx, args): Promise<ScreeningRules[]> =>
     await Promise.all(
-      args.clientIds.map(async (clientId) => {
+      args.clientIds.map(async (clientId, index) => {
         const { screening } = await loadClientSettings(ctx, clientId);
-        return { matchThreshold: screening.matchThreshold, adverseMediaCategories: screening.adverseMediaCategories };
+        const subjectKey = args.subjectKeys?.[index] ?? null;
+        return {
+          matchThreshold: screening.matchThreshold,
+          adverseMediaCategories: screening.adverseMediaCategories,
+          cleared: screening.rememberClearedMatches ? await clearedHitsFor(ctx, clientId, subjectKey) : [],
+        };
       }),
     ),
 });
@@ -656,12 +714,16 @@ export const runScreening = internalAction({
     entityType: v.union(v.literal("individual"), v.literal("entity")),
     country: v.optional(v.string()),
     ...amlSubjectDetailsValidator,
+    // The client's customer reference (monitoring), which identifies the
+    // customer for false-positive memory.
+    externalRef: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await ctx.runMutation(internalApi.verifications._markProcessing, { id: args.verificationId });
     try {
-      const { verificationId, clientId, ...subject } = args;
-      const rules: ScreeningRules[] = await ctx.runQuery(internalApi.aml._screeningRules, { clientIds: [clientId] });
+      const { verificationId, clientId, externalRef, ...subject } = args;
+      const subjectKey = subjectKeyFor({ ...subject, externalRef });
+      const rules: ScreeningRules[] = await ctx.runQuery(internalApi.aml._screeningRules, { clientIds: [clientId], subjectKeys: [subjectKey] });
       const [outcome] = await screenSubjects(ctx, [subject], rules);
       await ctx.runMutation(internalApi.amlPersistence.complete, {
         verificationId,
@@ -674,6 +736,7 @@ export const runScreening = internalAction({
         complete: outcome.complete,
         coverage: outcome.coverage,
         matches: outcome.matches,
+        ...(outcome.suppressed.length ? { suppressed: outcome.suppressed, subjectKey: subjectKey ?? undefined } : {}),
       });
       return { verdict: outcome.verdict, matches: outcome.candidateCount };
     } catch (error) {

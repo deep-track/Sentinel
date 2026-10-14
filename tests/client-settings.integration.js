@@ -205,11 +205,11 @@ test("monitoring frequency and the low-credit warning level", () => {
 
 test("AML screening applies the client's threshold and adverse media categories", () => {
   const aml = read("backend/convex/aml.ts");
-  assert.match(aml, /candidates: candidates\.filter\(\(candidate\) => candidate\.nameScore >= threshold\)/);
-  assert.match(aml, /matches: openSanctions\.matches\.filter\(\(match\) => Math\.round\(match\.score \* 100\) >= threshold\)/);
-  assert.match(aml, /hits: media\.hits\.filter\(\(hit\) => hit\.riskTypes\.some\(\(type\) => categories\.includes\(type\)\)\)/);
+  assert.match(aml, /candidate\.nameScore >= threshold &&/);
+  assert.match(aml, /Math\.round\(match\.score \* 100\) >= threshold &&/);
+  assert.match(aml, /\(!categories \|\| hit\.riskTypes\.some\(\(type\) => categories\.includes\(type\)\)\) &&/);
   assert.match(aml, /const ruled = applyScreeningRules\(candidates\[index\], openSanctionsOutcomes\[index\], adverseMediaOutcomes\[index\], rules\?\.\[index\]\);/);
-  assert.match(aml, /const rules: ScreeningRules\[\] = await ctx\.runQuery\(internalApi\.aml\._screeningRules, \{ clientIds: \[clientId\] \}\);/);
+  assert.match(aml, /const rules: ScreeningRules\[\] = await ctx\.runQuery\(internalApi\.aml\._screeningRules, \{ clientIds: \[clientId\], subjectKeys: \[subjectKey\] \}\);/);
 });
 
 // ── Team ────────────────────────────────────────────────────────────────────

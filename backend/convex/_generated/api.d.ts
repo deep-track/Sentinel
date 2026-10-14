@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as aml from "../aml.js";
+import type * as amlCleared from "../amlCleared.js";
 import type * as amlMonitoring from "../amlMonitoring.js";
 import type * as amlPersistence from "../amlPersistence.js";
 import type * as amlReport from "../amlReport.js";
@@ -37,6 +38,7 @@ import type * as lib_access from "../lib/access.js";
 import type * as lib_adverseMedia from "../lib/adverseMedia.js";
 import type * as lib_africasTalking from "../lib/africasTalking.js";
 import type * as lib_amlCategories from "../lib/amlCategories.js";
+import type * as lib_amlClearedMatches from "../lib/amlClearedMatches.js";
 import type * as lib_amlMatching from "../lib/amlMatching.js";
 import type * as lib_amlMonitoringStore from "../lib/amlMonitoringStore.js";
 import type * as lib_awsClients_amlClient from "../lib/awsClients/amlClient.js";
@@ -86,6 +88,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   aml: typeof aml;
+  amlCleared: typeof amlCleared;
   amlMonitoring: typeof amlMonitoring;
   amlPersistence: typeof amlPersistence;
   amlReport: typeof amlReport;
@@ -113,6 +116,7 @@ declare const fullApi: ApiFromModules<{
   "lib/adverseMedia": typeof lib_adverseMedia;
   "lib/africasTalking": typeof lib_africasTalking;
   "lib/amlCategories": typeof lib_amlCategories;
+  "lib/amlClearedMatches": typeof lib_amlClearedMatches;
   "lib/amlMatching": typeof lib_amlMatching;
   "lib/amlMonitoringStore": typeof lib_amlMonitoringStore;
   "lib/awsClients/amlClient": typeof lib_awsClients_amlClient;

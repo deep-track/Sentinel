@@ -403,6 +403,34 @@ export default defineSchema({
     .index("by_verification", ["verificationId"])
     .index("by_watchlist_entry", ["watchlistEntryId"]),
 
+  // False-positive memory (amlCleared.ts, lib/amlClearedMatches.ts): AML hits
+  // a reviewer cleared for a customer, so they aren't raised again for them
+  // unless they become more severe. "Forget" sets revokedAt (kept for audit).
+  amlClearedMatches: defineTable({
+    clientId: v.id("clients"),
+    subjectKey: v.string(),
+    subjectName: v.string(),
+    matchKey: v.string(),
+    source: v.string(),
+    sourceRecordId: v.string(),
+    entityName: v.string(),
+    categories: v.array(v.string()),
+    pepClass: v.optional(v.number()),
+    riskLevel: v.union(v.literal("critical"), v.literal("high")),
+    verificationId: v.id("verifications"),
+    reviewId: v.id("reviewQueue"),
+    clearedBy: v.string(),
+    clearedByName: v.optional(v.string()),
+    reasonCode: v.optional(v.string()),
+    clearedAt: v.number(),
+    suppressedCount: v.number(),
+    lastSuppressedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    revokedBy: v.optional(v.string()),
+  })
+    .index("by_client_and_subject", ["clientId", "subjectKey"])
+    .index("by_client_and_cleared_at", ["clientId", "clearedAt"]),
+
   // Ongoing AML monitoring (amlMonitoring.ts, lib/amlMonitoringStore.ts).
   // Each active subject is re-screened daily; `hits` is the baseline from the
   // last complete screening, and only new or more severe hits alert.
