@@ -425,6 +425,34 @@ export default defineSchema({
     .index("by_verification", ["verificationId"])
     .index("by_watchlist_entry", ["watchlistEntryId"]),
 
+  // False-positive memory (amlCleared.ts, lib/amlClearedMatches.ts): AML hits
+  // a reviewer cleared for a customer, so they aren't raised again for them
+  // unless they become more severe. "Forget" sets revokedAt (kept for audit).
+  amlClearedMatches: defineTable({
+    clientId: v.id("clients"),
+    subjectKey: v.string(),
+    subjectName: v.string(),
+    matchKey: v.string(),
+    source: v.string(),
+    sourceRecordId: v.string(),
+    entityName: v.string(),
+    categories: v.array(v.string()),
+    pepClass: v.optional(v.number()),
+    riskLevel: v.union(v.literal("critical"), v.literal("high")),
+    verificationId: v.id("verifications"),
+    reviewId: v.id("reviewQueue"),
+    clearedBy: v.string(),
+    clearedByName: v.optional(v.string()),
+    reasonCode: v.optional(v.string()),
+    clearedAt: v.number(),
+    suppressedCount: v.number(),
+    lastSuppressedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    revokedBy: v.optional(v.string()),
+  })
+    .index("by_client_and_subject", ["clientId", "subjectKey"])
+    .index("by_client_and_cleared_at", ["clientId", "clearedAt"]),
+
   // Ongoing AML monitoring (amlMonitoring.ts, lib/amlMonitoringStore.ts).
   // Each active subject is re-screened daily; `hits` is the baseline from the
   // last complete screening, and only new or more severe hits alert.
@@ -578,6 +606,41 @@ export default defineSchema({
     .index("by_client_and_timestamp", ["clientId", "timestamp"])
     .index("by_action_and_timestamp", ["action", "timestamp"]),
 
+  // Suspicious transaction / activity reports prepared from cases
+  // (strReports.ts): the goAML XML is rebuilt from these fields on download.
+  // The register is confidential (tipping-off): Admins and Reviewers only.
+  strReports: defineTable({
+    clientId: v.id("clients"),
+    verificationId: v.id("verifications"),
+    reviewId: v.optional(v.id("reviewQueue")),
+    reportCode: v.union(v.literal("STR"), v.literal("SAR")),
+    status: v.union(v.literal("draft"), v.literal("submitted")),
+    entityReference: v.string(),
+    reason: v.string(),
+    action: v.string(),
+    indicators: v.array(v.string()),
+    transaction: v.optional(
+      v.object({
+        number: v.string(),
+        date: v.number(),
+        amount: v.number(),
+        description: v.string(),
+        transmodeCode: v.optional(v.string()),
+        counterpartyName: v.optional(v.string()),
+        counterpartyAccount: v.optional(v.string()),
+      }),
+    ),
+    createdBy: v.string(),
+    createdByName: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    submittedAt: v.optional(v.number()),
+    submittedBy: v.optional(v.string()),
+    frcReference: v.optional(v.string()),
+  })
+    .index("by_client_and_created_at", ["clientId", "createdAt"])
+    .index("by_verification", ["verificationId"]),
+
   complianceReports: defineTable({
     reportType: v.literal("weekly_compliance"),
     periodStart: v.number(),
@@ -610,23 +673,71 @@ export default defineSchema({
     .index("by_generated_at", ["generatedAt"])
     .index("by_period", ["periodStart", "periodEnd"]),
 
+  // A client's webhook endpoints (webhooks.ts). Replaces the single
+  // clients.webhookUrl / webhookSecret, which are moved here on first use.
+  webhookEndpoints: defineTable({
+    clientId: v.id("clients"),
+    url: v.string(),
+    description: v.optional(v.string()),
+    secret: v.string(),
+    // A rotated secret: deliveries carry its signature in the *-Next headers
+    // until it becomes the secret (on activation, or after 24 hours).
+    nextSecret: v.optional(v.string()),
+    nextSecretCreatedAt: v.optional(v.number()),
+    // Event names (lib/webhookDispatch.ts WEBHOOK_EVENT_TYPES).
+    events: v.array(v.string()),
+    // Products whose checks are sent (absent = all).
+    products: v.optional(v.array(v.string())),
+    // Which checks: live keys and the portal, test keys, or both.
+    environment: v.union(v.literal("live"), v.literal("test"), v.literal("all")),
+    headers: v.optional(v.array(v.object({ name: v.string(), value: v.string() }))),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    pausedAt: v.optional(v.number()),
+    pausedReason: v.optional(v.string()),
+    consecutiveFailures: v.number(),
+    createdAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_client", ["clientId"]),
+
   webhookDeliveries: defineTable({
     clientId: v.id("clients"),
-    verificationId: v.id("verifications"),
+    // Absent for events not about a check (test events, low credits).
+    verificationId: v.optional(v.id("verifications")),
+    // Absent on deliveries made before endpoints existed.
+    endpointId: v.optional(v.id("webhookEndpoints")),
+    event: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("delivered"),
       v.literal("retrying"),
       v.literal("failed"),
+      // Held while its endpoint is paused; sent again when it resumes.
+      v.literal("paused"),
     ),
     attemptCount: v.number(),
     lastAttemptAt: v.optional(v.number()),
     nextRetryAt: v.optional(v.number()),
     lastResponseStatus: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    lastLatencyMs: v.optional(v.number()),
+    // Each attempt (latest 10): when, status code or error, and timing.
+    attempts: v.optional(
+      v.array(
+        v.object({
+          at: v.number(),
+          statusCode: v.optional(v.number()),
+          error: v.optional(v.string()),
+          latencyMs: v.optional(v.number()),
+        }),
+      ),
+    ),
+    test: v.optional(v.boolean()),
     payload: v.any(),
     createdAt: v.number(),
   })
     .index("by_client", ["clientId"])
+    .index("by_endpoint", ["endpointId"])
     .index("by_status_and_retry", ["status", "nextRetryAt"]),
 
   kyiRecords: defineTable({

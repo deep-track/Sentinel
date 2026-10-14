@@ -35,6 +35,7 @@ export type ResolvedSettings = {
     documentFraudAction: "reject" | "review";
     poaMaxAgeDays: number;
     acceptedPoaDocuments: string[] | null;
+    rememberClearedMatches: boolean;
   };
   notifications: {
     events: Record<string, { enabled: boolean; email: boolean; roles: string[] }>;
@@ -58,6 +59,9 @@ export type ResolvedSettings = {
     complianceContactName?: string;
     complianceContactEmail?: string;
     complianceContactPhone?: string;
+    city?: string;
+    goamlEntityId?: string;
+    goamlBranch?: string;
     logoStorageId?: string;
   };
 };

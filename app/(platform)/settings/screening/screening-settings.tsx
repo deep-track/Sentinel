@@ -17,6 +17,7 @@ import {
   useSettings,
   type ResolvedSettings,
 } from "@/components/settings/kit";
+import { ClearedMatches } from "./cleared-matches";
 
 type Screening = ResolvedSettings["screening"];
 
@@ -74,6 +75,20 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
             columns={1}
           />
         </Field>
+      </Section>
+
+      <Section
+        title="False-positive memory"
+        description="When a reviewer approves an AML case, its hits are remembered as cleared for that customer. Later screenings and monitoring don't raise them again, unless the hit becomes more severe (a new risk category, a more senior PEP class, or critical)."
+      >
+        <Toggle
+          checked={draft.rememberClearedMatches}
+          onChange={(rememberClearedMatches) => set({ rememberClearedMatches })}
+          disabled={disabled}
+          label="Don't raise cleared hits again"
+          detail="Only for customers identified by more than a name: a customer reference, ID or registration number, or date of birth. A hit cleared for one person is never hidden for another with the same name."
+        />
+        <ClearedMatches clientId={clientId} />
       </Section>
 
       <Section title="Ongoing monitoring">
@@ -170,6 +185,7 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
                 aiGeneratedAction: draft.aiGeneratedAction,
                 documentFraudAction: draft.documentFraudAction,
                 poaMaxAgeDays: draft.poaMaxAgeDays,
+                rememberClearedMatches: draft.rememberClearedMatches,
                 // null (every category) is stored as "not set".
                 ...(draft.adverseMediaCategories ? { adverseMediaCategories: draft.adverseMediaCategories } : {}),
                 ...(draft.acceptedPoaDocuments ? { acceptedPoaDocuments: draft.acceptedPoaDocuments } : {}),

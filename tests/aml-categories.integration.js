@@ -170,7 +170,7 @@ test("subject details are validated, stored and sent to OpenSanctions", () => {
   assert.match(aml, /Date of birth must be YYYY, YYYY-MM or YYYY-MM-DD\./);
   assert.match(aml, /Registration number and jurisdiction apply to companies only\./);
   assert.match(aml, /Nationality and ID number apply to individuals only\./);
-  assert.match(aml, /input: \{ subjectName, entityType: args\.entityType, country: country \?\? null, \.\.\.details \}/);
+  assert.match(aml, /input: \{ subjectName, entityType: args\.entityType, country: country \?\? null, \.\.\.details, \.\.\.\(externalRef \? \{ externalRef \} : \{\}\) \}/);
   assert.match(aml, /birthDate: subject\.dateOfBirth,/);
   assert.match(aml, /annotateBirthDates\(result, batch\[index\]\.dateOfBirth\)/);
   assert.match(aml, /categories: \["sanctions" as const\]/, "OFAC / UN hits are sanctions");

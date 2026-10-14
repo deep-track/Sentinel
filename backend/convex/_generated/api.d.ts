@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as aml from "../aml.js";
+import type * as amlCleared from "../amlCleared.js";
 import type * as amlMonitoring from "../amlMonitoring.js";
 import type * as amlPersistence from "../amlPersistence.js";
 import type * as amlReport from "../amlReport.js";
@@ -37,6 +38,7 @@ import type * as lib_access from "../lib/access.js";
 import type * as lib_adverseMedia from "../lib/adverseMedia.js";
 import type * as lib_africasTalking from "../lib/africasTalking.js";
 import type * as lib_amlCategories from "../lib/amlCategories.js";
+import type * as lib_amlClearedMatches from "../lib/amlClearedMatches.js";
 import type * as lib_amlMatching from "../lib/amlMatching.js";
 import type * as lib_amlMonitoringStore from "../lib/amlMonitoringStore.js";
 import type * as lib_awsClients_amlClient from "../lib/awsClients/amlClient.js";
@@ -53,6 +55,7 @@ import type * as lib_deeptrackLive from "../lib/deeptrackLive.js";
 import type * as lib_documentChecks from "../lib/documentChecks.js";
 import type * as lib_documentPipeline from "../lib/documentPipeline.js";
 import type * as lib_documentVision from "../lib/documentVision.js";
+import type * as lib_goaml from "../lib/goaml.js";
 import type * as lib_openSanctions from "../lib/openSanctions.js";
 import type * as lib_pricing from "../lib/pricing.js";
 import type * as lib_rateLimits from "../lib/rateLimits.js";
@@ -69,9 +72,11 @@ import type * as monitoring from "../monitoring.js";
 import type * as notifications from "../notifications.js";
 import type * as orgSettings from "../orgSettings.js";
 import type * as portal from "../portal.js";
+import type * as regulatorPack from "../regulatorPack.js";
 import type * as reviewQueue from "../reviewQueue.js";
 import type * as settings from "../settings.js";
 import type * as sso from "../sso.js";
+import type * as strReports from "../strReports.js";
 import type * as team from "../team.js";
 import type * as userProfiles from "../userProfiles.js";
 import type * as verifications from "../verifications.js";
@@ -87,6 +92,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   aml: typeof aml;
+  amlCleared: typeof amlCleared;
   amlMonitoring: typeof amlMonitoring;
   amlPersistence: typeof amlPersistence;
   amlReport: typeof amlReport;
@@ -114,6 +120,7 @@ declare const fullApi: ApiFromModules<{
   "lib/adverseMedia": typeof lib_adverseMedia;
   "lib/africasTalking": typeof lib_africasTalking;
   "lib/amlCategories": typeof lib_amlCategories;
+  "lib/amlClearedMatches": typeof lib_amlClearedMatches;
   "lib/amlMatching": typeof lib_amlMatching;
   "lib/amlMonitoringStore": typeof lib_amlMonitoringStore;
   "lib/awsClients/amlClient": typeof lib_awsClients_amlClient;
@@ -130,6 +137,7 @@ declare const fullApi: ApiFromModules<{
   "lib/documentChecks": typeof lib_documentChecks;
   "lib/documentPipeline": typeof lib_documentPipeline;
   "lib/documentVision": typeof lib_documentVision;
+  "lib/goaml": typeof lib_goaml;
   "lib/openSanctions": typeof lib_openSanctions;
   "lib/pricing": typeof lib_pricing;
   "lib/rateLimits": typeof lib_rateLimits;
@@ -146,9 +154,11 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   orgSettings: typeof orgSettings;
   portal: typeof portal;
+  regulatorPack: typeof regulatorPack;
   reviewQueue: typeof reviewQueue;
   settings: typeof settings;
   sso: typeof sso;
+  strReports: typeof strReports;
   team: typeof team;
   userProfiles: typeof userProfiles;
   verifications: typeof verifications;

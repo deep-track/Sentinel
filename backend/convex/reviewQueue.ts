@@ -8,6 +8,7 @@ import { chargeVerification } from "./lib/credits";
 import { verificationTypeLabel } from "./lib/verificationTypes";
 import { recordAudit } from "./auditLog";
 import { withoutMedia } from "./verifications";
+import { recordClearedMatches } from "./amlCleared";
 
 // ─────────────────────────────────────────────────────────
 // Section 11.2 (engineering doc) — authoritative per Brian's directive
@@ -268,6 +269,19 @@ export async function resolveReviewItem(
     ...(client?.approvedBy ? { approvedBy: client.approvedBy, approvedByName: client.approvedByName } : {}),
   });
 
+  // An approved AML screening clears its hits for this customer, so they
+  // aren't raised again (false-positive memory, amlCleared.ts).
+  const remembered =
+    finalVerdict === "pass"
+      ? await recordClearedMatches(ctx, {
+          verification,
+          reviewId: reviewRow._id,
+          clearedBy: reviewerId,
+          clearedByName: params.reviewerName,
+          reasonCode: client?.reasonCode,
+        })
+      : 0;
+
   // Idempotent per verification: a flow that already charged (e.g. AML on
   // completion) is not billed again here.
   await chargeVerification(ctx, {
@@ -291,6 +305,7 @@ export async function resolveReviewItem(
       previousVerdict: verification.verdict ?? null,
       finalVerdict,
       decidedBy: client ? "client" : "deeptrack",
+      ...(remembered ? { clearedMatchesRemembered: remembered } : {}),
       ...(client?.reasonCode ? { reasonCode: client.reasonCode } : {}),
       ...(client?.recommendedBy ? { recommendedBy: client.recommendedBy } : {}),
     },
@@ -313,6 +328,7 @@ export async function resolveReviewItem(
 
   await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, {
     verificationId: verification._id,
+    reviewDecided: true,
   });
 
   return { status: "resolved", verdict: finalVerdict };

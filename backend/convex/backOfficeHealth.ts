@@ -326,7 +326,7 @@ export const serviceHealth = query({
         .map(async (row) => ({
           _id: row._id,
           clientName: clientNames.get(row.clientId) ?? "Unknown client",
-          reference: (await ctx.db.get(row.verificationId))?.reference ?? null,
+          reference: row.verificationId ? (await ctx.db.get(row.verificationId))?.reference ?? null : (row.payload as { scan_id?: string } | null)?.scan_id ?? null,
           attemptCount: row.attemptCount,
           lastResponseStatus: row.lastResponseStatus ?? null,
           lastAttemptAt: row.lastAttemptAt ?? null,

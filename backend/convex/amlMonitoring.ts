@@ -9,6 +9,7 @@ import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./audi
 import { screenSubjects, type ScreeningSubject } from "./aml";
 import { completeScreening, type CompleteScreeningArgs } from "./amlPersistence";
 import { loadClientSettings, monitoringIntervalMs } from "./lib/clientSettings";
+import { subjectKeyFor } from "./lib/amlClearedMatches";
 import {
   INCOMPLETE_RETRY_MS,
   diffHits,
@@ -60,8 +61,12 @@ export const runDue = internalAction({
         limit: BATCH_SIZE,
       });
       if (due.length === 0) return { batches: batch };
-      // Each subject is screened under its own client's rules.
-      const rules = await ctx.runQuery(internalApi.aml._screeningRules, { clientIds: due.map((subject) => subject.clientId) });
+      // Each subject is screened under its own client's rules, without the
+      // hits already cleared for that customer.
+      const rules = await ctx.runQuery(internalApi.aml._screeningRules, {
+        clientIds: due.map((subject) => subject.clientId),
+        subjectKeys: due.map((subject) => subjectKeyFor({ ...subjectForScreening(subject), externalRef: subject.externalRef })),
+      });
       const outcomes = await screenSubjects(ctx, due.map(subjectForScreening), rules);
       for (let index = 0; index < due.length; index++) {
         await ctx.runMutation(internalApi.amlMonitoring._recordRun, {
@@ -94,6 +99,7 @@ export const _recordRun = internalMutation({
       confidence?: number;
       coverage: CompleteScreeningArgs["coverage"];
       matches: CompleteScreeningArgs["matches"];
+      suppressed?: CompleteScreeningArgs["suppressed"];
     };
     const now = Date.now();
     if (!outcome.complete) {
@@ -165,6 +171,9 @@ export const _recordRun = internalMutation({
       complete: true,
       coverage: outcome.coverage,
       matches: outcome.matches,
+      ...(outcome.suppressed?.length
+        ? { suppressed: outcome.suppressed, subjectKey: subjectKeyFor({ ...subjectForScreening(subject), externalRef: subject.externalRef }) ?? undefined }
+        : {}),
       monitoring: {
         subjectId: subject._id,
         reference: subject.reference,

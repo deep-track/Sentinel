@@ -3,6 +3,7 @@ import type { Infer } from "convex/values";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { ClientRole } from "./rbac";
+import type { ClearedHit } from "./amlClearedMatches";
 
 // A client's own settings (Settings in the client portal), managed by its
 // Admin: the review workflow, screening rules, notifications, security, data
@@ -129,6 +130,9 @@ export const screeningSettingsValidator = v.object({
   poaMaxAgeDays: v.optional(v.number()),
   // Proof of address types accepted (lib/documentChecks.ts POA_DOCUMENT_TYPES).
   acceptedPoaDocuments: v.optional(v.array(v.string())),
+  // Don't raise an AML hit again for a customer it was cleared for
+  // (lib/amlClearedMatches.ts), unless it became more severe.
+  rememberClearedMatches: v.optional(v.boolean()),
 });
 
 export const NOTIFICATION_EVENTS = [
@@ -141,6 +145,7 @@ export const NOTIFICATION_EVENTS = [
   "case_escalated",
   "monitoring_alert",
   "low_credit",
+  "webhook_failing",
 ] as const;
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
@@ -154,6 +159,7 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEvent, { label: strin
   case_escalated: { label: "Case escalated", detail: "A team member escalated a case for a senior decision." },
   monitoring_alert: { label: "Monitoring alert", detail: "Ongoing monitoring found a new or more severe hit." },
   low_credit: { label: "Low credits", detail: "The credit balance fell below the warning level." },
+  webhook_failing: { label: "Webhook paused", detail: "A webhook endpoint kept failing and was paused." },
 };
 
 // Events sent to the people named by the event itself, not to roles.
@@ -177,6 +183,7 @@ export const notificationSettingsValidator = v.object({
       case_escalated: v.optional(eventSettings),
       monitoring_alert: v.optional(eventSettings),
       low_credit: v.optional(eventSettings),
+      webhook_failing: v.optional(eventSettings),
     }),
   ),
   // Warn when the balance falls to this many credits. Unset = the plan's
@@ -222,6 +229,10 @@ export const profileSettingsValidator = v.object({
   complianceContactName: v.optional(v.string()),
   complianceContactEmail: v.optional(v.string()),
   complianceContactPhone: v.optional(v.string()),
+  city: v.optional(v.string()),
+  // goAML reporting entity id and branch, assigned by the FRC (STR exports).
+  goamlEntityId: v.optional(v.string()),
+  goamlBranch: v.optional(v.string()),
   logoStorageId: v.optional(v.id("_storage")),
 });
 
@@ -275,6 +286,7 @@ export type ResolvedSettings = {
     documentFraudAction: "reject" | "review";
     poaMaxAgeDays: number;
     acceptedPoaDocuments: string[] | null; // null = every recognised type
+    rememberClearedMatches: boolean;
   };
   notifications: {
     events: Record<NotificationEvent, { enabled: boolean; email: boolean; roles: ClientRole[] }>;
@@ -332,6 +344,7 @@ export const DEFAULTS: ResolvedSettings = {
     documentFraudAction: "reject",
     poaMaxAgeDays: 90,
     acceptedPoaDocuments: null,
+    rememberClearedMatches: true,
   },
   notifications: {
     events: {
@@ -344,6 +357,7 @@ export const DEFAULTS: ResolvedSettings = {
       case_escalated: { enabled: true, email: true, roles: ["client_admin", "reviewer"] },
       monitoring_alert: { enabled: true, email: true, roles: ["client_admin", "reviewer", "compliance_analyst"] },
       low_credit: { enabled: true, email: true, roles: ["client_admin"] },
+      webhook_failing: { enabled: true, email: true, roles: ["client_admin", "developer"] },
     },
     lowCreditBalance: null,
   },
@@ -683,7 +697,10 @@ function roleName(role: DecisionRole): string {
 
 // ── Screening rules (aml.ts) ────────────────────────────────────────────────
 
-export type ScreeningRules = Pick<ResolvedSettings["screening"], "matchThreshold" | "adverseMediaCategories">;
+export type ScreeningRules = Pick<ResolvedSettings["screening"], "matchThreshold" | "adverseMediaCategories"> & {
+  // Hits cleared for this customer before (false-positive memory).
+  cleared?: ClearedHit[];
+};
 
 export function monitoringIntervalMs(frequency: ResolvedSettings["screening"]["monitoringFrequency"]): number {
   const day = 24 * 60 * 60 * 1000;
