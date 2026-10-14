@@ -26,7 +26,8 @@ import { c2paConfigFromEnv, lookupContentCredentials } from "./lib/c2paResolutio
 
 const internalApi: any = internal;
 
-function textractOcr(): OcrProvider | null {
+// Shared with KYB (kybNode.ts).
+export function textractOcr(): OcrProvider | null {
   const region = process.env.AWS_TEXTRACT_REGION?.trim() || process.env.AWS_REGION?.trim();
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
