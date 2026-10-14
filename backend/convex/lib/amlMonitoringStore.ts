@@ -108,9 +108,12 @@ export async function enrolMonitoredSubject(
     externalRef?: string;
     verificationId: Id<"verifications">;
     enrolledBy: string;
+    // The client's re-screen frequency (Settings → Screening rules).
+    intervalMs?: number;
   },
 ): Promise<{ subjectId: Id<"amlMonitoredSubjects">; reference: string }> {
   const now = Date.now();
+  const intervalMs = params.intervalMs ?? RESCREEN_INTERVAL_MS;
   const fields = {
     subjectName: params.subjectName,
     entityType: params.entityType,
@@ -125,7 +128,7 @@ export async function enrolMonitoredSubject(
     enrolledBy: params.enrolledBy,
     baselineSet: false,
     hits: [],
-    nextScreenAt: now + RESCREEN_INTERVAL_MS,
+    nextScreenAt: now + intervalMs,
     updatedAt: now,
   };
   if (params.externalRef) {
@@ -158,6 +161,7 @@ export async function setBaselineFromEnrolment(
   ctx: MutationCtx,
   verificationId: Id<"verifications">,
   matches: MatchLike[],
+  intervalMs: number = RESCREEN_INTERVAL_MS,
 ) {
   const subject = await ctx.db
     .query("amlMonitoredSubjects")
@@ -169,7 +173,7 @@ export async function setBaselineFromEnrolment(
     baselineSet: true,
     hits: hitsFromMatches(matches),
     lastScreenedAt: now,
-    nextScreenAt: now + RESCREEN_INTERVAL_MS,
+    nextScreenAt: now + intervalMs,
     screenCount: subject.screenCount + 1,
     updatedAt: now,
   });

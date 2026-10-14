@@ -100,6 +100,7 @@ export const getBalanceForClient = query({
     await requireClientRole(ctx, args.clientId, [
       "client_admin",
       "compliance_analyst",
+      "reviewer",
       "developer",
       "viewer",
     ]);
@@ -150,7 +151,7 @@ export const backfillAllocations = internalMutation({
   },
 });
 
-const HISTORY_ROLES = ["client_admin", "compliance_analyst", "developer", "viewer"] as const;
+const HISTORY_ROLES = ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"] as const;
 
 // Client Billing page: plan, balance, prices and one page of the credit
 // ledger (newest first), with each line's money value and the check it was

@@ -18,6 +18,9 @@ crons.interval("probe external services", { minutes: 15 }, internal.backOfficeHe
 // and alerts on new or more severe hits.
 crons.interval("re-screen monitored AML subjects", { minutes: 15 }, internal.amlMonitoring.runDue, {});
 
+// Client review deadlines: raise and alert cases past their deadline.
+crons.interval("flag overdue client reviews", { minutes: 15 }, internal.clientReviews.flagOverdue, {});
+
 // Back Office client health: drop logged API errors older than 30 days.
 crons.interval("purge old API error logs", { hours: 1 }, internal.backOfficeClients.purgeApiErrors, {});
 

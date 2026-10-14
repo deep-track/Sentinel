@@ -1,8 +1,9 @@
 import { v, ConvexError } from "convex/values";
-import { internalAction, internalMutation, internalQuery, mutation } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireClientRole } from "./lib/rbac";
+import { actorTypeForClientRole, recordAudit } from "./auditLog";
 import {
   buildWebhookPayload,
   buildFailureWebhookPayload,
@@ -46,6 +47,8 @@ export const dispatchWebhook = internalAction({
             verdict: verification.verdict ?? "review",
             result: verification.result,
           });
+    // Events the client chose not to receive (Settings → Developers).
+    if (client.webhookEvents && !client.webhookEvents.includes(payload.event)) return;
 
     const deliveryId: Id<"webhookDeliveries"> = await ctx.runMutation(
       internal.webhooks._createDelivery,
@@ -129,7 +132,7 @@ export const resendWebhook = mutation({
     if (!delivery) {
       throw new ConvexError({ code: "not_found", message: "Delivery not found." });
     }
-    await requireClientRole(ctx, delivery.clientId, ["client_admin", "compliance_analyst"]);
+    await requireClientRole(ctx, delivery.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     // Only a delivery whose retry schedule is exhausted can be resent;
     // resending a pending/retrying one would start a second retry chain.
     if (delivery.status !== "failed") {
@@ -158,7 +161,70 @@ export const _getClientForWebhook = internalQuery({
   handler: async (ctx, args) => {
     const client = await ctx.db.get(args.clientId);
     if (!client) return null;
-    return { webhookUrl: client.webhookUrl, webhookSecret: client.webhookSecret };
+    return { webhookUrl: client.webhookUrl, webhookSecret: client.webhookSecret, webhookEvents: client.webhookEvents ?? null };
+  },
+});
+
+// ── Portal (Settings → Developers, Webhooks page) ──────────────────────────
+
+export const WEBHOOK_EVENTS = [
+  { value: "sentinel.scan.complete", label: "Check completed or failed (every product, and review decisions)" },
+  { value: "sentinel.monitoring.alert", label: "AML monitoring alert" },
+] as const;
+const MAX_DELIVERIES_LISTED = 50;
+
+export const getForClient = query({
+  args: { clientId: v.id("clients") },
+  handler: async (ctx, args) => {
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
+    const client = await ctx.db.get(args.clientId);
+    if (!client) return null;
+    const deliveries = await ctx.db
+      .query("webhookDeliveries")
+      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .order("desc")
+      .take(MAX_DELIVERIES_LISTED);
+    const verifications = await Promise.all(deliveries.map((row) => ctx.db.get(row.verificationId)));
+    return {
+      webhookUrl: client.webhookUrl ?? null,
+      configured: Boolean(client.webhookUrl && client.webhookSecret),
+      events: client.webhookEvents ?? WEBHOOK_EVENTS.map((event) => event.value),
+      eventOptions: WEBHOOK_EVENTS,
+      deliveries: deliveries.map((row, index) => ({
+        _id: row._id,
+        status: row.status,
+        event: (row.payload as { event?: string } | null)?.event ?? null,
+        reference: verifications[index]?.reference ?? null,
+        attemptCount: row.attemptCount,
+        lastAttemptAt: row.lastAttemptAt ?? null,
+        nextRetryAt: row.nextRetryAt ?? null,
+        lastResponseStatus: row.lastResponseStatus ?? null,
+        createdAt: row.createdAt,
+      })),
+    };
+  },
+});
+
+export const setEvents = mutation({
+  args: { clientId: v.id("clients"), events: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "developer"]);
+    const known: string[] = WEBHOOK_EVENTS.map((event) => event.value);
+    const events = [...new Set(args.events)];
+    if (events.length === 0) throw new ConvexError({ code: "invalid_argument", message: "Choose at least one event, or remove the webhook." });
+    if (events.some((event) => !known.includes(event))) throw new ConvexError({ code: "invalid_argument", message: "Unknown webhook event." });
+    const client = await ctx.db.get(args.clientId);
+    await ctx.db.patch(args.clientId, { webhookEvents: events });
+    await recordAudit(ctx, {
+      actorId: actor.userId,
+      actorType: actorTypeForClientRole(actor.role),
+      action: "webhook.events_updated",
+      targetType: "webhook",
+      targetId: args.clientId,
+      clientId: args.clientId,
+      metadata: { before: client?.webhookEvents ?? "all", after: events },
+    });
+    return null;
   },
 });
 

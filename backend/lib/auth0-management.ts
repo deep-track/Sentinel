@@ -145,7 +145,23 @@ export async function createOrganizationInvitation(params: {
   if (!canManageCompany(user, companyId)) {
     throw new Error("You can only invite users to your own company");
   }
+  return sendOrganizationInvitation({ inviter: user, email: params.email, redirectUrl: params.redirectUrl, companyId });
+}
 
+export function isInvitationEmailConfigured(): boolean {
+  return REQUIRED_ENV.every((name) => Boolean(process.env[name]?.trim()));
+}
+
+// Sends the Auth0 organization invitation email. No authorization of its
+// own: callers must already have checked that the inviter may invite to
+// `companyId` (createOrganizationInvitation above, or a client Admin's invite
+// that Convex's team.createInvite has just accepted).
+export async function sendOrganizationInvitation(params: {
+  inviter: Pick<AppUser, "id" | "fullName" | "email">;
+  email: string;
+  redirectUrl: string;
+  companyId: string;
+}) {
   const config = getConfig();
   const normalizedEmail = params.email.trim().toLowerCase();
   if (!normalizedEmail || !normalizedEmail.includes("@")) {
@@ -155,7 +171,7 @@ export async function createOrganizationInvitation(params: {
   return managementRequest<OrganizationInvitation>(invitationsPath(config), {
     method: "POST",
     body: JSON.stringify({
-      inviter: { name: user.fullName, email: user.email },
+      inviter: { name: params.inviter.fullName, email: params.inviter.email },
       invitee: { email: normalizedEmail },
       client_id: config.invitationClientId,
       connection_id: config.invitationConnectionId,
@@ -163,9 +179,24 @@ export async function createOrganizationInvitation(params: {
       send_invitation_email: true,
       // app_metadata is copied onto the user when the invitation is accepted;
       // the Post-Login Action emits companyId from it as a namespaced claim.
-      app_metadata: { redirectUrl: params.redirectUrl, companyId, invitedBy: user.id },
+      app_metadata: { redirectUrl: params.redirectUrl, companyId: params.companyId, invitedBy: params.inviter.id },
     }),
   });
+}
+
+// Deletes an Auth0 invitation after the caller's own authorization (a client
+// Admin revoking their team's invite in Convex). An invitation that is
+// already gone (accepted or expired) is not an error.
+export async function deleteOrganizationInvitation(invitationId: string) {
+  const config = getConfig();
+  const id = invitationId.trim();
+  if (!id) return;
+  try {
+    await managementRequest<void>(invitationsPath(config, id), { method: "DELETE" });
+  } catch (error) {
+    if (error instanceof Auth0ManagementError && error.status === 404) return;
+    throw error;
+  }
 }
 
 export async function revokeOrganizationInvitation(invitationId: string) {

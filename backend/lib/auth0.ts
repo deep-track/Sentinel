@@ -64,9 +64,16 @@ function getPreservedCustomClaims(): string[] {
 			getRoleClaimName(),
 			DEFAULT_ROLES_CLAIM,
 			getCompanyIdClaimName(),
+			// Whether sign-in used MFA (a client's Settings → Security can
+			// require it; see sessionUsedMfa in backend/lib/auth.ts).
+			"amr",
+			MFA_CLAIM,
 		]),
 	];
 }
+
+// Set by auth0/sentinel-role-claims-action.js when the login used MFA.
+export const MFA_CLAIM = "https://deeptrack.io/mfa";
 
 async function beforeSessionSaved(session: SessionData): Promise<SessionData> {
 	const rawUser = session.user as Record<string, unknown>;

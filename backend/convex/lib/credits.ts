@@ -2,6 +2,7 @@ import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { creditsToMoney, formatMoney } from "./pricing";
+import { checkLowCredit } from "../notifications";
 
 type LedgerType = "allocation" | "deduction" | "refund" | "adjustment";
 
@@ -70,6 +71,7 @@ export async function recordLedgerEntry(
     createdAt: Date.now(),
   });
   await ctx.db.patch(entry.clientId, { creditBalance: balance + entry.amount });
+  await checkLowCredit(ctx, entry.clientId, balance + entry.amount);
   return balance + entry.amount;
 }
 

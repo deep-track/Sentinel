@@ -8,9 +8,9 @@ import { buildVerificationReference } from "./lib/crypto";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 import { screenSubjects, type ScreeningSubject } from "./aml";
 import { completeScreening, type CompleteScreeningArgs } from "./amlPersistence";
+import { loadClientSettings, monitoringIntervalMs } from "./lib/clientSettings";
 import {
   INCOMPLETE_RETRY_MS,
-  RESCREEN_INTERVAL_MS,
   diffHits,
   hitsFromMatches,
   type MonitoredHit,
@@ -60,7 +60,9 @@ export const runDue = internalAction({
         limit: BATCH_SIZE,
       });
       if (due.length === 0) return { batches: batch };
-      const outcomes = await screenSubjects(ctx, due.map(subjectForScreening));
+      // Each subject is screened under its own client's rules.
+      const rules = await ctx.runQuery(internalApi.aml._screeningRules, { clientIds: due.map((subject) => subject.clientId) });
+      const outcomes = await screenSubjects(ctx, due.map(subjectForScreening), rules);
       for (let index = 0; index < due.length; index++) {
         await ctx.runMutation(internalApi.amlMonitoring._recordRun, {
           subjectId: due[index]._id,
@@ -109,11 +111,12 @@ export const _recordRun = internalMutation({
     // is new: an incomplete screening can't have cleared anything.
     const { added, escalated, removed } = diffHits(subject.baselineSet ? subject.hits : [], current);
     const alert = added.length > 0 || escalated.length > 0;
+    const { screening } = await loadClientSettings(ctx, subject.clientId);
     await ctx.db.patch(subject._id, {
       baselineSet: true,
       hits: current,
       lastScreenedAt: now,
-      nextScreenAt: now + RESCREEN_INTERVAL_MS,
+      nextScreenAt: now + monitoringIntervalMs(screening.monitoringFrequency),
       screenCount: subject.screenCount + 1,
       ...(alert ? { alertCount: subject.alertCount + 1, lastAlertAt: now } : {}),
       updatedAt: now,
@@ -175,8 +178,8 @@ export const _recordRun = internalMutation({
 
 // ── Client access (portal) ─────────────────────────────────────────────────
 
-const READ_ROLES = ["client_admin", "compliance_analyst", "developer", "viewer"] as const;
-const WRITE_ROLES = ["client_admin", "compliance_analyst", "developer"] as const;
+const READ_ROLES = ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"] as const;
+const WRITE_ROLES = ["client_admin", "compliance_analyst", "reviewer", "developer"] as const;
 
 function publicSubject(subject: Doc<"amlMonitoredSubjects">) {
   return {

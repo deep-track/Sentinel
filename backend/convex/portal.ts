@@ -45,7 +45,7 @@ export const overview = query({
     recentLimit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     const client = await ctx.db.get(args.clientId);
     if (!client) return null;
 

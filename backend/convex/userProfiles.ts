@@ -19,6 +19,9 @@ export function createdTime(doc: { createdAt: number; _creationTime: number }): 
   return doc.createdAt > 0 ? doc.createdAt : Math.floor(doc._creationTime);
 }
 
+// lastSeenAt is shown on the Team page; it doesn't need to be exact.
+const LAST_SEEN_WRITE_INTERVAL_MS = 60 * 60 * 1000;
+
 export const recordMine = mutation({
   args: {},
   handler: async (ctx) => {
@@ -27,24 +30,27 @@ export const recordMine = mutation({
     const name = clean(identity.name);
     const email = clean(identity.email);
     if (!name && !email) return null;
+    const now = Date.now();
 
     const existing = await ctx.db
       .query("userProfiles")
       .withIndex("by_user_id", (q) => q.eq("userId", identity.subject))
       .unique();
     if (existing) {
-      if (existing.name !== name || existing.email !== email) {
-        await ctx.db.patch(existing._id, { name, email, updatedAt: Date.now() });
+      const changed = existing.name !== name || existing.email !== email;
+      const stale = !existing.lastSeenAt || now - existing.lastSeenAt >= LAST_SEEN_WRITE_INTERVAL_MS;
+      if (changed || stale) {
+        await ctx.db.patch(existing._id, { name, email, lastSeenAt: now, ...(changed ? { updatedAt: now } : {}) });
       }
       return null;
     }
-    await ctx.db.insert("userProfiles", { userId: identity.subject, name, email, updatedAt: Date.now() });
+    await ctx.db.insert("userProfiles", { userId: identity.subject, name, email, updatedAt: now, lastSeenAt: now });
     return null;
   },
 });
 
 // Name (or email) per user id, for ids that have a profile.
-export async function profileNames(ctx: QueryCtx, ids: Iterable<string>): Promise<Map<string, string>> {
+export async function profileNames(ctx: Pick<QueryCtx, "db">, ids: Iterable<string>): Promise<Map<string, string>> {
   const unique = [...new Set(ids)].filter((id) => id && id !== "system");
   const rows = await Promise.all(
     unique.map((userId) => ctx.db.query("userProfiles").withIndex("by_user_id", (q) => q.eq("userId", userId)).unique()),

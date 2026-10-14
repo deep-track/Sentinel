@@ -10,7 +10,7 @@
  */
 export const ACTIVE_CLIENT_COOKIE = "sentinel_client_id";
 
-export type ClientRole = "client_admin" | "compliance_analyst" | "developer" | "viewer";
+export type ClientRole = "client_admin" | "compliance_analyst" | "reviewer" | "developer" | "viewer";
 
 export type ClientMembership = {
   clientId: string;

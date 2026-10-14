@@ -62,9 +62,10 @@ const STAGES: Array<{ key: keyof ClientRow["onboarding"]; label: string }> = [
 
 const ROLE_LABELS: Record<string, string> = {
   client_admin: "Admin",
-  compliance_analyst: "Compliance analyst",
+  reviewer: "Reviewer",
+  compliance_analyst: "Analyst",
   developer: "Developer",
-  viewer: "Viewer",
+  viewer: "Viewer / Auditor",
 };
 
 function weekStartsEndingAt(now: number, count: number): number[] {

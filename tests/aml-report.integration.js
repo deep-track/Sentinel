@@ -8,7 +8,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 test("AML report query: any client member, AML only, review and monitoring included", () => {
   const source = read("backend/convex/amlReport.ts");
-  assert.match(source, /const REPORT_ROLES = \["client_admin", "compliance_analyst", "developer", "viewer"\] as const;/);
+  assert.match(source, /const REPORT_ROLES = \["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"\] as const;/);
+  // The organization's profile and logo head the report.
+  assert.match(source, /const \{ profile \} = await loadClientSettings\(ctx, verification\.clientId\);/);
   assert.match(source, /if \(!verification \|\| verification\.type !== "aml"\) return null;/);
   assert.match(source, /ctx\.db\.normalizeId\("verifications", args\.verificationId\)/, "a bad id is not found, not an error");
   assert.match(source, /withIndex\("by_verification", \(q\) => q\.eq\("verificationId", verification\._id\)\)/);

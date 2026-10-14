@@ -13,8 +13,9 @@ import { withoutMedia } from "./verifications";
 // Section 11.2 (engineering doc) — authoritative per Brian's directive
 // that the engineering doc wins where it conflicts with the Platform
 // Spec. Review Queue is an Internal Ops module (Section 12.2):
-// resolved by internal reviewers, cross-client visibility, not a
-// client-facing action.
+// resolved by internal reviewers, cross-client visibility. A client's own
+// team can also decide its cases under its workflow rules
+// (clientReviews.ts); both paths share resolveReviewItem.
 // ─────────────────────────────────────────────────────────
 
 const SORT_WEIGHT: Record<string, number> = {
@@ -123,7 +124,7 @@ export const getForInternalOps = query({
 export const listForClient = query({
   args: { clientId: v.id("clients") },
   handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst"]);
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer"]);
     const rows = await ctx.db
       .query("reviewQueue")
       .withIndex("by_client_and_status", (q) => q.eq("clientId", args.clientId))
@@ -171,19 +172,35 @@ export async function resolveReviewItem(
     action: ReviewAction;
     notes?: string;
     certaintyPct?: number;
+    // Set when the client's own team decides (clientReviews.decide), which
+    // has already applied the client's workflow rules. Client decisions are
+    // business decisions, not model-training labels: no certainty score and
+    // no feedback label.
+    client?: {
+      actorType: "client_user" | "internal_admin";
+      reasonCode?: string;
+      // The second person's approval of a four-eyes recommendation.
+      approvedBy?: string;
+      approvedByName?: string;
+      recommendedBy?: string;
+    };
   },
 ): Promise<{ status: "escalated" } | { status: "resolved"; verdict: "pass" | "reject" }> {
-  const { reviewerId, reviewRow, action } = params;
+  const { reviewerId, reviewRow, action, client } = params;
   const notes = params.notes?.trim() || undefined;
 
   if (reviewRow.status === "resolved") {
     throw new ConvexError({ code: "already_resolved", message: "This item was already resolved." });
   }
+  if (client && action === "escalate") {
+    throw new ConvexError({ code: "invalid_argument", message: "Client escalations don't resolve a case." });
+  }
 
   // "Keep verdict" and "Escalate" require notes for the audit trail
   // (carried over from the Platform Spec's Reject/Escalate rule,
-  // applied to this taxonomy's negative/uncertain outcomes).
-  if ((action === "keep_verdict" || action === "escalate") && !notes) {
+  // applied to this taxonomy's negative/uncertain outcomes). A client
+  // decision may give a reason code instead.
+  if ((action === "keep_verdict" || action === "escalate") && !notes && !client?.reasonCode) {
     throw new ConvexError({
       code: "notes_required",
       message: `${action} requires notes for the audit trail.`,
@@ -193,6 +210,7 @@ export async function resolveReviewItem(
   // Section 10.4 — reviewers must never confirm/keep-verdict below 80%
   // certainty; escalate instead.
   if (
+    !client &&
     (action === "confirm" || action === "keep_verdict") &&
     (params.certaintyPct === undefined ||
       !Number.isFinite(params.certaintyPct) ||
@@ -245,6 +263,9 @@ export async function resolveReviewItem(
     resolvedBy: reviewerId,
     resolvedByName: params.reviewerName,
     resolvedAt: now,
+    decisionSource: client ? "client" : "deeptrack",
+    ...(client?.reasonCode ? { reasonCode: client.reasonCode } : {}),
+    ...(client?.approvedBy ? { approvedBy: client.approvedBy, approvedByName: client.approvedByName } : {}),
   });
 
   // Idempotent per verification: a flow that already charged (e.g. AML on
@@ -258,7 +279,7 @@ export async function resolveReviewItem(
 
   await recordAudit(ctx, {
     actorId: reviewerId,
-    actorType: "reviewer",
+    actorType: client ? client.actorType : "reviewer",
     action: `review.${action}`,
     targetType: "verification",
     targetId: verification._id,
@@ -269,12 +290,16 @@ export async function resolveReviewItem(
       certaintyPct: params.certaintyPct,
       previousVerdict: verification.verdict ?? null,
       finalVerdict,
+      decidedBy: client ? "client" : "deeptrack",
+      ...(client?.reasonCode ? { reasonCode: client.reasonCode } : {}),
+      ...(client?.recommendedBy ? { recommendedBy: client.recommendedBy } : {}),
     },
   });
 
   // Section 11.2: "Confirmed labels enter the dataset pipeline" — only
-  // corrections (the automation got it wrong) are a retraining signal.
-  const label = feedbackLabelFor(verification.verdict, finalVerdict);
+  // corrections (the automation got it wrong) are a retraining signal, and
+  // only DeepTrack reviewers' decisions are labels.
+  const label = client ? null : feedbackLabelFor(verification.verdict, finalVerdict);
   if (label) {
     await ctx.db.insert("feedbackLabels", {
       verificationId: verification._id,

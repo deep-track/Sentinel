@@ -92,6 +92,14 @@ type Report = {
     } | null;
   };
   clientName: string | null;
+  organization?: {
+    legalName: string | null;
+    registrationNumber: string | null;
+    regulator: string | null;
+    licenceNumber: string | null;
+    complianceContact: string | null;
+    logoUrl: string | null;
+  };
   review: {
     status: "pending" | "in_review" | "resolved";
     priority: "low" | "normal" | "high";
@@ -102,6 +110,11 @@ type Report = {
     resolutionNotes: string | null;
     resolvedAt: number | null;
     resolvedByName: string | null;
+    reviewId?: string;
+    decisionSource?: "client" | "deeptrack" | null;
+    reasonCode?: string | null;
+    recommendation?: { action: "approve" | "reject"; byName: string | null; reasonCode: string | null; at: number } | null;
+    approvedByName?: string | null;
   } | null;
   monitoring: {
     reference: string;
@@ -177,6 +190,7 @@ function reviewStatusLabel(review: NonNullable<Report["review"]>) {
     if (review.resolutionAction === "keep_verdict") return "Resolved — the match was confirmed";
     return "Resolved";
   }
+  if (review.recommendation) return "Awaiting second approval (four-eyes)";
   return review.status === "in_review" ? "Escalated — under investigation" : "Awaiting review";
 }
 
@@ -385,7 +399,7 @@ export function AmlReport({ verificationId }: { verificationId: string }) {
     );
   }
 
-  const { verification, review, monitoring, clientName } = report;
+  const { verification, review, monitoring, clientName, organization } = report;
   const input = verification.input ?? {};
   const result = verification.result ?? {};
   const matches = result.matches ?? [];
@@ -436,6 +450,27 @@ export function AmlReport({ verificationId }: { verificationId: string }) {
       </div>
 
       <header className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
+        {organization?.logoUrl || organization?.legalName ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4 dark:border-slate-700">
+            {organization.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={organization.logoUrl} alt={`${organization.legalName ?? clientName ?? "Organization"} logo`} className="max-h-12 max-w-48 object-contain" />
+            ) : (
+              <span />
+            )}
+            <div className="text-right text-xs text-slate-500">
+              {organization.legalName ? <p className="font-medium text-slate-700 dark:text-slate-300">{organization.legalName}</p> : null}
+              {organization.registrationNumber ? <p>Reg. no. {organization.registrationNumber}</p> : null}
+              {organization.regulator ? (
+                <p>
+                  Regulated by {organization.regulator}
+                  {organization.licenceNumber ? ` · licence ${organization.licenceNumber}` : ""}
+                </p>
+              ) : null}
+              {organization.complianceContact ? <p>Compliance: {organization.complianceContact}</p> : null}
+            </div>
+          </div>
+        ) : null}
         <p className="text-xs uppercase tracking-wide text-slate-500">AML screening report{clientName ? ` · ${clientName}` : ""}</p>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -550,13 +585,30 @@ export function AmlReport({ verificationId }: { verificationId: string }) {
               <ClientDate value={review.createdAt} format="PPpp" />
             </Row>
             <Row label="Why it was held">{review.triggerReason}</Row>
+            {review.recommendation ? (
+              <Row label="Recommendation">
+                {review.recommendation.action === "approve" ? "Approve" : "Reject"}
+                {review.recommendation.reasonCode ? ` (${review.recommendation.reasonCode})` : ""}
+                {review.recommendation.byName ? ` by ${review.recommendation.byName}` : ""} · <ClientDate value={review.recommendation.at} format="PPpp" />
+              </Row>
+            ) : null}
             {review.resolvedAt ? (
               <Row label="Resolved">
                 <ClientDate value={review.resolvedAt} format="PPpp" />
                 {review.resolvedByName ? ` by ${review.resolvedByName}` : ""}
+                {review.decisionSource === "client" ? " (your team)" : review.decisionSource === "deeptrack" ? " (DeepTrack)" : ""}
+                {review.approvedByName && review.recommendation ? ", second approval under four-eyes" : ""}
               </Row>
             ) : null}
+            {review.reasonCode ? <Row label="Reason">{review.reasonCode}</Row> : null}
             {review.resolutionNotes ? <Row label="Reviewer notes">{review.resolutionNotes}</Row> : null}
+            {review.reviewId && review.status !== "resolved" ? (
+              <p className="mt-3 print:hidden">
+                <Link href={`/reviews/${review.reviewId}`} className="text-sm font-medium text-primary hover:underline">
+                  Open the case to decide it →
+                </Link>
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="text-sm text-slate-500">

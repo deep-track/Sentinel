@@ -304,7 +304,11 @@ test("IDP wiring: API route, Node action with Textract, credits, KYI retired, si
 
   const documents = read("backend/convex/documents.ts");
   assert.match(documents, /\/\/ Media is passed to the pipeline only; it is never stored\./);
-  assert.match(documents, /await requireClientRole\(ctx, args\.clientId, \["client_admin", "compliance_analyst", "developer"\]\)/);
+  assert.match(documents, /await requireClientRole\(ctx, args\.clientId, \["client_admin", "compliance_analyst", "reviewer", "developer"\]\)/);
+  // The client's IDP rules apply to every result, and cases go through queueReview.
+  assert.match(documents, /const ruled = applyDocumentRules\(args\.verdict, args\.result \?\? \{\}, settings\.screening\);/);
+  assert.match(documents, /await queueReview\(ctx, \{/);
+  assert.doesNotMatch(documents, /ctx\.db\.insert\("reviewQueue"/);
   assert.match(documents, /assertMediaSize\(\{ documentFrontBase64, documentBackBase64 \}\)/);
 
   assert.match(read("backend/convex/http.ts"), /path: "\/v1\/verify\/document",\s*method: "POST"/);

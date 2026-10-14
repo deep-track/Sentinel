@@ -7,6 +7,8 @@ import { chargeVerification } from "./lib/credits";
 import { MAX_LIST_AGE_MS, SOURCE_KEYS, type SourceKey } from "./lib/amlMatching";
 import { summarizeCategories } from "./lib/amlCategories";
 import { setBaselineFromEnrolment } from "./lib/amlMonitoringStore";
+import { queueReview } from "./clientReviews";
+import { loadClientSettings, monitoringIntervalMs } from "./lib/clientSettings";
 import type { MutationCtx } from "./_generated/server";
 import type { Infer } from "convex/values";
 
@@ -297,14 +299,13 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
     });
   }
   if (args.verdict !== "pass") {
-    await ctx.db.insert("reviewQueue", {
+    await queueReview(ctx, {
       verificationId: args.verificationId,
       clientId: args.clientId,
       triggerType: "auto_escalation",
       triggerReason: args.reason,
       priority: args.verdict === "reject" ? "high" : "normal",
-      status: "pending",
-      createdAt: now,
+      monitoring: Boolean(args.monitoring),
     });
   }
   if (args.chargeCredits ?? true) {
@@ -342,7 +343,8 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
     timestamp: now,
   });
   if (!args.monitoring && (args.complete ?? args.chargeCredits ?? true)) {
-    await setBaselineFromEnrolment(ctx, args.verificationId, args.matches);
+    const { screening } = await loadClientSettings(ctx, args.clientId);
+    await setBaselineFromEnrolment(ctx, args.verificationId, args.matches, monitoringIntervalMs(screening.monitoringFrequency));
   }
   await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, {
     verificationId: args.verificationId,

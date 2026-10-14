@@ -65,6 +65,7 @@ async function clientSummary(ctx: QueryCtx, client: ClientDoc, monthStart: numbe
     usagePct: client.creditLimit > 0 ? Math.round((usedThisMonth / client.creditLimit) * 1000) / 10 : null,
     billingCurrency: client.billingCurrency ?? "USD",
     balanceValue: creditsToMoney(balance, client.billingCurrency ?? "USD", client.plan),
+    seatLimit: client.seatLimit ?? null,
     createdAt: createdTime(client),
   };
 }
@@ -268,6 +269,8 @@ export const updateClient = mutation({
     rpmCap: v.optional(v.number()),
     creditThresholdPct: v.optional(v.number()),
     billingCurrency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
+    // Team seats (active members + pending invites); null removes the limit.
+    seatLimit: v.optional(v.union(v.number(), v.null())),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -276,7 +279,13 @@ export const updateClient = mutation({
     const client = await ctx.db.get(args.clientId);
     if (!client) throw new ConvexError({ code: "not_found", message: "Client not found." });
 
-    const patch: Partial<Pick<ClientDoc, "name" | "plan" | "status" | "creditLimit" | "rpmCap" | "creditThresholdPct" | "billingCurrency">> = {};
+    const patch: Partial<Pick<ClientDoc, "name" | "plan" | "status" | "creditLimit" | "rpmCap" | "creditThresholdPct" | "billingCurrency" | "seatLimit">> = {};
+    if (args.seatLimit !== undefined) {
+      if (args.seatLimit !== null && (!Number.isInteger(args.seatLimit) || args.seatLimit < 1 || args.seatLimit > 10_000)) {
+        throw new ConvexError({ code: "invalid_argument", message: "Seat limit must be a whole number from 1 to 10,000, or empty for no limit." });
+      }
+      if ((args.seatLimit ?? undefined) !== client.seatLimit) patch.seatLimit = args.seatLimit ?? undefined;
+    }
     // Credits are counted in the billing currency (lib/pricing.ts), so it can
     // only change while the client has no credits.
     if (args.billingCurrency !== undefined && args.billingCurrency !== (client.billingCurrency ?? "USD")) {
