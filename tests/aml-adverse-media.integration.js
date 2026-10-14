@@ -219,7 +219,7 @@ test("adverse media wiring: stricter verdict only, coverage reported, monitoring
   assert.match(aml, /provider: providerName === "none" \? null : providerName === "gdelt" \? gdeltProvider\(\) : WEB_SEARCH_PROVIDER/);
   assert.match(aml, /client: apiKey \? new Anthropic\(\{ apiKey \}\) : null/);
   assert.match(aml, /source: "ADVERSE_MEDIA" as const,\s*sourceRecordId: hit\.url,/);
-  assert.match(aml, /categories: \["adverse_media" as const\]/);
+  assert.match(aml, /categories: \[\s*"adverse_media" as const,/);
   // complete stays about sanctions coverage only.
   assert.match(aml, /complete: decision\.complete,/);
 

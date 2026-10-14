@@ -133,6 +133,8 @@ type Report = {
 const SOURCE_LABELS: Record<string, string> = {
   OFAC_SDN: "OFAC Specially Designated Nationals list (US Treasury)",
   UN_CONSOLIDATED: "UN Security Council Consolidated List",
+  EU_FSF: "EU Consolidated Financial Sanctions List",
+  UK_SANCTIONS: "UK Sanctions List (FCDO)",
   OPENSANCTIONS: "OpenSanctions (global sanctions, PEP and risk data)",
   ADVERSE_MEDIA: "Adverse media (news)",
   FBI_MOST_WANTED: "FBI Most Wanted",

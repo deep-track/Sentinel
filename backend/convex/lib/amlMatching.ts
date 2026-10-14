@@ -2,12 +2,26 @@
 // amlPersistence.ts / watchlists.ts (coverage). No Convex imports, so it can be
 // unit tested directly.
 
-export const SOURCE_KEYS = ["OFAC_SDN", "UN_CONSOLIDATED"] as const;
+export const SOURCE_KEYS = ["OFAC_SDN", "UN_CONSOLIDATED", "EU_FSF", "UK_SANCTIONS"] as const;
 export type SourceKey = (typeof SOURCE_KEYS)[number];
+
+// Lists that count towards complete coverage only after their first
+// successful ingestion, so adding a list never holds screenings for review
+// before it has been loaded.
+export const SOURCES_REQUIRED_AFTER_FIRST_LOAD: SourceKey[] = ["EU_FSF", "UK_SANCTIONS"];
 
 export const SOURCE_LABELS: Record<SourceKey, string> = {
   OFAC_SDN: "OFAC SDN",
   UN_CONSOLIDATED: "UN Consolidated",
+  EU_FSF: "EU Consolidated",
+  UK_SANCTIONS: "UK Sanctions List",
+};
+
+export const SOURCE_DISPLAY_NAMES: Record<SourceKey, string> = {
+  OFAC_SDN: "OFAC Specially Designated Nationals",
+  UN_CONSOLIDATED: "UN Security Council Consolidated List",
+  EU_FSF: "EU Consolidated Financial Sanctions List",
+  UK_SANCTIONS: "UK Sanctions List (FCDO)",
 };
 
 export type SourceCadence = "daily" | "weekly";

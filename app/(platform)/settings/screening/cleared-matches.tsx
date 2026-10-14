@@ -30,6 +30,8 @@ type Cleared = {
 const SOURCE_LABELS: Record<string, string> = {
   OFAC_SDN: "OFAC SDN",
   UN_CONSOLIDATED: "UN list",
+  EU_FSF: "EU list",
+  UK_SANCTIONS: "UK list",
   OPENSANCTIONS: "OpenSanctions",
   ADVERSE_MEDIA: "Adverse media",
 };
