@@ -47,6 +47,8 @@ type Risk = {
 const SOURCE_LABELS: Record<string, string> = {
   OFAC_SDN: "OFAC SDN",
   UN_CONSOLIDATED: "UN Consolidated",
+  EU_FSF: "EU Consolidated",
+  UK_SANCTIONS: "UK Sanctions List",
   OPENSANCTIONS: "OpenSanctions",
   FBI_MOST_WANTED: "FBI Most Wanted",
   ADVERSE_MEDIA: "Adverse media",
@@ -56,6 +58,8 @@ const SOURCE_LABELS: Record<string, string> = {
 const SOURCE_COLORS: Record<string, string> = {
   OFAC_SDN: "#0191DA",
   UN_CONSOLIDATED: "#7EC7EA",
+  EU_FSF: "#2E7D5B",
+  UK_SANCTIONS: "#5B6B8C",
   OPENSANCTIONS: "#E8A33D",
   FBI_MOST_WANTED: "#E5484D",
   ADVERSE_MEDIA: "#8E4EC6",

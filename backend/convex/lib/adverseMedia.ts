@@ -538,10 +538,37 @@ export function parseJsonArticles(text: string): WebSearchArticle[] | null {
   }
 }
 
+// Kenyan official sources searched in addition for subjects in Kenya: the
+// Kenya Gazette and court records (insolvency, winding-up, receivership,
+// judgments), the financial regulators' enforcement and fit-and-proper
+// notices, procurement debarment and the anti-corruption commission.
+export const KENYA_RECORD_DOMAINS = [
+  "kenyalaw.org",
+  "new.kenyalaw.org",
+  "judiciary.go.ke",
+  "centralbank.go.ke",
+  "cma.or.ke",
+  "ira.go.ke",
+  "sasra.go.ke",
+  "rba.go.ke",
+  "frc.go.ke",
+  "ppra.go.ke",
+  "eacc.go.ke",
+  "brs.go.ke",
+];
+
+const KENYA_RECORDS_FOCUS = `This search is limited to Kenyan official sources. Look for the subject in: Kenya Gazette notices (bankruptcy, insolvency, winding-up, receivership, administration, liquidation, deregistration, disqualified directors), court judgments and rulings (kenyalaw.org, judiciary.go.ke), enforcement actions, licence revocations, fit-and-proper rejections and warnings by the Central Bank of Kenya, Capital Markets Authority, Insurance Regulatory Authority, SASRA and RBA, the Financial Reporting Centre, PPRA debarment lists, and the Ethics and Anti-Corruption Commission. Classify gazette insolvency notices as insolvency and regulator actions as regulatory_action.`;
+
+export function isKenyanSubject(subject: Pick<AdverseMediaSubject, "country" | "nationality" | "jurisdiction">): boolean {
+  return [subject.country, subject.nationality, subject.jurisdiction].some((value) => typeof value === "string" && /^(ke|ken|kenya)$/i.test(value.trim()));
+}
+
 export async function searchAndClassifyWithClaude(
   client: Anthropic,
   subject: AdverseMediaSubject,
+  options: { allowedDomains?: string[]; focus?: string } = {},
 ): Promise<{ articlesFound: number; classified: ClassifiedArticle[] }> {
+  const systemPrompt = options.focus ? `${WEB_SEARCH_SYSTEM_PROMPT}\n\n${options.focus}` : WEB_SEARCH_SYSTEM_PROMPT;
   const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [
     { role: "user", content: `Screened subject:\n${describeSubject(subject)}\n\nSearch for adverse media about this subject and assess what you find.` },
   ];
@@ -558,8 +585,15 @@ export async function searchAndClassifyWithClaude(
         : { effort: "low" },
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: WEB_SEARCH_MAX_USES }],
-      system: structured ? WEB_SEARCH_SYSTEM_PROMPT : `${WEB_SEARCH_SYSTEM_PROMPT}
+      tools: [
+        {
+          type: "web_search_20260209",
+          name: "web_search",
+          max_uses: WEB_SEARCH_MAX_USES,
+          ...(options.allowedDomains ? { allowed_domains: options.allowedDomains } : {}),
+        },
+      ],
+      system: structured ? systemPrompt : `${systemPrompt}
 
 ${JSON_ONLY_INSTRUCTION}`,
       messages,
@@ -613,7 +647,22 @@ export async function screenAdverseMediaMany(
     if (deps.provider === WEB_SEARCH_PROVIDER) {
       try {
         const { articlesFound, classified } = await searchAndClassifyWithClaude(deps.client, subjects[index]);
-        outcomes.push({ status: "screened", provider: WEB_SEARCH_PROVIDER, articlesFound, hits: adverseMediaHits(classified) });
+        // Kenyan subjects: also search the Kenyan official records. A failure
+        // there doesn't fail the news screening.
+        let records: ClassifiedArticle[] = [];
+        let recordsFound = 0;
+        if (isKenyanSubject(subjects[index])) {
+          try {
+            const result = await searchAndClassifyWithClaude(deps.client, subjects[index], { allowedDomains: KENYA_RECORD_DOMAINS, focus: KENYA_RECORDS_FOCUS });
+            records = result.classified;
+            recordsFound = result.articlesFound;
+          } catch (error) {
+            deps.onError?.(error);
+          }
+        }
+        const seen = new Set(classified.map((article) => article.url));
+        const merged = [...classified, ...records.filter((article) => !seen.has(article.url))];
+        outcomes.push({ status: "screened", provider: WEB_SEARCH_PROVIDER, articlesFound: articlesFound + recordsFound, hits: adverseMediaHits(merged) });
       } catch (error) {
         deps.onError?.(error);
         outcomes.push({ status: "unavailable" });

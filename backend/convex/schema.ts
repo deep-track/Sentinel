@@ -319,7 +319,7 @@ export default defineSchema({
     .index("by_verification", ["verificationId"]),
 
   watchlistSources: defineTable({
-    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS")),
     displayName: v.string(),
     sourceUrl: v.string(),
     cadence: v.union(v.literal("daily"), v.literal("weekly")),
@@ -332,7 +332,7 @@ export default defineSchema({
   }).index("by_source_key", ["sourceKey"]),
 
   watchlistVersions: defineTable({
-    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS")),
     sourceUrl: v.string(),
     sourceVersion: v.string(),
     contentHash: v.string(),
@@ -356,7 +356,7 @@ export default defineSchema({
 
   watchlistEntries: defineTable({
     versionId: v.id("watchlistVersions"),
-    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS")),
     sourceRecordId: v.string(),
     entityType: v.union(v.literal("individual"), v.literal("entity"), v.literal("unknown")),
     primaryName: v.string(),
@@ -378,6 +378,8 @@ export default defineSchema({
     source: v.union(
       v.literal("OFAC_SDN"),
       v.literal("UN_CONSOLIDATED"),
+      v.literal("EU_FSF"),
+      v.literal("UK_SANCTIONS"),
       v.literal("FBI_MOST_WANTED"),
       v.literal("OPENSANCTIONS"),
       v.literal("ADVERSE_MEDIA"),
