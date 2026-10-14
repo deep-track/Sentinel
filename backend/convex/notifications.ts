@@ -4,6 +4,7 @@ import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { loadClientSettings, lowCreditLevel, type NotificationEvent, PERSONAL_EVENTS } from "./lib/clientSettings";
+import { queueClientEvent } from "./webhooks";
 
 // Notifications for a client's team (Settings → Notifications): an in-app
 // inbox per user, and an email when the event's settings ask for one and
@@ -91,6 +92,16 @@ export async function checkLowCredit(ctx: MutationCtx, clientId: Id<"clients">, 
         ? "Your organization has no credits left, so new checks are refused. Contact DeepTrack to top up."
         : `Your balance is ${balance.toLocaleString("en-US")} credits, at or below your warning level of ${level.toLocaleString("en-US")}. Contact DeepTrack to top up before checks are refused.`,
     link: "/billing",
+  });
+  // And the sentinel.credits.low webhook, for endpoints that subscribe to it.
+  await queueClientEvent(ctx, clientId, {
+    event: "sentinel.credits.low",
+    scan_id: `credits_${Date.now()}`,
+    status: balance <= 0 ? "REJECT" : "REVIEW",
+    timestamp: new Date().toISOString(),
+    product: null,
+    result: null,
+    credits: { balance, warning_level: level },
   });
 }
 

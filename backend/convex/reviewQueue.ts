@@ -313,6 +313,7 @@ export async function resolveReviewItem(
 
   await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, {
     verificationId: verification._id,
+    reviewDecided: true,
   });
 
   return { status: "resolved", verdict: finalVerdict };
