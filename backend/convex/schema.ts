@@ -584,6 +584,41 @@ export default defineSchema({
     .index("by_client_and_timestamp", ["clientId", "timestamp"])
     .index("by_action_and_timestamp", ["action", "timestamp"]),
 
+  // Suspicious transaction / activity reports prepared from cases
+  // (strReports.ts): the goAML XML is rebuilt from these fields on download.
+  // The register is confidential (tipping-off): Admins and Reviewers only.
+  strReports: defineTable({
+    clientId: v.id("clients"),
+    verificationId: v.id("verifications"),
+    reviewId: v.optional(v.id("reviewQueue")),
+    reportCode: v.union(v.literal("STR"), v.literal("SAR")),
+    status: v.union(v.literal("draft"), v.literal("submitted")),
+    entityReference: v.string(),
+    reason: v.string(),
+    action: v.string(),
+    indicators: v.array(v.string()),
+    transaction: v.optional(
+      v.object({
+        number: v.string(),
+        date: v.number(),
+        amount: v.number(),
+        description: v.string(),
+        transmodeCode: v.optional(v.string()),
+        counterpartyName: v.optional(v.string()),
+        counterpartyAccount: v.optional(v.string()),
+      }),
+    ),
+    createdBy: v.string(),
+    createdByName: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    submittedAt: v.optional(v.number()),
+    submittedBy: v.optional(v.string()),
+    frcReference: v.optional(v.string()),
+  })
+    .index("by_client_and_created_at", ["clientId", "createdAt"])
+    .index("by_verification", ["verificationId"]),
+
   complianceReports: defineTable({
     reportType: v.literal("weekly_compliance"),
     periodStart: v.number(),

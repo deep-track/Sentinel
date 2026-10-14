@@ -13,6 +13,7 @@ import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { getErrorMessage } from "@/modules/shared/errors";
 import { CategoryBadge, DueLabel, PriorityBadge, type ReviewSummary } from "../review-parts";
+import { StrPanel } from "@/components/reports/str-dialog";
 
 type CaseDetail = ReviewSummary & {
   clientId?: string;
@@ -143,6 +144,18 @@ export function ReviewCase({ reviewId }: { reviewId: string }) {
       ) : null}
 
       {closed ? <Outcome data={data} /> : <WorkPanel data={data} reviewId={reviewId} />}
+
+      {data.verification && ["client_admin", "reviewer", "internal_admin"].includes(data.me.role) ? (
+        <StrPanel
+          verificationId={data.verification._id}
+          reviewId={reviewId}
+          defaultReason={[
+            `${data.categoryLabel} on ${data.verification.subject} (Sentinel ${data.verification.reference}).`,
+            data.result?.reason ?? data.triggerReason,
+            ...data.hits.slice(0, 5).map((hit) => `Hit: ${hit.entityName} (${hit.source.replace(/_/g, " ")}, ${hit.program}, score ${hit.matchScore}).`),
+          ].join(" ")}
+        />
+      ) : null}
 
       <Card className="p-6">
         <h2 className="text-base font-semibold">History</h2>

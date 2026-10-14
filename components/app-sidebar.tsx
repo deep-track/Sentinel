@@ -24,6 +24,7 @@ import {
 	Building2,
 	ClipboardCheck,
 	CreditCard,
+	FileBarChart,
 	Fingerprint,
 	Home,
 	Key,
@@ -58,6 +59,7 @@ const developerItems = [
 ];
 
 const accountItems = [
+	{ title: "Reports", url: "/reports", icon: FileBarChart },
 	{ title: "Billing & Credits", url: "/billing", icon: CreditCard },
 	{ title: "Settings", url: "/settings", icon: Settings },
 ];

@@ -29,9 +29,12 @@ const TEXT_FIELDS: Array<{ key: keyof Profile; label: string; placeholder?: stri
   { key: "registrationNumber", label: "Registration number", placeholder: "PVT-…" },
   { key: "licenceNumber", label: "Licence number" },
   { key: "address", label: "Registered address" },
-  { key: "complianceContactName", label: "Compliance contact", placeholder: "Name of the CRO or MLRO" },
+  { key: "city", label: "City", placeholder: "Nairobi" },
+  { key: "complianceContactName", label: "Compliance contact", placeholder: "Name of the CRO or MLRO", hint: "The reporting person on STRs." },
   { key: "complianceContactEmail", label: "Compliance contact email", type: "email" },
   { key: "complianceContactPhone", label: "Compliance contact phone", type: "tel" },
+  { key: "goamlEntityId", label: "goAML reporting entity ID", hint: "Assigned by the Financial Reporting Centre when you registered on goAML. Needed to prepare STRs." },
+  { key: "goamlBranch", label: "goAML branch (optional)" },
 ];
 
 export function OrganizationProfile({ clientId }: { clientId: string }) {
