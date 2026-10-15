@@ -195,7 +195,8 @@ export const trialBanner = query({
   handler: async (ctx, args) => {
     await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     const client = await ctx.db.get(args.clientId);
-    if (!client || client.plan !== "trial") return null;
+    // Only trials with an end date (self-service); Back Office trials have none.
+    if (!client || client.plan !== "trial" || client.trialEndsAt === undefined) return null;
     const now = Date.now();
     return {
       expired: client.status === "trial_expired" || (client.trialEndsAt !== undefined && client.trialEndsAt <= now),
