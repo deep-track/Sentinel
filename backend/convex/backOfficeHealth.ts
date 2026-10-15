@@ -33,6 +33,8 @@ const CONFIG: Array<{ key: string; label: string; purpose: string; required: boo
   { key: "WATCHLIST_UN_CONSOLIDATED_URL", label: "UN watchlist URL", purpose: "AML screening", required: true },
   { key: "WATCHLIST_EU_FSF_URL", label: "EU watchlist URL override", purpose: "AML screening (built-in default)", required: false },
   { key: "WATCHLIST_UK_SANCTIONS_URL", label: "UK watchlist URL override", purpose: "AML screening (built-in default)", required: false },
+  { key: "METAMAP_CLIENT_ID", label: "MetaMap client ID", purpose: "Kenya BRS company registry lookup (KYB)", required: false },
+  { key: "METAMAP_CLIENT_SECRET", label: "MetaMap client secret", purpose: "Kenya BRS company registry lookup (KYB)", required: false },
   { key: "DEEPTRACK_LIVE_BASE_URL", label: "DeepTrack Live URL", purpose: "Selfie and video liveness", required: true },
   { key: "DEEPTRACK_LIVE_API_KEY", label: "DeepTrack Live API key", purpose: "Selfie and video liveness", required: true },
   { key: "SENTINEL_INTERNAL_API_BASE_URL", label: "Scanning service URL", purpose: "Document scan, IPRS", required: true },

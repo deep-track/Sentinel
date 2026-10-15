@@ -813,4 +813,17 @@ kybDirectors: defineTable({
   createdAt: v.number(),
 })
   .index("by_kyb_verification", ["kybVerificationId"]),
+
+  // Kenya BRS lookups through MetaMap, which may answer at the callback URL.
+  // Only the SHA-256 of the callback token is stored.
+  kybRegistryLookups: defineTable({
+    verificationId: v.id("verifications"),
+    tokenHash: v.string(),
+    status: v.union(v.literal("pending"), v.literal("received")),
+    response: v.optional(v.any()),
+    requestedAt: v.number(),
+    receivedAt: v.optional(v.number()),
+  })
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_verification", ["verificationId"]),
 });

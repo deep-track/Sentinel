@@ -61,9 +61,9 @@ const SIGNAL_SEVERITY: Record<VisualFraudSignal, Record<"medium" | "high", Fraud
   partial_or_cropped: { high: "medium", medium: "medium" },
 };
 
-const nullableString = { anyOf: [{ type: "string" }, { type: "null" }] } as const;
+export const nullableString = { anyOf: [{ type: "string" }, { type: "null" }] } as const;
 
-const FRAUD_SCHEMA = {
+export const FRAUD_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["signals", "summary"],
@@ -146,7 +146,7 @@ const POA_SCHEMA = {
   },
 } as const;
 
-const SHARED_RULES = `You work for a regulated identity-verification provider. Read the document exactly as printed. Never guess or fill in a value you cannot read: use null. Dates must be YYYY-MM-DD; convert from the document's format and say null if the day or month is ambiguous. Countries are ISO 3166-1 alpha-3 codes when you can tell them.
+export const SHARED_RULES = `You work for a regulated identity-verification provider. Read the document exactly as printed. Never guess or fill in a value you cannot read: use null. Dates must be YYYY-MM-DD; convert from the document's format and say null if the day or month is ambiguous. Countries are ISO 3166-1 alpha-3 codes when you can tell them.
 
 Then examine the document as a forensic document examiner and report fraud signals only where you see concrete evidence, with the evidence in one sentence:
 - ai_generated: signs the document image was produced by a generative model: garbled or nonsensical micro-text, warped or melting guilloche patterns and borders, inconsistent or invented seals and emblems, unnaturally smooth or plastic-looking textures and faces, lighting that doesn't match the card, text that drifts or changes style mid-word.
@@ -174,7 +174,7 @@ export type VisionResult<F> = {
   model: string;
 };
 
-function imageBlocks(images: DocumentImage[]): Anthropic.Beta.Messages.BetaContentBlockParam[] {
+export function imageBlocks(images: DocumentImage[]): Anthropic.Beta.Messages.BetaContentBlockParam[] {
   return images.flatMap((image): Anthropic.Beta.Messages.BetaContentBlockParam[] => [
     { type: "text", text: `${image.side === "front" ? "Front" : "Back"} of the document:` },
     image.mediaType === "application/pdf"
