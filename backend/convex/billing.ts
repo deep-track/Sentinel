@@ -8,7 +8,7 @@ import { recordLedgerEntry } from "./lib/credits";
 import { loadClientSettings } from "./lib/clientSettings";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
 import { notify } from "./notifications";
-import { PLAN_LABELS, PLAN_PREPAY, PLANS, planCredits, type BillingCurrency, type Plan } from "./lib/pricing";
+import { PLAN_BONUS, PLAN_LABELS, PLAN_PREPAY, PLANS, planCredits, priceList, type BillingCurrency, type Plan } from "./lib/pricing";
 import {
   cleanEmail,
   invoiceNumber,
@@ -80,7 +80,7 @@ function sellerOf(settings: Doc<"billingSettings"> | null) {
 // Issues an invoice with the next number (transactional, so numbers never repeat).
 async function issue(
   ctx: MutationCtx,
-  params: { clientId: Id<"clients">; kind: Doc<"invoices">["kind"]; lines: InvoiceLine[]; credits: number; createdBy: string; automatic?: boolean; dueDays?: number; notes?: string },
+  params: { clientId: Id<"clients">; kind: Doc<"invoices">["kind"]; plan?: Exclude<Plan, "trial">; lines: InvoiceLine[]; credits: number; createdBy: string; automatic?: boolean; dueDays?: number; notes?: string },
 ): Promise<Doc<"invoices">> {
   const client = await ctx.db.get(params.clientId);
   if (!client) throw new ConvexError({ code: "not_found", message: "Client not found." });
@@ -96,6 +96,7 @@ async function issue(
     clientId: params.clientId,
     number: invoiceNumber(year, sequence),
     kind: params.kind,
+    ...(params.plan ? { plan: params.plan } : {}),
     status: "issued",
     currency: client.billingCurrency ?? "USD",
     lines: params.lines,
@@ -127,6 +128,24 @@ async function markInvoicePaid(
   if (invoice.status !== "issued") return false;
   const now = Date.now();
   await ctx.db.patch(invoice._id, { status: "paid", paidAt: now, paymentMethod: payment.method, paymentReference: payment.reference.slice(0, 120), markedPaidBy: payment.by });
+  // A plan prepayment moves the client to its plan; any payment by a trial
+  // makes it a Starter client. Either way it can run checks again. Done
+  // before the credits are added, so they are valued on the new plan.
+  const client = await ctx.db.get(invoice.clientId);
+  const nextPlan = invoice.plan ?? (client?.plan === "trial" ? "starter" : null);
+  if (client && nextPlan && (nextPlan !== client.plan || client.status === "trial_expired" || client.trialEndsAt !== undefined)) {
+    const previousPlan = client.plan;
+    await ctx.db.patch(client._id, { plan: nextPlan, status: client.status === "suspended" ? "suspended" : "active", trialEndsAt: undefined });
+    await recordAudit(ctx, {
+      actorId: payment.by,
+      actorType: "system",
+      action: previousPlan === "trial" ? "client.trial_upgraded" : "client.plan_changed",
+      targetType: "client",
+      targetId: client._id,
+      clientId: client._id,
+      metadata: { invoice: invoice.number, from: previousPlan, plan: nextPlan },
+    });
+  }
   if (invoice.credits > 0) {
     await recordLedgerEntry(ctx, { clientId: invoice.clientId, type: "allocation", amount: invoice.credits, reason: `Invoice ${invoice.number} paid (${payment.method.replace("_", " ")})` });
   }
@@ -168,6 +187,41 @@ function invoiceView(invoice: Doc<"invoices">) {
   };
 }
 
+type PaidPlan = Exclude<Plan, "trial">;
+const PAID_PLANS: PaidPlan[] = ["starter", "growth", "business", "enterprise"];
+const planValidator = v.union(v.literal("starter"), v.literal("growth"), v.literal("business"), v.literal("enterprise"));
+
+function planLine(plan: PaidPlan, currency: BillingCurrency): { lines: InvoiceLine[]; credits: number } {
+  const price = PLAN_PREPAY[currency][plan];
+  const credits = planCredits(plan, currency);
+  return { lines: [{ description: `Sentinel ${PLAN_LABELS[plan]} plan, annual prepayment (${credits.toLocaleString("en-US")} credits)`, quantity: 1, unitPrice: price, amount: price }], credits };
+}
+
+// The unpaid invoice for this plan, or a new one.
+async function planInvoice(ctx: MutationCtx, clientId: Id<"clients">, plan: PaidPlan, createdBy: string): Promise<Doc<"invoices">> {
+  const client = await ctx.db.get(clientId);
+  if (!client) throw new ConvexError({ code: "not_found", message: "Client not found." });
+  const currency: BillingCurrency = client.billingCurrency ?? "USD";
+  const open = (await ctx.db.query("invoices").withIndex("by_client_and_issued_at", (q) => q.eq("clientId", clientId)).order("desc").take(50)).find(
+    (row) => row.status === "issued" && row.kind === "plan" && row.plan === plan && row.currency === currency,
+  );
+  if (open) return open;
+  const { lines, credits } = planLine(plan, currency);
+  const invoice = await issue(ctx, { clientId, kind: "plan", plan, lines, credits, createdBy });
+  await recordAudit(ctx, { actorId: createdBy, actorType: "client_user", action: "billing.plan_invoice_requested", targetType: "invoice", targetId: invoice._id, clientId, metadata: { number: invoice.number, plan, total: invoice.total, currency } });
+  return invoice;
+}
+
+// Admins only, checked in read mode (the "viewer" entry) so that an
+// expired trial can still pay or buy a plan.
+async function requirePayingAdmin(ctx: MutationCtx, clientId: Id<"clients">) {
+  const actor = await requireClientRole(ctx, clientId, ["client_admin", "viewer"]);
+  if (actor.role !== "client_admin" && actor.role !== "internal_admin") throw new ConvexError({ code: "forbidden", message: "Only Admins can pay." });
+  const client = await ctx.db.get(clientId);
+  if (client?.status === "suspended") throw new ConvexError({ code: "forbidden", message: "This account is suspended. Contact DeepTrack." });
+  return actor;
+}
+
 // ── Client portal ───────────────────────────────────────────────────────────
 
 export const overview = query({
@@ -189,6 +243,15 @@ export const overview = query({
       limits: TOP_UP_LIMITS[currency],
       presets: TOP_UP_PRESETS[currency],
       invoices: invoices.map(invoiceView),
+      plans: PAID_PLANS.map((plan) => ({
+        plan,
+        label: PLAN_LABELS[plan],
+        price: PLAN_PREPAY[currency][plan],
+        credits: planCredits(plan, currency),
+        bonusPct: Math.round(PLAN_BONUS[currency][plan] * 100),
+        prices: priceList(plan, currency),
+        pendingInvoiceId: invoices.find((row) => row.status === "issued" && row.kind === "plan" && row.plan === plan)?._id ?? null,
+      })),
       options: {
         billingEmail: billing?.billingEmail ?? null,
         taxPin: billing?.taxPin ?? null,
@@ -280,14 +343,17 @@ export const _startPayment = internalMutation({
     clientId: v.id("clients"),
     amount: v.optional(v.number()),
     invoiceId: v.optional(v.id("invoices")),
+    plan: v.optional(planValidator),
     saveCard: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const actor = await requireClientRole(ctx, args.clientId, ["client_admin"]);
+    const actor = await requirePayingAdmin(ctx, args.clientId);
     const client = await ctx.db.get(args.clientId);
     if (!client) throw new ConvexError({ code: "not_found", message: "Client not found." });
     let invoice: Doc<"invoices"> | null;
-    if (args.invoiceId) {
+    if (args.plan) {
+      invoice = await planInvoice(ctx, args.clientId, args.plan, actor.userId);
+    } else if (args.invoiceId) {
       invoice = await ctx.db.get(args.invoiceId);
       if (!invoice || invoice.clientId !== args.clientId) throw new ConvexError({ code: "not_found", message: "Invoice not found." });
       if (invoice.status !== "issued") invalid(invoice.status === "paid" ? "This invoice is already paid." : "This invoice was cancelled.");
@@ -318,7 +384,7 @@ export const _startPayment = internalMutation({
   },
 });
 
-async function checkout(ctx: { runMutation: any }, args: { clientId: Id<"clients">; amount?: number; invoiceId?: Id<"invoices">; saveCard: boolean }) {
+async function checkout(ctx: { runMutation: any }, args: { clientId: Id<"clients">; amount?: number; invoiceId?: Id<"invoices">; plan?: PaidPlan; saveCard: boolean }) {
   const secret = paystackSecret();
   if (!secret) throw new ConvexError({ code: "not_configured", message: "Online payment isn't set up yet. Pay by bank transfer or M-Pesa using the details on the invoice." });
   const started = await ctx.runMutation(internalApi.billing._startPayment, args);
@@ -336,6 +402,22 @@ async function checkout(ctx: { runMutation: any }, args: { clientId: Id<"clients
 export const startTopUp = action({
   args: { clientId: v.id("clients"), amount: v.number(), saveCard: v.boolean() },
   handler: async (ctx, args): Promise<{ url: string; reference: string }> => await checkout(ctx, args),
+});
+
+// Choose a plan and pay its annual prepayment on Paystack.
+export const startPlanPurchase = action({
+  args: { clientId: v.id("clients"), plan: planValidator, saveCard: v.boolean() },
+  handler: async (ctx, args): Promise<{ url: string; reference: string }> => await checkout(ctx, args),
+});
+
+// Choose a plan and get its invoice, to pay by bank transfer or M-Pesa.
+export const requestPlanInvoice = mutation({
+  args: { clientId: v.id("clients"), plan: planValidator },
+  handler: async (ctx, args) => {
+    const actor = await requirePayingAdmin(ctx, args.clientId);
+    const invoice = await planInvoice(ctx, args.clientId, args.plan, actor.userId);
+    return { invoiceId: invoice._id, number: invoice.number };
+  },
 });
 
 export const payInvoice = action({
@@ -530,9 +612,7 @@ export const issueInvoice = mutation({
     let credits: number;
     if (args.kind === "plan") {
       if (!args.plan) invalid("Choose the plan.");
-      const price = PLAN_PREPAY[currency][args.plan];
-      credits = planCredits(args.plan, currency);
-      lines = [{ description: `Sentinel ${PLAN_LABELS[args.plan]} plan, annual prepayment (${credits.toLocaleString("en-US")} credits)`, quantity: 1, unitPrice: price, amount: price }];
+      ({ lines, credits } = planLine(args.plan, currency));
     } else {
       const description = args.description?.trim();
       if (!description || description.length > 200) invalid("Describe the charge in up to 200 characters.");
@@ -542,7 +622,7 @@ export const issueInvoice = mutation({
       lines = [{ description, quantity: 1, unitPrice: amount, amount }];
     }
     const dueDays = Math.min(Math.max(Math.floor(args.dueDays ?? PAYMENT_TERMS_DAYS), 0), 90);
-    const invoice = await issue(ctx, { clientId: args.clientId, kind: args.kind, lines, credits, createdBy: actorId, dueDays, ...(args.notes?.trim() ? { notes: args.notes.trim().slice(0, 1000) } : {}) });
+    const invoice = await issue(ctx, { clientId: args.clientId, kind: args.kind, ...(args.kind === "plan" && args.plan ? { plan: args.plan } : {}), lines, credits, createdBy: actorId, dueDays, ...(args.notes?.trim() ? { notes: args.notes.trim().slice(0, 1000) } : {}) });
     await recordAudit(ctx, { actorId, actorType: "internal_admin", action: "billing.invoice_issued", targetType: "invoice", targetId: invoice._id, clientId: args.clientId, metadata: { number: invoice.number, total: invoice.total, currency, credits } });
     return { invoiceId: invoice._id, number: invoice.number };
   },

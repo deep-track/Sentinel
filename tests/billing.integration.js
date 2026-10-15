@@ -291,3 +291,44 @@ test("wiring: the receipt downloads when a payment is confirmed", () => {
   assert.match(payments, /result\.status === "paid" \|\| result\.status === "already"[\s\S]{0,600}downloadInvoicePdf\(invoice\)/);
   assert.match(read("backend/convex/billing.ts"), /invoiceId: payment\.invoiceId/);
 });
+
+// ── Choosing a plan ─────────────────────────────────────────────────────────
+
+test("choosing a plan: one invoice per plan, and paying it moves the client to the plan", async () => {
+  const { billing, ctx, tables, record } = setup();
+  const overview = await billing.overview.handler(ctx, { clientId: "c1" });
+  assert.deepEqual(overview.plans.map((plan) => [plan.plan, plan.price, plan.credits]), [
+    ["starter", 250_000, 6_250],
+    ["growth", 550_000, 15_125],
+    ["business", 1_200_000, 34_500],
+    ["enterprise", 1_700_000, 51_000],
+  ]);
+
+  const byBank = await billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "growth" });
+  const again = await billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "growth" });
+  assert.equal(again.invoiceId, byBank.invoiceId, "the unpaid invoice is reused");
+  const invoice = tables.invoices.find((row) => row._id === byBank.invoiceId);
+  assert.equal(invoice.kind, "plan");
+  assert.equal(invoice.plan, "growth");
+  assert.equal(invoice.total, 550_000);
+
+  const started = await billing._startPayment.handler(ctx, { clientId: "c1", plan: "growth", saveCard: false });
+  assert.equal(started.invoiceId, byBank.invoiceId, "Paystack pays the same invoice");
+  assert.equal(started.amount, 55_000_000);
+  await billing._settle.handler(ctx, { reference: started.reference, transaction: success(started.reference, 55_000_000) });
+
+  const client = tables.clients[0];
+  assert.equal(client.plan, "growth");
+  assert.equal(client.status, "active");
+  assert.deepEqual(record.ledger.map((entry) => entry.amount), [15_125]);
+  assert.ok(record.audits.some((entry) => entry.action === "client.plan_changed" && entry.metadata.plan === "growth" && entry.metadata.from === "starter"));
+});
+
+test("an expired trial that buys a plan moves straight to it", async () => {
+  const { billing, ctx, tables } = setup();
+  Object.assign(tables.clients[0], { plan: "trial", status: "trial_expired", trialEndsAt: 1 });
+  const { invoiceId } = await billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "business" });
+  await billing.markPaid.handler(ctx, { invoiceId, method: "bank_transfer", reference: "FT26288XYZ" });
+  const client = tables.clients[0];
+  assert.deepEqual([client.plan, client.status, client.trialEndsAt], ["business", "active", undefined]);
+});

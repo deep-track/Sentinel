@@ -23,6 +23,9 @@ crons.interval("re-screen monitored AML subjects", { minutes: 15 }, internal.aml
 // Client review deadlines: raise and alert cases past their deadline.
 crons.interval("flag overdue client reviews", { minutes: 15 }, internal.clientReviews.flagOverdue, {});
 
+// Self-service trials past their end date stop running checks.
+crons.cron("expire ended trials", "0 5 * * *", (internal as any).signups.expireTrials, {});
+
 // Back Office client health: drop logged API errors older than 30 days.
 crons.interval("purge old API error logs", { hours: 1 }, internal.backOfficeClients.purgeApiErrors, {});
 

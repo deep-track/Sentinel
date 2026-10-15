@@ -96,7 +96,9 @@ export async function loadCurrentAccess(
               if (!role) return null;
 
               const client = await ctx.db.get(row.clientId);
-              if (!client || client.status !== "active") return null;
+              // An expired trial stays readable (checks are refused) so its
+              // Admin can see results and pay to continue.
+              if (!client || (client.status !== "active" && client.status !== "trial_expired")) return null;
 
               return {
                 clientId: client._id,
