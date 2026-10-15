@@ -183,8 +183,8 @@ test("trials past their end date stop; others don't", async () => {
 
 test("wiring: paying upgrades a trial, expired trials stay readable, /signup is public", () => {
   const billing = read("backend/convex/billing.ts");
-  assert.match(billing, /client\?\.plan === "trial"[\s\S]{0,200}plan: "starter"/);
-  assert.match(billing, /requireClientRole\(ctx, args\.clientId, \["client_admin", "viewer"\]\)/, "an expired trial can still pay");
+  assert.match(billing, /invoice\.plan \?\? \(client\?\.plan === "trial" \? "starter" : null\)/);
+  assert.match(billing, /requireClientRole\(ctx, clientId, \["client_admin", "viewer"\]\)/, "an expired trial can still pay");
   assert.match(read("backend/convex/lib/access.ts"), /client\.status !== "active" && client\.status !== "trial_expired"/);
   assert.match(read("backend/convex/apiKeys.ts"), /client\.status !== "active"/, "the API refuses expired trials");
   assert.match(read("middleware.ts"), /"\/signup"/);

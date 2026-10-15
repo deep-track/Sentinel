@@ -10,6 +10,7 @@ import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { formatMoney } from "@/backend/convex/lib/pricing";
 import { BillingPayments } from "@/components/billing/billing-payments";
+import { PlanPicker } from "@/components/billing/plan-picker";
 
 type Entry = {
   _id: string;
@@ -108,6 +109,7 @@ export function BillingView({ clientId }: { clientId: string }) {
       </div>
 
       <BillingPayments clientId={clientId} />
+      <PlanPicker clientId={clientId} />
 
       <Card className="p-6 bg-card border-border">
         <p className="text-sm font-medium text-foreground">Your prices</p>

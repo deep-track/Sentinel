@@ -335,6 +335,8 @@ export default defineSchema({
     clientId: v.id("clients"),
     number: v.string(),
     kind: v.union(v.literal("top_up"), v.literal("plan"), v.literal("other")),
+    // A plan prepayment: paying it moves the client to this plan.
+    plan: v.optional(v.union(v.literal("starter"), v.literal("growth"), v.literal("business"), v.literal("enterprise"))),
     status: v.union(v.literal("issued"), v.literal("paid"), v.literal("void")),
     currency: v.union(v.literal("USD"), v.literal("KES")),
     lines: v.array(v.object({ description: v.string(), quantity: v.number(), unitPrice: v.number(), amount: v.number() })),
