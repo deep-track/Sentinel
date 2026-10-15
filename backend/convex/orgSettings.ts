@@ -261,7 +261,7 @@ export const retentionReport = query({
     return {
       retentionMonths: data.retentionMonths,
       cutoff: cutoff.getTime(),
-      pastRetention: Math.min(rows.length, 1000),
+      pastRetention: Math.min(rows.filter((row) => !row.purgedAt).length, 1000),
       pastRetentionCapped: rows.length > 1000,
       oldestRecordAt: oldest?.createdAt ?? null,
     };

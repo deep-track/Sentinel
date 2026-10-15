@@ -209,6 +209,10 @@ export default defineSchema({
     failureReason: v.optional(v.string()),
     disputeReason: v.optional(v.string()), // client-initiated dispute
     disputedAt: v.optional(v.number()),
+    // Personal data removed after the retention period (retention.ts); the
+    // row stays as a minimal record (reference, type, verdict, dates).
+    purgedAt: v.optional(v.number()),
+    retentionPurgeId: v.optional(v.id("retentionPurges")),
     createdAt: v.number(),
     updatedAt: v.number(),
     completedAt: v.optional(v.number()),
@@ -745,6 +749,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_client", ["clientId"])
+    .index("by_verification", ["verificationId"])
     .index("by_endpoint", ["endpointId"])
     .index("by_status_and_retry", ["status", "nextRetryAt"]),
 
@@ -819,6 +824,33 @@ kybDirectors: defineTable({
   createdAt: v.number(),
 })
   .index("by_kyb_verification", ["kybVerificationId"]),
+
+  // Removal of personal data past a client's retention period: requested by
+  // one Admin, approved by another (or DeepTrack), then run in batches.
+  retentionPurges: defineTable({
+    clientId: v.id("clients"),
+    status: v.union(v.literal("pending_approval"), v.literal("running"), v.literal("completed"), v.literal("cancelled")),
+    retentionMonths: v.number(),
+    cutoff: v.number(), // checks created before this
+    estimated: v.number(),
+    estimateCapped: v.boolean(),
+    requestedBy: v.string(),
+    requestedByName: v.optional(v.string()),
+    requestedAt: v.number(),
+    approvedBy: v.optional(v.string()),
+    approvedByName: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+    cancelledBy: v.optional(v.string()),
+    cancelledAt: v.optional(v.number()),
+    cursor: v.optional(v.number()),
+    purged: v.number(),
+    held: v.number(),
+    holds: v.object({ openCase: v.number(), monitoring: v.number(), str: v.number(), unfinished: v.number() }),
+    relatedRemoved: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_client_and_requested_at", ["clientId", "requestedAt"])
+    .index("by_status", ["status"]),
 
   // Kenya BRS lookups through MetaMap, which may answer at the callback URL.
   // Only the SHA-256 of the callback token is stored.

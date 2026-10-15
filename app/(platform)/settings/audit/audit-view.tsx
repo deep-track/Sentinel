@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClientDate } from "@/components/client-date";
-import { useAuthedQuery } from "@/hooks/use-authed-query";
+import { RetentionRemoval } from "@/components/settings/retention-removal";
 import {
   Field,
   ReadOnlyNotice,
@@ -56,6 +56,12 @@ const ACTION_LABELS: Record<string, string> = {
   "settings.notifications_updated": "Changed notifications",
   "settings.security_updated": "Changed security settings",
   "settings.data_updated": "Changed data retention",
+  "retention.purge_requested": "Requested removal of old records",
+  "retention.purge_approved": "Approved removal of old records",
+  "retention.purge_cancelled": "Cancelled removal of old records",
+  "retention.purge_completed": "Removed records past retention",
+  "verification.disputed": "Disputed a result",
+  "verification.dispute_withdrawn": "Withdrew a dispute",
   "settings.profile_updated": "Changed the organization profile",
   "api_key.created": "Created an API key",
   "api_key.rotated": "Rotated an API key",
@@ -197,11 +203,8 @@ function AuditLog({ clientId }: { clientId: string }) {
   );
 }
 
-type RetentionReport = { retentionMonths: number; cutoff: number; pastRetention: number; pastRetentionCapped: boolean; oldestRecordAt: number | null };
-
 function Retention({ clientId }: { clientId: string }) {
   const data = useSettings(clientId);
-  const report = useAuthedQuery(anyApi.orgSettings.retentionReport, { clientId }) as RetentionReport | undefined;
   const { draft, setDraft, dirty, reset } = useDraft<{ retentionMonths: number }>(data?.settings.data);
   const save = useMutation(anyApi.orgSettings.saveData);
   const { saving, run } = useSave();
@@ -214,7 +217,7 @@ function Retention({ clientId }: { clientId: string }) {
         title="Data retention"
         description={`How long customer due diligence records are kept. Kenya's Proceeds of Crime and Anti-Money Laundering Act requires at least 7 years (${limits.minRetentionMonths} months).`}
       >
-        <Field label="Keep records for (months)" htmlFor="retention" hint={`${limits.minRetentionMonths}–${limits.maxRetentionMonths} months. Sentinel never deletes records automatically; records past the period are listed for your compliance officer to approve removal with DeepTrack.`}>
+        <Field label="Keep records for (months)" htmlFor="retention" hint={`${limits.minRetentionMonths}–${limits.maxRetentionMonths} months. Sentinel never deletes records on its own: an Admin requests removal of the checks past the period, and a second Admin (or DeepTrack) approves it.`}>
           <input
             id="retention"
             type="number"
@@ -226,24 +229,7 @@ function Retention({ clientId }: { clientId: string }) {
             onChange={(event) => setDraft({ retentionMonths: Number(event.target.value) })}
           />
         </Field>
-        {report ? (
-          <p className="text-sm text-muted-foreground">
-            {report.pastRetention === 0 ? (
-              <>No records are past the retention period yet.</>
-            ) : (
-              <>
-                {report.pastRetentionCapped ? "More than 1,000" : report.pastRetention.toLocaleString("en-US")} check{report.pastRetention === 1 ? " is" : "s are"} older than{" "}
-                <ClientDate value={report.cutoff} format="PP" />.
-              </>
-            )}
-            {report.oldestRecordAt ? (
-              <>
-                {" "}
-                Oldest record: <ClientDate value={report.oldestRecordAt} format="PP" />.
-              </>
-            ) : null}
-          </p>
-        ) : null}
+        <RetentionRemoval clientId={clientId} />
       </Section>
       <SaveBar canEdit={data.canEdit} dirty={dirty} saving={saving} onReset={reset} onSave={() => void run(() => save({ clientId, data: draft }))} />
     </>
