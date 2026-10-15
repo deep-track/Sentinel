@@ -157,8 +157,33 @@ export default defineSchema({
     // When the low-credit notification last went out; cleared once the
     // balance is topped up above the warning level again.
     lowCreditNotifiedAt: v.optional(v.number()),
+    // Self-service trials (signups.ts): when the trial ends, who started it
+    // and their email domain (one trial per company domain).
+    trialEndsAt: v.optional(v.number()),
+    signupSource: v.optional(v.literal("self_service")),
+    signupOwner: v.optional(v.string()),
+    signupDomain: v.optional(v.string()),
     createdAt: v.number(),
-  }),
+  })
+    .index("by_signup_owner", ["signupOwner"])
+    .index("by_signup_domain", ["signupDomain"])
+    .index("by_plan_and_status", ["plan", "status"]),
+
+  // Sign-up requests from the public /signup page, before the person has an
+  // account: the Auth0 invitation is sent to this email, and the trial form
+  // is filled in from it after they sign in.
+  signupRequests: defineTable({
+    email: v.string(), // lower-cased
+    name: v.string(),
+    company: v.string(),
+    country: v.string(),
+    status: v.union(v.literal("pending"), v.literal("invited"), v.literal("completed")),
+    createdAt: v.number(),
+    invitedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_email", ["email"])
+    .index("by_created_at", ["createdAt"]),
 
   apiKeys: defineTable({
     clientId: v.id("clients"),

@@ -127,6 +127,12 @@ async function markInvoicePaid(
   if (invoice.status !== "issued") return false;
   const now = Date.now();
   await ctx.db.patch(invoice._id, { status: "paid", paidAt: now, paymentMethod: payment.method, paymentReference: payment.reference.slice(0, 120), markedPaidBy: payment.by });
+  // A paying trial becomes a Starter client and can run checks again.
+  const client = await ctx.db.get(invoice.clientId);
+  if (client?.plan === "trial") {
+    await ctx.db.patch(client._id, { plan: "starter", status: client.status === "suspended" ? "suspended" : "active", trialEndsAt: undefined });
+    await recordAudit(ctx, { actorId: payment.by, actorType: "system", action: "client.trial_upgraded", targetType: "client", targetId: client._id, clientId: client._id, metadata: { invoice: invoice.number, plan: "starter" } });
+  }
   if (invoice.credits > 0) {
     await recordLedgerEntry(ctx, { clientId: invoice.clientId, type: "allocation", amount: invoice.credits, reason: `Invoice ${invoice.number} paid (${payment.method.replace("_", " ")})` });
   }
@@ -283,9 +289,13 @@ export const _startPayment = internalMutation({
     saveCard: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const actor = await requireClientRole(ctx, args.clientId, ["client_admin"]);
+    // Read-mode role check (the "viewer" entry), so an expired trial can
+    // still pay; only Admins may, checked just below.
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "viewer"]);
+    if (actor.role !== "client_admin" && actor.role !== "internal_admin") throw new ConvexError({ code: "forbidden", message: "Only Admins can pay." });
     const client = await ctx.db.get(args.clientId);
     if (!client) throw new ConvexError({ code: "not_found", message: "Client not found." });
+    if (client.status === "suspended") throw new ConvexError({ code: "forbidden", message: "This account is suspended. Contact DeepTrack." });
     let invoice: Doc<"invoices"> | null;
     if (args.invoiceId) {
       invoice = await ctx.db.get(args.invoiceId);
