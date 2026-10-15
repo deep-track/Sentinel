@@ -8,6 +8,7 @@ import type { KYCStatus } from "@/backend/lib/kyc-types";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 import { DownloadReportButton } from "../[id]/report-actions";
 import { ClientDate } from "@/components/client-date";
+import { DisputeButton } from "@/components/disputes/dispute-button";
 
 interface KYCDetailPageProps {
   params: Promise<{ id: string }>;
@@ -214,6 +215,7 @@ export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
               <div className="flex items-center gap-3">
                 <KYCStatusBadge status={normalizeStatus(record)} size="lg" />
                 <DownloadReportButton />
+                <DisputeButton verificationId={id} />
               </div>
             </div>
 

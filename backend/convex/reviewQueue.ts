@@ -9,6 +9,7 @@ import { verificationTypeLabel } from "./lib/verificationTypes";
 import { recordAudit } from "./auditLog";
 import { withoutMedia } from "./verifications";
 import { recordClearedMatches } from "./amlCleared";
+import { notify } from "./notifications";
 
 // ─────────────────────────────────────────────────────────
 // Section 11.2 (engineering doc) — authoritative per Brian's directive
@@ -323,6 +324,18 @@ export async function resolveReviewItem(
       certaintyPct: params.certaintyPct!,
       notes,
       createdAt: now,
+    });
+  }
+
+  // A client dispute: tell the client's team what DeepTrack decided.
+  if (reviewRow.triggerType === "client_dispute") {
+    const changed = verification.verdict !== finalVerdict;
+    await notify(ctx, {
+      clientId: verification.clientId,
+      event: "dispute_resolved",
+      title: `Dispute ${changed ? "upheld" : "not upheld"}: ${verification.reference}`,
+      body: `${changed ? `The result was changed from ${verification.verdict ?? "—"} to ${finalVerdict}.` : `The result stays ${finalVerdict}.`}${notes ? ` ${notes.slice(0, 500)}` : ""}`,
+      link: `/disputes`,
     });
   }
 

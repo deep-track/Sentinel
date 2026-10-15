@@ -85,6 +85,13 @@ type Message = { tone: "ok" | "error"; text: string } | null;
 // Must match backend/convex/reviewQueue.ts (MIN_CERTAINTY_PCT).
 const MIN_CERTAINTY_PCT = 80;
 
+// A client dispute is decided on the result itself: Pass or Reject.
+const DISPUTE_ACTIONS: Record<Action, { label: string; outcome: string; needsNotes: boolean; needsCertainty: boolean }> = {
+  confirm: { label: "Final: pass", outcome: "the check passes (dispute upheld if it was rejected)", needsNotes: true, needsCertainty: true },
+  keep_verdict: { label: "Final: reject", outcome: "the check is rejected (dispute upheld if it had passed)", needsNotes: true, needsCertainty: true },
+  escalate: { label: "Escalate", outcome: "insufficient evidence — routed to an engineer, stays open", needsNotes: true, needsCertainty: false },
+};
+
 const ACTIONS: Record<Action, { label: string; outcome: string; needsNotes: boolean; needsCertainty: boolean }> = {
   confirm: { label: "Confirm", outcome: "the automated flag was wrong — final verdict pass", needsNotes: false, needsCertainty: true },
   keep_verdict: { label: "Keep verdict", outcome: "the flag was right — final verdict reject", needsNotes: true, needsCertainty: true },
@@ -407,6 +414,7 @@ function Resolution({ item }: { item: ReviewDetail }) {
 }
 
 function ResolveForm({ item }: { item: ReviewDetail }) {
+  const actions = item.triggerType === "client_dispute" ? DISPUTE_ACTIONS : ACTIONS;
   const resolve = useMutation(anyApi.reviewQueue.resolve);
   const [notes, setNotes] = useState("");
   const [certainty, setCertainty] = useState("");
@@ -418,9 +426,9 @@ function ResolveForm({ item }: { item: ReviewDetail }) {
 
   // Same rules as resolveReviewItem; the mutation re-checks them.
   function validate(action: Action): string | null {
-    if (ACTIONS[action].needsNotes && !notes.trim()) return `${ACTIONS[action].label} requires notes for the audit trail.`;
-    if (ACTIONS[action].needsCertainty && !certaintyOk) {
-      return `Certainty must be between ${MIN_CERTAINTY_PCT} and 100% to ${ACTIONS[action].label.toLowerCase()} — escalate instead.`;
+    if (actions[action].needsNotes && !notes.trim()) return `${actions[action].label} requires notes for the audit trail.`;
+    if (actions[action].needsCertainty && !certaintyOk) {
+      return `Certainty must be between ${MIN_CERTAINTY_PCT} and 100% to ${actions[action].label.toLowerCase()} — escalate instead.`;
     }
     return null;
   }
@@ -432,7 +440,7 @@ function ResolveForm({ item }: { item: ReviewDetail }) {
       return;
     }
     const subject = item.verification ? `${typeLabel(item.verification.type)} ${item.verification.reference}` : "this item";
-    if (!window.confirm(`${ACTIONS[action].label} ${subject}: ${ACTIONS[action].outcome}?`)) return;
+    if (!window.confirm(`${actions[action].label} ${subject}: ${actions[action].outcome}?`)) return;
 
     setPending(action);
     setMessage(null);
@@ -496,7 +504,7 @@ function ResolveForm({ item }: { item: ReviewDetail }) {
         </div>
 
         <div className="flex flex-col gap-2">
-          {(Object.keys(ACTIONS) as Action[]).map((action) => (
+          {(Object.keys(actions) as Action[]).map((action) => (
             <div key={action} className="flex items-center gap-2.5">
               <button
                 type="button"
@@ -504,9 +512,9 @@ function ResolveForm({ item }: { item: ReviewDetail }) {
                 disabled={pending !== null}
                 onClick={() => submit(action)}
               >
-                {pending === action ? "Saving…" : ACTIONS[action].label}
+                {pending === action ? "Saving…" : actions[action].label}
               </button>
-              <span className="text-[11px] text-sentinel-subtle">{ACTIONS[action].outcome}</span>
+              <span className="text-[11px] text-sentinel-subtle">{actions[action].outcome}</span>
             </div>
           ))}
         </div>

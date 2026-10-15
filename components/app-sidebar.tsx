@@ -23,6 +23,7 @@ import {
 import {
 	Building2,
 	ClipboardCheck,
+	Flag,
 	CreditCard,
 	FileBarChart,
 	Fingerprint,
@@ -51,6 +52,7 @@ const getMainItems = () => [
 	{ title: "AML Screening", url: "/aml-check", icon: Shield },
 	{ title: "Liveness", url: "/liveness", icon: Fingerprint },
 	{ title: "Reviews", url: "/reviews", icon: ClipboardCheck },
+	{ title: "Disputes", url: "/disputes", icon: Flag },
 ];
 
 const developerItems = [
