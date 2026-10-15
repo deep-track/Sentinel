@@ -4,7 +4,7 @@ import type { QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chargeVerification } from "./lib/credits";
-import { MAX_LIST_AGE_MS, SOURCE_KEYS, type SourceKey } from "./lib/amlMatching";
+import { MAX_LIST_AGE_MS, SOURCES_REQUIRED_AFTER_FIRST_LOAD, SOURCE_KEYS, type SourceKey } from "./lib/amlMatching";
 import { summarizeCategories } from "./lib/amlCategories";
 import { setBaselineFromEnrolment } from "./lib/amlMonitoringStore";
 import { queueReview } from "./clientReviews";
@@ -13,7 +13,7 @@ import { noteSuppressed } from "./amlCleared";
 import type { MutationCtx } from "./_generated/server";
 import type { Infer } from "convex/values";
 
-const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"));
+const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS"));
 const openSanctionsStatusValidator = v.union(
   v.literal("screened"),
   v.literal("unavailable"),
@@ -43,6 +43,8 @@ export async function loadWatchlistCoverage(ctx: QueryCtx, now: number) {
       .withIndex("by_source_key", (q) => q.eq("sourceKey", sourceKey))
       .first();
     if (source?.lastError) lastErrors[sourceKey] = source.lastError;
+    // A newly added list isn't required until it has been loaded once.
+    if (SOURCES_REQUIRED_AFTER_FIRST_LOAD.includes(sourceKey) && !source?.lastSuccessfulAt) continue;
     const active = await ctx.db
       .query("watchlistVersions")
       .withIndex("by_source_and_status", (q) => q.eq("sourceKey", sourceKey).eq("status", "active"))

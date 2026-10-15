@@ -667,7 +667,13 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
           matchScore: hit.severity === "high" ? 90 : 70,
           matchMethod: "ai_classification" as const,
           riskLevel: "high" as const,
-          categories: ["adverse_media" as const],
+          // Insolvency notices and regulator actions (e.g. from the Kenyan
+          // official records) also count in those categories.
+          categories: [
+            "adverse_media" as const,
+            ...(hit.riskTypes.includes("insolvency") ? (["insolvency"] as const) : []),
+            ...(hit.riskTypes.includes("regulatory_action") ? (["fitness_probity"] as const) : []),
+          ],
           media: {
             url: hit.url,
             title: hit.title,
