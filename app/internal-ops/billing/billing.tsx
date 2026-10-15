@@ -9,6 +9,7 @@ import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { useTimeBoundaries } from "@/hooks/use-time-boundaries";
 import { getErrorMessage } from "@/modules/shared/errors";
+import { InvoicesPanel } from "./invoices-panel";
 import {
   Badge,
   Cell,
@@ -240,6 +241,8 @@ export function Billing({ canWrite }: { canWrite: boolean }) {
               <PricingPanel usdToKes={data.pricing.usdToKes} canWrite={canWrite} />
               <StatementPanel clients={data.clients} monthStarts={data.monthStarts} />
             </div>
+
+            <InvoicesPanel clients={data.clients} canWrite={canWrite} />
           </>
         )}
       </div>

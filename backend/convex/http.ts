@@ -18,6 +18,7 @@ import { MAX_MEDIA_BASE64_CHARS } from "./lib/verificationTypes";
 import type { IdpInput } from "./verifications";
 import { MAX_ALIASES, MAX_COUNTRY_LENGTH, MAX_IDENTIFIER_LENGTH, MAX_SUBJECT_NAME_LENGTH, type AmlSubjectDetails } from "./aml";
 import { MAX_EXTERNAL_REF_LENGTH } from "./lib/amlMonitoringStore";
+import { paystackSecret, validPaystackSignature } from "./lib/paystack";
 
 const http = httpRouter();
 
@@ -833,6 +834,33 @@ http.route({
     }
     const result = await ctx.runMutation((internal as any).kyb.receiveRegistryCallback, { token, body });
     return json(result, result.accepted ? 200 : 404);
+  }),
+});
+
+// Paystack webhooks (Dashboard → Settings → API Keys & Webhooks → Webhook
+// URL: https://<deployment>.convex.site/webhooks/paystack). Signed with the
+// secret key (x-paystack-signature, HMAC-SHA512). A successful charge is
+// verified with Paystack's API before the invoice is settled (billing.ts).
+http.route({
+  path: "/webhooks/paystack",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const secret = paystackSecret();
+    if (!secret) return json({ error: "Paystack is not configured" }, 503);
+    const raw = await request.text();
+    if (raw.length > 256 * 1024) return json({ error: "Body too large" }, 413);
+    if (!(await validPaystackSignature(raw, request.headers.get("x-paystack-signature"), secret))) return json({ error: "Invalid signature" }, 401);
+    let event: { event?: string; data?: { reference?: string } };
+    try {
+      event = JSON.parse(raw);
+    } catch {
+      return json({ error: "Invalid JSON" }, 400);
+    }
+    const reference = event.data?.reference;
+    if ((event.event === "charge.success" || event.event === "charge.failed") && typeof reference === "string" && reference.startsWith("snt-")) {
+      await ctx.scheduler.runAfter(0, (internal as any).billing.verifyAndSettle, { reference });
+    }
+    return json({ received: true });
   }),
 });
 

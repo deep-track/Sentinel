@@ -89,8 +89,8 @@ export async function checkLowCredit(ctx: MutationCtx, clientId: Id<"clients">, 
     title: balance <= 0 ? "Out of credits" : `Low credits: ${balance.toLocaleString("en-US")} left`,
     body:
       balance <= 0
-        ? "Your organization has no credits left, so new checks are refused. Contact DeepTrack to top up."
-        : `Your balance is ${balance.toLocaleString("en-US")} credits, at or below your warning level of ${level.toLocaleString("en-US")}. Contact DeepTrack to top up before checks are refused.`,
+        ? "Your organization has no credits left, so new checks are refused. Top up on the Billing page."
+        : `Your balance is ${balance.toLocaleString("en-US")} credits, at or below your warning level of ${level.toLocaleString("en-US")}. Top up on the Billing page before checks are refused.`,
     link: "/billing",
   });
   // And the sentinel.credits.low webhook, for endpoints that subscribe to it.

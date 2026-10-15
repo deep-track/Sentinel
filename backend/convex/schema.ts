@@ -284,9 +284,100 @@ export default defineSchema({
     pricePerCredit: v.optional(v.any()),
     // USD → KES rate for clients billed in KES (lib/pricing.ts).
     usdToKes: v.optional(v.number()),
+    // Invoices (billing.ts): DeepTrack's details, VAT and how to pay by
+    // bank transfer or M-Pesa paybill to the bank.
+    seller: v.optional(
+      v.object({
+        name: v.optional(v.string()),
+        address: v.optional(v.string()),
+        kraPin: v.optional(v.string()),
+        email: v.optional(v.string()),
+        vatRatePct: v.optional(v.number()),
+        paymentInstructions: v.optional(v.string()),
+      }),
+    ),
+    // Next invoice number per year: DT-<year>-<0001>.
+    invoiceYear: v.optional(v.number()),
+    invoiceNext: v.optional(v.number()),
     updatedAt: v.number(),
     updatedBy: v.string(),
   }).index("by_key", ["key"]),
+
+  // Invoices: credit top-ups, plan prepayments and other charges. Paying one
+  // (Paystack, or marked paid by DeepTrack for a bank / M-Pesa transfer)
+  // adds its credits to the ledger once.
+  invoices: defineTable({
+    clientId: v.id("clients"),
+    number: v.string(),
+    kind: v.union(v.literal("top_up"), v.literal("plan"), v.literal("other")),
+    status: v.union(v.literal("issued"), v.literal("paid"), v.literal("void")),
+    currency: v.union(v.literal("USD"), v.literal("KES")),
+    lines: v.array(v.object({ description: v.string(), quantity: v.number(), unitPrice: v.number(), amount: v.number() })),
+    subtotal: v.number(),
+    vatRatePct: v.number(),
+    vat: v.number(),
+    total: v.number(),
+    credits: v.number(), // added when paid
+    buyer: v.object({ name: v.string(), address: v.optional(v.string()), kraPin: v.optional(v.string()), email: v.optional(v.string()) }),
+    seller: v.object({ name: v.string(), address: v.optional(v.string()), kraPin: v.optional(v.string()), email: v.optional(v.string()), paymentInstructions: v.optional(v.string()) }),
+    issuedAt: v.number(),
+    dueAt: v.number(),
+    createdBy: v.string(),
+    automatic: v.optional(v.boolean()),
+    paidAt: v.optional(v.number()),
+    paymentMethod: v.optional(v.union(v.literal("paystack"), v.literal("bank_transfer"), v.literal("mpesa"), v.literal("other"))),
+    paymentReference: v.optional(v.string()),
+    markedPaidBy: v.optional(v.string()),
+    voidedAt: v.optional(v.number()),
+    voidedBy: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  })
+    .index("by_client_and_issued_at", ["clientId", "issuedAt"])
+    .index("by_number", ["number"])
+    .index("by_status_and_issued_at", ["status", "issuedAt"]),
+
+  // Paystack transactions for invoices.
+  payments: defineTable({
+    clientId: v.id("clients"),
+    invoiceId: v.id("invoices"),
+    reference: v.string(),
+    status: v.union(v.literal("initialized"), v.literal("success"), v.literal("failed")),
+    amount: v.number(), // subunits (cents)
+    currency: v.union(v.literal("USD"), v.literal("KES")),
+    email: v.string(),
+    saveCard: v.boolean(),
+    automatic: v.boolean(),
+    channel: v.optional(v.string()),
+    failureReason: v.optional(v.string()),
+    initiatedBy: v.string(),
+    createdAt: v.number(),
+    settledAt: v.optional(v.number()),
+  })
+    .index("by_reference", ["reference"])
+    .index("by_invoice", ["invoiceId"]),
+
+  // Per-client billing options: billing email, the saved card (Paystack
+  // authorization, server-side only) and automatic top-up.
+  clientBilling: defineTable({
+    clientId: v.id("clients"),
+    billingEmail: v.optional(v.string()),
+    taxPin: v.optional(v.string()), // the client's KRA PIN, shown on invoices
+    card: v.optional(
+      v.object({
+        authorizationCode: v.string(),
+        email: v.string(),
+        last4: v.optional(v.string()),
+        brand: v.optional(v.string()),
+        expMonth: v.optional(v.string()),
+        expYear: v.optional(v.string()),
+        savedAt: v.number(),
+      }),
+    ),
+    autoTopUp: v.optional(v.object({ enabled: v.boolean(), amount: v.number(), thresholdCredits: v.number() })),
+    lastAutoTopUpAt: v.optional(v.number()),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_client", ["clientId"]),
 
   // Back Office service health: one row per scheduled probe of an external
   // dependency (every 15 min, kept 7 days).

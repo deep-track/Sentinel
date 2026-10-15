@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { formatMoney } from "@/backend/convex/lib/pricing";
+import { BillingPayments } from "@/components/billing/billing-payments";
 
 type Entry = {
   _id: string;
@@ -102,9 +103,11 @@ export function BillingView({ clientId }: { clientId: string }) {
             <span className="text-sm text-muted-foreground">credits</span>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">worth {formatMoney(balanceValue, client.currency)}</p>
-          {balance <= 0 ? <p className="mt-2 text-xs text-destructive">New verifications are refused until credits are added. Contact DeepTrack to top up.</p> : null}
+          {balance <= 0 ? <p className="mt-2 text-xs text-destructive">New verifications are refused until credits are added. Top up below.</p> : null}
         </Card>
       </div>
+
+      <BillingPayments clientId={clientId} />
 
       <Card className="p-6 bg-card border-border">
         <p className="text-sm font-medium text-foreground">Your prices</p>
