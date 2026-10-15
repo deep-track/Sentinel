@@ -569,6 +569,12 @@ export default defineSchema({
     reasonCode: v.optional(v.string()),
     approvedBy: v.optional(v.string()),
     approvedByName: v.optional(v.string()),
+    // Client disputes: the result disputed and the one the client expects.
+    disputedVerdict: v.optional(v.union(v.literal("pass"), v.literal("reject"))),
+    expectedVerdict: v.optional(v.union(v.literal("pass"), v.literal("reject"))),
+    // A client dispute the client withdrew (closed without a decision).
+    withdrawnAt: v.optional(v.number()),
+    withdrawnBy: v.optional(v.string()),
     createdAt: v.number(),
     resolvedAt: v.optional(v.number()),
   })

@@ -167,7 +167,9 @@ export async function queueReview(
       ? "high_risk"
       : "standard";
   const queue = verification ? queueForType(verification.type) : "kyc";
-  const assignee = settings.review.assignment === "round_robin" ? await pickAssignee(ctx, fields.clientId, queue) : null;
+  // A dispute is DeepTrack's to decide: no team assignment or alerts.
+  const dispute = fields.triggerType === "client_dispute";
+  const assignee = !dispute && settings.review.assignment === "round_robin" ? await pickAssignee(ctx, fields.clientId, queue) : null;
 
   const reviewId = await ctx.db.insert("reviewQueue", {
     verificationId: fields.verificationId,
@@ -185,7 +187,9 @@ export async function queueReview(
 
   const subject = verification ? subjectOf(verification) : "a check";
   const reason = fields.triggerReason.slice(0, 300);
-  if (fields.monitoring) {
+  if (dispute) {
+    // No alert: the team raised it.
+  } else if (fields.monitoring) {
     await notify(ctx, { clientId: fields.clientId, event: "monitoring_alert", title: `Monitoring alert: ${subject}`, body: reason, link: link(reviewId) });
   } else if (category === "sanctions") {
     await notify(ctx, { clientId: fields.clientId, event: "sanctions_hit", title: `Sanctions hit: ${subject}`, body: reason, link: link(reviewId) });
@@ -212,7 +216,8 @@ export async function queueReview(
 type Actor = { userId: string; role: ClientRole | "internal_admin" };
 
 function decisionFor(actor: Actor, row: Doc<"reviewQueue">, category: CaseCategory, rules: ResolvedSettings["review"], makerId: string | null) {
-  if (row.status === "resolved") return { canAct: false, final: false, reason: "This case is closed." };
+  if (row.status === "resolved") return { canAct: false, final: false, reason: row.withdrawnAt ? "The dispute was withdrawn." : "This case is closed." };
+  if (row.triggerType === "client_dispute") return { canAct: false, final: false, reason: "Your team disputed this result. DeepTrack decides it, and you'll be notified." };
   const check = checkDecision({ actor, category, rules, makerId, recommendation: row.recommendation ?? null });
   return check.ok ? { canAct: true, final: check.final, reason: null } : { canAct: false, final: false, reason: check.reason };
 }
@@ -330,7 +335,7 @@ export const counts = query({
   },
 });
 
-const HISTORY_ACTIONS = /^(verification\.created|review\.|aml\.|document\.)/;
+const HISTORY_ACTIONS = /^(verification\.(created|disputed|dispute_withdrawn)|review\.|aml\.|document\.)/;
 
 export const get = query({
   args: { reviewId: v.string() },
@@ -426,6 +431,8 @@ async function loadOpen(ctx: MutationCtx, reviewId: Id<"reviewQueue">) {
   if (!row) throw new ConvexError({ code: "not_found", message: "Case not found." });
   const actor = await requireClientRole(ctx, row.clientId, REVIEW_WORK_ROLES);
   if (row.status === "resolved") invalid("This case is already closed.");
+  // A dispute challenges the result, so DeepTrack decides it (disputes.ts).
+  if (row.triggerType === "client_dispute") forbidden("DeepTrack decides disputes. You can withdraw the dispute instead.");
   return { row, actor };
 }
 
