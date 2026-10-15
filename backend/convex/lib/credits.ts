@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { creditsToMoney, formatMoney } from "./pricing";
 import { checkLowCredit } from "../notifications";
+import { maybeAutoTopUp } from "./autoTopUp";
 
 type LedgerType = "allocation" | "deduction" | "refund" | "adjustment";
 
@@ -72,6 +73,7 @@ export async function recordLedgerEntry(
   });
   await ctx.db.patch(entry.clientId, { creditBalance: balance + entry.amount });
   await checkLowCredit(ctx, entry.clientId, balance + entry.amount);
+  if (entry.amount < 0) await maybeAutoTopUp(ctx, entry.clientId, balance + entry.amount);
   return balance + entry.amount;
 }
 
