@@ -416,6 +416,55 @@ export const verifyAndSettle = internalAction({
   },
 });
 
+// Reconciliation (cron, every 10 minutes): asks Paystack about payments
+// still waiting, so none is missed when the webhook doesn't reach Sentinel
+// (one Paystack account shared with another app has one webhook URL).
+// Final answers (success, failed, reversed) are settled; an abandoned
+// checkout is closed after a day, as the customer may still come back.
+export const RECONCILE_MIN_AGE_MS = 3 * 60 * 1000;
+export const RECONCILE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+const ABANDONED_AFTER_MS = 24 * 60 * 60 * 1000;
+
+export function reconcileDecision(transactionStatus: string, ageMs: number): "settle" | "wait" {
+  if (["success", "failed", "reversed"].includes(transactionStatus)) return "settle";
+  if (transactionStatus === "abandoned" && ageMs > ABANDONED_AFTER_MS) return "settle";
+  return "wait";
+}
+
+export const _paymentsToReconcile = internalQuery({
+  args: { now: v.number() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("payments")
+      .withIndex("by_status_and_created_at", (q) => q.eq("status", "initialized").gt("createdAt", args.now - RECONCILE_MAX_AGE_MS).lt("createdAt", args.now - RECONCILE_MIN_AGE_MS))
+      .take(50);
+    return rows.map((row) => ({ reference: row.reference, createdAt: row.createdAt }));
+  },
+});
+
+export const reconcilePayments = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const secret = paystackSecret();
+    if (!secret) return { checked: 0, settled: 0 };
+    const now = Date.now();
+    const pending: Array<{ reference: string; createdAt: number }> = await ctx.runQuery(internalApi.billing._paymentsToReconcile, { now });
+    let settled = 0;
+    for (const payment of pending) {
+      try {
+        const transaction = await verifyTransaction(secret, payment.reference);
+        if (reconcileDecision(transaction.status, now - payment.createdAt) === "wait") continue;
+        await ctx.runMutation(internalApi.billing._settle, { reference: payment.reference, transaction });
+        settled += 1;
+      } catch (error) {
+        // Not found yet (checkout never opened) or Paystack unavailable: try again next run.
+        console.warn("[billing] reconcile skipped", payment.reference, error instanceof Error ? error.message.slice(0, 120) : "unknown");
+      }
+    }
+    return { checked: pending.length, settled };
+  },
+});
+
 // The Billing page calls this on return from Paystack's checkout, in case
 // the webhook hasn't arrived yet.
 export const confirmPayment = action({

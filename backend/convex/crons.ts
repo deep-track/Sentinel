@@ -23,6 +23,10 @@ crons.interval("re-screen monitored AML subjects", { minutes: 15 }, internal.aml
 // Client review deadlines: raise and alert cases past their deadline.
 crons.interval("flag overdue client reviews", { minutes: 15 }, internal.clientReviews.flagOverdue, {});
 
+// Paystack payments still waiting: confirm them with Paystack (no reliance
+// on the webhook alone).
+crons.interval("reconcile Paystack payments", { minutes: 10 }, (internal as any).billing.reconcilePayments, {});
+
 // Back Office client health: drop logged API errors older than 30 days.
 crons.interval("purge old API error logs", { hours: 1 }, internal.backOfficeClients.purgeApiErrors, {});
 

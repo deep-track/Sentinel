@@ -291,3 +291,16 @@ test("wiring: the receipt downloads when a payment is confirmed", () => {
   assert.match(payments, /result\.status === "paid" \|\| result\.status === "already"[\s\S]{0,600}downloadInvoicePdf\(invoice\)/);
   assert.match(read("backend/convex/billing.ts"), /invoiceId: payment\.invoiceId/);
 });
+
+test("reconciliation settles final answers and waits on checkouts still open", () => {
+  const { billing } = setup();
+  const HOUR = 3600_000;
+  assert.equal(billing.reconcileDecision("success", 5 * 60_000), "settle");
+  assert.equal(billing.reconcileDecision("failed", 5 * 60_000), "settle");
+  assert.equal(billing.reconcileDecision("reversed", HOUR), "settle");
+  assert.equal(billing.reconcileDecision("ongoing", HOUR), "wait");
+  assert.equal(billing.reconcileDecision("pending", HOUR), "wait");
+  assert.equal(billing.reconcileDecision("abandoned", 2 * HOUR), "wait", "the customer may still come back");
+  assert.equal(billing.reconcileDecision("abandoned", 25 * HOUR), "settle");
+  assert.match(read("backend/convex/crons.ts"), /billing\.reconcilePayments/);
+});
