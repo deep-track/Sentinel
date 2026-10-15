@@ -420,12 +420,12 @@ export const verifyAndSettle = internalAction({
 // the webhook hasn't arrived yet.
 export const confirmPayment = action({
   args: { reference: v.string() },
-  handler: async (ctx, args): Promise<{ status: string; invoiceNumber: string | null }> => {
+  handler: async (ctx, args): Promise<{ status: string; invoiceNumber: string | null; invoiceId: string | null }> => {
     const payment = await ctx.runQuery(internalApi.billing._payment, { reference: args.reference, checkAccess: true });
-    if (!payment) return { status: "not_found", invoiceNumber: null };
+    if (!payment) return { status: "not_found", invoiceNumber: null, invoiceId: null };
     const result: { status: string } = payment.status === "success" ? { status: "already" } : await ctx.runAction(internalApi.billing.verifyAndSettle, { reference: args.reference });
     const invoiceNumber: string | null = await ctx.runQuery(internalApi.billing._invoiceNumber, { invoiceId: payment.invoiceId });
-    return { status: result.status, invoiceNumber };
+    return { status: result.status, invoiceNumber, invoiceId: payment.invoiceId };
   },
 });
 

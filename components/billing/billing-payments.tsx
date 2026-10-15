@@ -3,16 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useConvex, useMutation } from "convex/react";
 import { anyApi } from "convex/server";
 import { toast } from "sonner";
-import { CreditCard, FileText, Loader2, Zap } from "lucide-react";
+import { CreditCard, Download, FileText, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { getErrorMessage } from "@/modules/shared/errors";
 import { formatMoney } from "@/backend/convex/lib/pricing";
+import { downloadInvoicePdf, type InvoicePdfData } from "@/components/billing/invoice-pdf";
 
 // Top-ups and invoices on the Billing page (backend/convex/billing.ts):
 // pay online with Paystack (card or mobile money), or by bank transfer /
@@ -65,20 +66,28 @@ function usePaymentReturn() {
   const params = useSearchParams();
   const router = useRouter();
   const confirm = useAction(anyApi.billing.confirmPayment);
+  const convex = useConvex();
   const done = useRef(false);
   const reference = params.get("payment") ?? params.get("reference");
   useEffect(() => {
     if (!reference || done.current) return;
     done.current = true;
     void confirm({ reference })
-      .then((result: { status: string; invoiceNumber: string | null }) => {
-        if (result.status === "paid" || result.status === "already") toast.success(`Payment received${result.invoiceNumber ? ` for ${result.invoiceNumber}` : ""}. Credits added.`);
+      .then(async (result: { status: string; invoiceNumber: string | null; invoiceId: string | null }) => {
+        if (result.status === "paid" || result.status === "already") {
+          toast.success(`Payment received${result.invoiceNumber ? ` for ${result.invoiceNumber}` : ""}. Credits added; your receipt is downloading.`);
+          // The paid invoice (receipt) downloads straight away.
+          if (result.invoiceId) {
+            const invoice = (await convex.query(anyApi.billing.invoice, { invoiceId: result.invoiceId })) as InvoicePdfData | null;
+            if (invoice) await downloadInvoicePdf(invoice).catch(() => toast.error("The receipt couldn't be downloaded. Open the invoice to download it."));
+          }
+        }
         else if (result.status === "pending") toast.message("Payment is still processing. Credits are added as soon as Paystack confirms it.");
         else toast.error("The payment didn't go through.");
       })
       .catch((error: unknown) => toast.error(getErrorMessage(error, "Couldn't confirm the payment.")))
       .finally(() => router.replace("/billing"));
-  }, [reference, confirm, router]);
+  }, [reference, confirm, convex, router]);
 }
 
 export function BillingPayments({ clientId }: { clientId: string }) {
@@ -185,6 +194,7 @@ export function BillingPayments({ clientId }: { clientId: string }) {
                       <FileText className="mr-1 h-4 w-4" /> View
                     </Link>
                   </Button>
+                  <DownloadInvoiceButton invoiceId={invoice._id} label={invoice.status === "paid" ? "Receipt" : "PDF"} />
                   {invoice.status === "issued" && data.canPay && data.paystackEnabled ? (
                     <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void go(invoice._id, () => payInvoice({ invoiceId: invoice._id, saveCard }))}>
                       {busy === invoice._id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
@@ -292,5 +302,33 @@ function BillingOptions({ clientId, data }: { clientId: string; data: Overview }
         Save billing settings
       </Button>
     </Card>
+  );
+}
+
+// Downloads the invoice (or, once paid, the receipt) as a PDF.
+export function DownloadInvoiceButton({ invoiceId, label = "Download PDF" }: { invoiceId: string; label?: string }) {
+  const convex = useConvex();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const invoice = (await convex.query(anyApi.billing.invoice, { invoiceId })) as InvoicePdfData | null;
+          if (!invoice) throw new Error("not found");
+          await downloadInvoicePdf(invoice);
+        } catch (error) {
+          toast.error(getErrorMessage(error, "Couldn't download the invoice."));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+      {label}
+    </Button>
   );
 }

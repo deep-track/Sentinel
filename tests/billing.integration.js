@@ -253,3 +253,41 @@ test("wiring: the Paystack webhook verifies the signature, ledger charges trigge
   const billingSource = read("backend/convex/billing.ts");
   assert.doesNotMatch(billingSource.slice(billingSource.indexOf("export const overview"), billingSource.indexOf("export const invoice ")), /authorizationCode/, "the card token never reaches the browser");
 });
+
+// ── Invoice PDF ─────────────────────────────────────────────────────────────
+
+test("the invoice PDF: a receipt once paid, safe text, a stable file name", async () => {
+  const pdf = loadTs("components/billing/invoice-pdf.ts");
+  const { PDFDocument } = require("pdf-lib");
+  const base = {
+    number: "DT-2026-0001",
+    currency: "KES",
+    lines: [{ description: "Sentinel credits top-up (100 credits)", quantity: 1, unitPrice: 4000, amount: 4000 }],
+    subtotal: 4000,
+    vatRatePct: 16,
+    vat: 640,
+    total: 4640,
+    credits: 100,
+    buyer: { name: "Kampuni ya Mwangi – “SACCO” 中" },
+    seller: { name: "DeepTrack Ltd", paymentInstructions: "M-Pesa: Paybill 247247, Account 0123456789" },
+    issuedAt: Date.UTC(2026, 9, 15),
+    dueAt: Date.UTC(2026, 9, 29),
+  };
+  const logo = fs.readFileSync(path.join(root, "public/deeptrack-transparent.png"));
+  const paid = await pdf.buildInvoicePdf({ ...base, status: "paid", paidAt: Date.UTC(2026, 9, 15), paymentMethod: "paystack", paymentReference: "snt-1" }, logo);
+  const doc = await PDFDocument.load(paid);
+  assert.equal(doc.getPageCount(), 1);
+  assert.equal(doc.getTitle(), "Receipt DT-2026-0001");
+  const unpaid = await PDFDocument.load(await pdf.buildInvoicePdf({ ...base, status: "issued", paidAt: null, paymentMethod: null, paymentReference: null }, null));
+  assert.equal(unpaid.getTitle(), "Invoice DT-2026-0001", "no logo still builds");
+  assert.equal(pdf.pdfText("A – “b” 中"), 'A - "b" ?');
+  assert.equal(pdf.pdfMoney(4640, "KES"), "KES 4,640.00");
+  assert.equal(pdf.invoiceFileName({ number: "DT-2026-0001", status: "paid" }), "Receipt-DT-2026-0001.pdf");
+  assert.equal(pdf.invoiceFileName({ number: "DT-2026-0002", status: "issued" }), "Invoice-DT-2026-0002.pdf");
+});
+
+test("wiring: the receipt downloads when a payment is confirmed", () => {
+  const payments = read("components/billing/billing-payments.tsx");
+  assert.match(payments, /result\.status === "paid" \|\| result\.status === "already"[\s\S]{0,600}downloadInvoicePdf\(invoice\)/);
+  assert.match(read("backend/convex/billing.ts"), /invoiceId: payment\.invoiceId/);
+});

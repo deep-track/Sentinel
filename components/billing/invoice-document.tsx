@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { anyApi } from "convex/server";
-import { ChevronLeft, Printer } from "lucide-react";
+import { toast } from "sonner";
+import { ChevronLeft, Download, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { formatMoney } from "@/backend/convex/lib/pricing";
+import { downloadInvoicePdf } from "@/components/billing/invoice-pdf";
 
 // An invoice laid out for printing / saving as PDF (billing.invoice).
 
@@ -60,9 +62,14 @@ export function InvoiceDocument({ invoiceId, backHref = "/billing" }: { invoiceI
         <Link href={backHref} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700">
           <ChevronLeft className="h-4 w-4" /> Billing
         </Link>
-        <Button size="sm" variant="outline" onClick={() => window.print()}>
-          <Printer className="mr-1.5 h-4 w-4" /> Print / save as PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => void downloadInvoicePdf(invoice).catch(() => toast.error("The PDF couldn't be created. Use Print instead."))}>
+            <Download className="mr-1.5 h-4 w-4" /> Download {invoice.status === "paid" ? "receipt" : "invoice"} (PDF)
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => window.print()}>
+            <Printer className="mr-1.5 h-4 w-4" /> Print
+          </Button>
+        </div>
       </div>
       <article className="relative rounded-2xl border bg-white p-8 text-slate-900 dark:bg-slate-900 dark:text-white print:border-0 print:p-0">
         {invoice.status !== "issued" ? (
