@@ -125,6 +125,13 @@ type KybResult = {
   reason?: string;
   certificate?: { verdict: string; reason: string; fields?: Record<string, unknown>; flags?: Flag[]; checks?: Check[]; summary?: string };
   proofOfAddress?: { verdict: string; reason: string; flags?: Flag[]; checks?: Check[] };
+  registry?: {
+    verdict: string;
+    reason: string;
+    checks?: Check[];
+    record?: { companyName?: string | null; registrationNumber?: string | null; registrationDate?: string | null; kraPin?: string | null; shareholders?: Array<{ name: string; shares?: string | null }> };
+    lateResponse?: { receivedAt: number; status: string; record?: { companyName?: string | null; active?: boolean | null } };
+  };
   parties?: Array<{ name: string; role: string; verdict: string; complete: boolean; reason: string; hits: number; suppressed: number }>;
 };
 
@@ -199,6 +206,33 @@ function AutomatedChecks({ result }: { result: unknown }) {
           </p>
           <p className="mt-1 text-xs text-slate-500">{data.proofOfAddress.reason}</p>
           <ChecksList checks={data.proofOfAddress.checks} flags={data.proofOfAddress.flags} />
+        </div>
+      ) : null}
+      {data.registry ? (
+        <div>
+          <p className="text-sm font-medium">
+            Company registry (Kenya BRS): <span className={VERDICT_STYLE[data.registry.verdict]}>{VERDICT_LABEL[data.registry.verdict] ?? data.registry.verdict}</span>
+          </p>
+          {data.registry.record ? (
+            <p className="mt-1 text-xs text-slate-500">
+              {String(data.registry.record.companyName ?? "—")} · no. {String(data.registry.record.registrationNumber ?? "—")}
+              {data.registry.record.registrationDate ? ` · registered ${data.registry.record.registrationDate}` : ""}
+              {data.registry.record.kraPin ? ` · KRA PIN ${data.registry.record.kraPin}` : ""}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">{data.registry.reason}</p>
+          )}
+          {data.registry.record?.shareholders?.length ? (
+            <p className="mt-1 text-xs text-slate-500">
+              Shareholders: {data.registry.record.shareholders.map((holder) => `${holder.name}${holder.shares ? ` (${holder.shares})` : ""}`).join(", ")}
+            </p>
+          ) : null}
+          {data.registry.lateResponse ? (
+            <p className="mt-1 text-xs text-amber-600">
+              The registry answered after the checks finished: {data.registry.lateResponse.status === "found" ? `${data.registry.lateResponse.record?.companyName ?? "record found"}${data.registry.lateResponse.record?.active === false ? " (not active)" : ""}` : data.registry.lateResponse.status.replace("_", " ")}.
+            </p>
+          ) : null}
+          <ChecksList checks={data.registry.checks} />
         </div>
       ) : null}
       {data.parties?.length ? (

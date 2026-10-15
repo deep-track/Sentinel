@@ -2,7 +2,8 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { buildVerificationReference } from "./lib/crypto";
+import { buildVerificationReference, sha256Hex } from "./lib/crypto";
+import { readBrsResponse } from "./lib/kenyaBrs";
 import { requireClientRole } from "./lib/rbac";
 import { assertCreditsForNewVerification, creditsForVerification } from "./lib/verificationTypes";
 import { chargeVerification } from "./lib/credits";
@@ -193,7 +194,7 @@ export const _screenParties = internalAction({
 });
 
 const hitValidator = v.object({
-  source: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("OPENSANCTIONS"), v.literal("ADVERSE_MEDIA")),
+  source: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS"), v.literal("OPENSANCTIONS"), v.literal("ADVERSE_MEDIA")),
   sourceRecordId: v.string(),
   entityName: v.string(),
   program: v.string(),
@@ -308,5 +309,52 @@ export const getDirectors = query({
       .query("kybDirectors")
       .withIndex("by_kyb_verification", (q) => q.eq("kybVerificationId", args.kybVerificationId))
       .take(MAX_DIRECTORS);
+  },
+});
+
+// ── Kenya BRS registry lookups (MetaMap) ────────────────────────────────────
+
+export const _startRegistryLookup = internalMutation({
+  args: { verificationId: v.id("verifications"), tokenHash: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("kybRegistryLookups", { verificationId: args.verificationId, tokenHash: args.tokenHash, status: "pending", requestedAt: Date.now() });
+  },
+});
+
+export const _registryLookup = internalQuery({
+  args: { tokenHash: v.string() },
+  handler: async (ctx, args) => {
+    const lookup = await ctx.db
+      .query("kybRegistryLookups")
+      .withIndex("by_token_hash", (q) => q.eq("tokenHash", args.tokenHash))
+      .unique();
+    return lookup ? { status: lookup.status, response: lookup.response ?? null } : null;
+  },
+});
+
+// MetaMap's callback. An answer that arrives after the checks finished is
+// added to the result for the reviewer.
+export const receiveRegistryCallback = internalMutation({
+  args: { token: v.string(), body: v.any() },
+  handler: async (ctx, args): Promise<{ accepted: boolean }> => {
+    const tokenHash = await sha256Hex(args.token);
+    const lookup = await ctx.db
+      .query("kybRegistryLookups")
+      .withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    if (!lookup) return { accepted: false };
+    if (lookup.status === "received") return { accepted: true };
+    const now = Date.now();
+    await ctx.db.patch(lookup._id, { status: "received", response: args.body, receivedAt: now });
+    const verification = await ctx.db.get(lookup.verificationId);
+    const result = verification?.result as Record<string, unknown> | undefined;
+    if (verification && verification.status === "completed" && result?.registry) {
+      const read = readBrsResponse(args.body);
+      await ctx.db.patch(verification._id, {
+        result: { ...result, registry: { ...(result.registry as Record<string, unknown>), lateResponse: { receivedAt: now, ...read } } },
+        updatedAt: now,
+      });
+    }
+    return { accepted: true };
   },
 });

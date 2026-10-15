@@ -161,12 +161,13 @@ export type ComponentOutcome = { verdict: "pass" | "review" | "reject" | "unavai
 // The overall KYB verdict. Any rejection (a strong sanctions match, a forged
 // or impossible certificate) rejects; anything held, unreadable or
 // unavailable goes to review; only an all-clear passes.
-export function decideKyb(params: { certificate: ComponentOutcome; proofOfAddress: ComponentOutcome; parties: PartyOutcome[] }): {
+// registry is the company-register lookup (Kenya BRS), when it applies.
+export function decideKyb(params: { certificate: ComponentOutcome; proofOfAddress: ComponentOutcome; parties: PartyOutcome[]; registry?: ComponentOutcome }): {
   verdict: "pass" | "review" | "reject";
   reason: string;
   complete: boolean;
 } {
-  const { certificate, proofOfAddress, parties } = params;
+  const { certificate, proofOfAddress, parties, registry } = params;
   const issues: string[] = [];
   let verdict: "pass" | "review" | "reject" = "pass";
   const raise = (to: "review" | "reject") => {
@@ -175,6 +176,7 @@ export function decideKyb(params: { certificate: ComponentOutcome; proofOfAddres
   for (const [label, component] of [
     ["Registration certificate", certificate],
     ["Proof of address", proofOfAddress],
+    ...(registry ? ([["Company registry", registry]] as const) : []),
   ] as const) {
     if (component.verdict === "pass") continue;
     raise(component.verdict === "reject" ? "reject" : "review");
@@ -185,10 +187,11 @@ export function decideKyb(params: { certificate: ComponentOutcome; proofOfAddres
     raise(party.verdict === "reject" ? "reject" : "review");
     issues.push(`${party.role === "business" ? "The business" : party.name} (${party.role === "business" ? "AML" : `${party.role}, AML`}): ${party.complete ? party.reason : "screening incomplete"}`);
   }
-  const complete = certificate.verdict !== "unavailable" && proofOfAddress.verdict !== "unavailable" && parties.every((party) => party.complete);
+  const complete =
+    certificate.verdict !== "unavailable" && proofOfAddress.verdict !== "unavailable" && registry?.verdict !== "unavailable" && parties.every((party) => party.complete);
   const reason =
     verdict === "pass"
-      ? `Business verified: the registration certificate matches, proof of address passed, and the business and ${parties.length - 1} director${parties.length - 1 === 1 ? "" : "s"} / owner${parties.length - 1 === 1 ? "" : "s"} were screened with no hits.`
+      ? `Business verified: the registration certificate matches${registry ? " the company register" : ""}, proof of address passed, and the business and ${parties.length - 1} director${parties.length - 1 === 1 ? "" : "s"} / owner${parties.length - 1 === 1 ? "" : "s"} were screened with no hits.`
       : `${verdict === "reject" ? "Business rejected" : "Business needs review"}: ${issues.slice(0, 6).join(" ")}`;
   return { verdict, reason: reason.slice(0, 2000), complete };
 }

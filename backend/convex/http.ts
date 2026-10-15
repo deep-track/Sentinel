@@ -814,4 +814,26 @@ http.route({
   }),
 });
 
+// MetaMap GovChecks callback for Kenya BRS lookups. The URL carries a
+// one-time random token per lookup (only its hash is stored); callbacks
+// aren't signed, so the token is the proof of origin.
+http.route({
+  path: "/webhooks/metamap/brs",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const token = new URL(request.url).searchParams.get("token");
+    if (!token || !/^[0-9a-f]{64}$/.test(token)) return json({ error: "Invalid callback token" }, 401);
+    const raw = await request.text();
+    if (raw.length > 256 * 1024) return json({ error: "Body too large" }, 413);
+    let body: unknown;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return json({ error: "Invalid JSON" }, 400);
+    }
+    const result = await ctx.runMutation((internal as any).kyb.receiveRegistryCallback, { token, body });
+    return json(result, result.accepted ? 200 : 404);
+  }),
+});
+
 export default http;
