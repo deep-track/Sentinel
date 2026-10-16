@@ -9,7 +9,7 @@ import { NextResponse } from "next/server";
 // cookie refresh). This middleware never enforces authentication itself:
 // protected pages and API routes check the session server-side. Matching is
 // exact or on a path-segment boundary, so "/sign-in-foo" is not public.
-const PUBLIC_ROUTES = ["/sign-in", "/logged-out"];
+const PUBLIC_ROUTES = ["/sign-in", "/logged-out", "/signup"];
 
 function isPublicRoute(pathname: string): boolean {
 	return PUBLIC_ROUTES.some(

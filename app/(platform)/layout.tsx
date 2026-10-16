@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { NotificationBell } from "@/components/notification-bell";
 import { IdleTimeout } from "@/components/security/idle-timeout";
 import { SecurityBlock } from "@/components/security/security-block";
+import { TrialBanner } from "@/components/billing/trial-banner";
 import { ipAllowed } from "@/backend/convex/lib/clientSettings";
 import { getActiveMembership } from "./_lib/active-client";
 import { requestIp } from "./_lib/request-ip";
@@ -137,6 +138,7 @@ export default async function Layout({
           </div>
         </div>
 
+        {active ? <TrialBanner clientId={active.clientId} /> : null}
         {children}
       </main>
     </SidebarProvider>
