@@ -35,7 +35,7 @@ const DELIVERY_RANK: Record<Doc<"livenessRequests">["deliveryStatus"], number> =
 
 // Accepts common formatting ("+254 700-000 000", "00254...", "whatsapp:+...")
 // and returns strict E.164, or null.
-function normalizePhoneNumber(raw: string): string | null {
+export function normalizePhoneNumber(raw: string): string | null {
   let value = raw.trim().replace(/^whatsapp:/i, "").replace(/[\s().-]/g, "");
   if (value.startsWith("00")) value = `+${value.slice(2)}`;
   return E164_PATTERN.test(value) ? value : null;
@@ -81,7 +81,7 @@ export const submit = mutation({
   },
 });
 
-type SendOutcome = { ok: true; sid: string } | { ok: false; reason: string };
+export type SendOutcome = { ok: true; sid: string } | { ok: false; reason: string };
 
 async function sendTwilioMessage(sid: string, token: string, body: URLSearchParams): Promise<SendOutcome> {
   const controller = new AbortController();
@@ -142,7 +142,7 @@ async function sendAfricasTalkingSms(username: string, apiKey: string, to: strin
 // SMS goes through Africa's Talking when it is configured, otherwise Twilio.
 // WhatsApp always goes through Twilio. Delivery reports from either provider
 // update the request by provider message id. Null means no provider is set up.
-async function sendInvitation(request: Doc<"livenessRequests">, message: string): Promise<SendOutcome | null> {
+export async function sendInvitation(request: { method: "sms" | "whatsapp" | "email"; contact: string }, message: string): Promise<SendOutcome | null> {
   const atUsername = process.env.AFRICASTALKING_USERNAME?.trim();
   const atApiKey = process.env.AFRICASTALKING_API_KEY?.trim();
   if (request.method === "sms" && atUsername && atApiKey) {

@@ -181,7 +181,7 @@ function requireText(fields: Record<string, string>) {
 // Shared IDP creation path (dashboard KYC, generic create, public API).
 // Checks credits, inserts the row WITHOUT media, schedules processing with
 // the media, and audits the creation — all in the caller's transaction.
-async function createIdpVerification(
+export async function createIdpVerification(
   ctx: MutationCtx,
   params: {
     clientId: Id<"clients">;
