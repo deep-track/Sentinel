@@ -195,8 +195,9 @@ export class PdfReport {
     }
   }
 
+  // Kept with the start of its content: never alone at the foot of a page.
   heading(title: string, hint?: string) {
-    this.ensure(hint ? 64 : 48);
+    this.ensure(hint ? 120 : 104);
     this.y -= 8;
     this.text(title, this.left, this.y, { size: 12.5, font: this.bold, color: COLORS.brand });
     this.y -= 16;
@@ -210,7 +211,7 @@ export class PdfReport {
   }
 
   subheading(title: string) {
-    this.ensure(34);
+    this.ensure(80);
     this.y -= 4;
     this.text(title, this.left, this.y, { size: 10.5, font: this.bold });
     this.y -= 14;

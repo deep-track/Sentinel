@@ -7,6 +7,8 @@ import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import { countries } from "@/backend/lib/kyb-types";
 import { type KYBStatus, KYBStatusBadge } from "@/modules/kyb/kyb-status-badge";
 import { DisputeButton } from "@/components/disputes/dispute-button";
+import { ReportPdfButton } from "@/components/reports/report-pdf-button";
+import { kybReportSpec } from "@/components/reports/kyb-report-spec";
 
 interface KYBDetailPageProps {
   params: Promise<{ id: string }>;
@@ -298,6 +300,7 @@ export default async function KYBDetailPage({ params }: KYBDetailPageProps) {
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3">
                 <KYBStatusBadge status={status} size="lg" />
+                <ReportPdfButton spec={kybReportSpec(verification, directors, country)} />
                 <DisputeButton verificationId={id} />
               </div>
             </div>
