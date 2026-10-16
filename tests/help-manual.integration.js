@@ -51,6 +51,7 @@ const OUTLINE = {
   ],
 };
 
+// Every manual is written.
 const WRITTEN = Object.keys(OUTLINE);
 
 const SECTIONS = ["What it's for", "Who can use it", "Step by step", "What each result means", "Common questions", "Related chapters"];
