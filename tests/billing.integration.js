@@ -296,13 +296,20 @@ test("wiring: the receipt downloads when a payment is confirmed", () => {
 
 test("choosing a plan: one invoice per plan, and paying it moves the client to the plan", async () => {
   const { billing, ctx, tables, record } = setup();
+  tables.billingSettings.push({ _id: "bs", key: "default", usdToKes: 129, updatedAt: 1, updatedBy: "ops" });
   const overview = await billing.overview.handler(ctx, { clientId: "c1" });
-  assert.deepEqual(overview.plans.map((plan) => [plan.plan, plan.price, plan.credits]), [
-    ["starter", 250_000, 6_250],
-    ["growth", 550_000, 15_125],
-    ["business", 1_200_000, 34_500],
-    ["enterprise", 1_700_000, 51_000],
-  ]);
+  assert.deepEqual(
+    overview.plans.map((plan) => [plan.plan, plan.priceUsd, plan.chargeAmount, plan.purchasable]),
+    [
+      ["starter", 2_500, 322_500, true],
+      ["growth", 5_500, 709_500, true],
+      ["business", 12_000, 1_548_000, true],
+      ["enterprise", null, null, false],
+    ],
+    "USD prices; Kenyan clients pay KES at the rate; Enterprise goes to sales",
+  );
+  assert.equal(overview.salesContact, "bryan@deeptrack.io");
+  assert.equal(overview.plans[0].credits, undefined, "no credit counts on the cards");
 
   const byBank = await billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "growth" });
   const again = await billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "growth" });
@@ -310,22 +317,45 @@ test("choosing a plan: one invoice per plan, and paying it moves the client to t
   const invoice = tables.invoices.find((row) => row._id === byBank.invoiceId);
   assert.equal(invoice.kind, "plan");
   assert.equal(invoice.plan, "growth");
-  assert.equal(invoice.total, 550_000);
+  assert.equal(invoice.currency, "KES");
+  assert.equal(invoice.total, 709_500);
+  assert.match(invoice.lines[0].description, /US\$5,500 at KES 129 per US\$/);
+  assert.equal(invoice.credits, 19_511, "KES 709,500 / 40 + the Growth 10% bonus");
 
   const started = await billing._startPayment.handler(ctx, { clientId: "c1", plan: "growth", saveCard: false });
   assert.equal(started.invoiceId, byBank.invoiceId, "Paystack pays the same invoice");
-  assert.equal(started.amount, 55_000_000);
-  await billing._settle.handler(ctx, { reference: started.reference, transaction: success(started.reference, 55_000_000) });
+  assert.equal(started.amount, 70_950_000);
+  await billing._settle.handler(ctx, { reference: started.reference, transaction: success(started.reference, 70_950_000) });
 
   const client = tables.clients[0];
   assert.equal(client.plan, "growth");
   assert.equal(client.status, "active");
-  assert.deepEqual(record.ledger.map((entry) => entry.amount), [15_125]);
+  assert.deepEqual(record.ledger.map((entry) => entry.amount), [19_511]);
   assert.ok(record.audits.some((entry) => entry.action === "client.plan_changed" && entry.metadata.plan === "growth" && entry.metadata.from === "starter"));
+
+  // A new rate prices a new invoice.
+  tables.billingSettings[0].usdToKes = 130;
+  const repriced = await billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "business" });
+  assert.equal(tables.invoices.find((row) => row._id === repriced.invoiceId).total, 1_560_000);
+});
+
+test("Enterprise is sales-only, and KES plans need the exchange rate", async () => {
+  const { billing, ctx, tables } = setup();
+  await assert.rejects(billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "growth" }), /aren't available yet/, "no rate set");
+  assert.equal((await billing.overview.handler(ctx, { clientId: "c1" })).plans[1].purchasable, false);
+  tables.billingSettings.push({ _id: "bs", key: "default", usdToKes: 129, updatedAt: 1, updatedBy: "ops" });
+  await assert.rejects(billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "enterprise" }), /bryan@deeptrack\.io/);
+  await assert.rejects(billing._startPayment.handler(ctx, { clientId: "c1", plan: "enterprise", saveCard: false }), /sales team/);
+
+  tables.clients[0].billingCurrency = "USD";
+  const usd = await billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "starter" });
+  const invoice = tables.invoices.find((row) => row._id === usd.invoiceId);
+  assert.deepEqual([invoice.currency, invoice.total, invoice.credits], ["USD", 2_500, 250_000]);
 });
 
 test("an expired trial that buys a plan moves straight to it", async () => {
   const { billing, ctx, tables } = setup();
+  tables.billingSettings.push({ _id: "bs", key: "default", usdToKes: 129, updatedAt: 1, updatedBy: "ops" });
   Object.assign(tables.clients[0], { plan: "trial", status: "trial_expired", trialEndsAt: 1 });
   const { invoiceId } = await billing.requestPlanInvoice.handler(ctx, { clientId: "c1", plan: "business" });
   await billing.markPaid.handler(ctx, { invoiceId, method: "bank_transfer", reference: "FT26288XYZ" });
