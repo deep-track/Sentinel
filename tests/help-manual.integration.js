@@ -52,7 +52,7 @@ const OUTLINE = {
 };
 
 // Manuals written so far; each manual's PR adds its letter.
-const WRITTEN = ["b"];
+const WRITTEN = ["b", "a"];
 
 const SECTIONS = ["What it's for", "Who can use it", "Step by step", "What each result means", "Common questions", "Related chapters"];
 const ALL_IDS = new Set(Object.entries(OUTLINE).flatMap(([manual, titles]) => titles.map((_, i) => `${manual}${i + 1}`)));
