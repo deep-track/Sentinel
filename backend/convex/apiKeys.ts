@@ -388,7 +388,7 @@ export function scopeForRoute(route: string): ApiScope | null {
   if (route === "POST /v1/verify/idp") return "verify:kyc";
   if (route === "POST /v1/verify/aml") return "verify:aml";
   if (route === "POST /v1/verify/document") return "verify:document";
-  if (route.includes("/v1/monitoring/")) return "monitoring";
+  if (route.includes("/v1/monitoring/") || route.startsWith("POST /v1/transactions")) return "monitoring";
   if (route.startsWith("GET /v1/verify")) return "results:read";
   if (route.startsWith("GET /v1/credits")) return "credits:read";
   return null;

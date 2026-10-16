@@ -616,10 +616,13 @@ function kenyanRiskListMatches(subject: ScreeningSubject, lists: RiskEntry[], ru
   return matches.sort((left, right) => right.nameScore - left.nameScore).slice(0, MATCH_LIMIT);
 }
 
-export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[], rules?: ScreeningRules[]): Promise<ScreeningOutcome[]> {
+export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[], rules?: ScreeningRules[], options?: { adverseMedia?: boolean }): Promise<ScreeningOutcome[]> {
   // Both run alongside the local watchlist scan; neither rejects.
   const openSanctionsPromise = screenOpenSanctions(subjects);
-  const adverseMediaPromise = screenAdverseMedia(subjects);
+  // Off for bulk screenings (transaction counterparties): a web search
+  // per name costs too much.
+  const adverseMediaPromise: Promise<AdverseMediaOutcome[]> =
+    options?.adverseMedia === false ? Promise.resolve(subjects.map(() => ({ status: "disabled" as const }))) : screenAdverseMedia(subjects);
   // Sentinel's Kenyan PEP register. Unavailable never blocks screening.
   const pepRegisterPromise: Promise<PepEntry[]> = subjects.some((subject) => subject.entityType === "individual")
     ? loadPepRegister(ctx).catch((error) => {
