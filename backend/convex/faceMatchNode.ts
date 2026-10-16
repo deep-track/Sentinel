@@ -23,7 +23,7 @@ import {
 } from "./lib/faceMatch";
 
 // Face match for KYC with Amazon Rekognition (lib/faceMatch.ts). Env:
-//   AWS_REKOGNITION_REGION (or AWS_REGION), AWS_ACCESS_KEY_ID,
+//   AWS_REKOGNITION_REGION (or AWS_REGION, or AWS_TEXTRACT_REGION), AWS_ACCESS_KEY_ID,
 //   AWS_SECRET_ACCESS_KEY. The IAM user needs rekognition:CompareFaces and,
 //   for duplicate faces, CreateCollection, SearchFacesByImage, IndexFaces
 //   and DeleteFaces. Without them face match is skipped.
@@ -31,7 +31,7 @@ import {
 const internalApi: any = internal;
 
 function rekognition(): RekognitionClient | null {
-  const region = process.env.AWS_REKOGNITION_REGION?.trim() || process.env.AWS_REGION?.trim();
+  const region = process.env.AWS_REKOGNITION_REGION?.trim() || process.env.AWS_REGION?.trim() || process.env.AWS_TEXTRACT_REGION?.trim();
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
   if (!region || !accessKeyId || !secretAccessKey) return null;
