@@ -35,6 +35,7 @@ const SOURCE_LABELS: Record<string, string> = {
   OPENSANCTIONS: "OpenSanctions",
   ADVERSE_MEDIA: "Adverse media",
   KE_PEP: "Kenyan PEP register",
+  KE_RISK_LIST: "Kenyan risk lists (Sentinel)",
 };
 
 export function ClearedMatches({ clientId }: { clientId: string }) {

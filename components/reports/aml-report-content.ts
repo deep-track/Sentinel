@@ -127,6 +127,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   OPENSANCTIONS: "OpenSanctions (global sanctions, PEP and risk data)",
   ADVERSE_MEDIA: "Adverse media (news)",
   KE_PEP: "Sentinel Kenyan PEP register",
+  KE_RISK_LIST: "Kenyan risk lists (Sentinel)",
   FBI_MOST_WANTED: "FBI Most Wanted",
 };
 

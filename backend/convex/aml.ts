@@ -33,6 +33,8 @@ import { DEFAULTS, loadClientSettings, monitoringIntervalMs, type ScreeningRules
 import { hitKey as clearedKey, stillCleared, subjectKeyFor } from "./lib/amlClearedMatches";
 import { isCurrent, matchPepEntry, PEP_LEVEL_CLASS, PEP_LEVEL_LABELS, type PepEntry, type PepMatch } from "./lib/kenyaPep";
 import { loadPepRegister } from "./pepRegister";
+import { matchRiskEntry, riskListSource, type RiskEntry, type RiskMatch } from "./lib/riskLists";
+import { loadRiskLists } from "./riskLists";
 import { clearedHitsFor } from "./amlCleared";
 import {
   OPENSANCTIONS_STRONG_MATCH_SCORE,
@@ -588,6 +590,27 @@ function kenyanPepMatches(subject: ScreeningSubject, register: PepEntry[], rules
   return matches.sort((left, right) => right.nameScore - left.nameScore).slice(0, MATCH_LIMIT);
 }
 
+// Kenyan risk list hits for one subject (people and organisations), under
+// the client's threshold and cleared-hit memory.
+function kenyanRiskListMatches(subject: ScreeningSubject, lists: RiskEntry[], rules: ScreeningRules | undefined, suppressed: SuppressedMatch[]): RiskMatch[] {
+  if (lists.length === 0) return [];
+  const threshold = rules?.matchThreshold ?? DEFAULTS.screening.matchThreshold;
+  const cleared = new Map((rules?.cleared ?? []).map((hit) => [hit.key, hit]));
+  const matches: RiskMatch[] = [];
+  for (const entry of lists) {
+    const match = matchRiskEntry({ name: subject.subjectName, entityType: subject.entityType }, entry);
+    if (!match || match.nameScore < threshold) continue;
+    const category = (riskListSource(entry.sourceKey)?.category ?? "fitness_probity") as "fitness_probity" | "special_interest";
+    const hit = cleared.get(clearedKey("KE_RISK_LIST", entry._id));
+    if (hit && stillCleared({ categories: [category], riskLevel: "high" }, hit)) {
+      suppressed.push({ source: "KE_RISK_LIST", sourceRecordId: entry._id, entityName: entry.name, clearedAt: hit.clearedAt, clearedByName: hit.clearedByName ?? null, reasonCode: hit.reasonCode ?? null });
+      continue;
+    }
+    matches.push(match);
+  }
+  return matches.sort((left, right) => right.nameScore - left.nameScore).slice(0, MATCH_LIMIT);
+}
+
 export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[], rules?: ScreeningRules[]): Promise<ScreeningOutcome[]> {
   // Both run alongside the local watchlist scan; neither rejects.
   const openSanctionsPromise = screenOpenSanctions(subjects);
@@ -599,6 +622,11 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
         return [];
       })
     : Promise.resolve([]);
+  // Kenyan enforcement, debarment and wanted lists. Unavailable never blocks.
+  const riskListsPromise: Promise<RiskEntry[]> = loadRiskLists(ctx).catch((error) => {
+    console.error("[aml] Kenyan risk lists unavailable", error instanceof Error ? error.message.slice(0, 120) : "unknown");
+    return [];
+  });
   const coverage: Coverage = await ctx.runQuery(internalApi.amlPersistence.getActiveVersions, { now: Date.now() });
   const candidates: Array<Array<Candidate<Entry>>> = subjects.map(() => []);
   for (const version of coverage.versions) {
@@ -622,10 +650,12 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
   const openSanctionsOutcomes = await openSanctionsPromise;
   const adverseMediaOutcomes = await adverseMediaPromise;
   const pepRegister = await pepRegisterPromise;
+  const riskLists = await riskListsPromise;
 
   return subjects.map((_, index) => {
     const ruled = applyScreeningRules(candidates[index], openSanctionsOutcomes[index], adverseMediaOutcomes[index], rules?.[index]);
     const pepMatches = kenyanPepMatches(subjects[index], pepRegister, rules?.[index], ruled.suppressed);
+    const riskListMatches = kenyanRiskListMatches(subjects[index], riskLists, rules?.[index], ruled.suppressed);
     const subjectCandidates = ruled.candidates.sort(compareCandidates);
     const openSanctions = ruled.openSanctions;
     // Decide on ALL candidates, then keep only the strongest for storage.
@@ -637,11 +667,12 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
     const hasAnyMatch = stored.length > 0 || openSanctionsMatches.length > 0 || mediaHits.length > 0;
     // Adverse media and Kenyan PEP hits can only make a verdict stricter
     // (pass → review).
-    const verdict = (mediaHits.length > 0 || pepMatches.length > 0) && decision.verdict === "pass" ? "review" : decision.verdict;
+    const verdict = (mediaHits.length > 0 || pepMatches.length > 0 || riskListMatches.length > 0) && decision.verdict === "pass" ? "review" : decision.verdict;
     const reason = [
       decision.reason,
       mediaHits.length > 0 ? describeAdverseMedia(mediaHits) : null,
       pepMatches.length > 0 ? `Possible Kenyan PEP: ${pepMatches.slice(0, 3).map((match) => `${match.entry.fullName} (${match.entry.position})`).join("; ")}.` : null,
+      riskListMatches.length > 0 ? `On a Kenyan risk list: ${riskListMatches.slice(0, 3).map((match) => `${match.entry.name} (${riskListSource(match.entry.sourceKey)?.label ?? match.entry.sourceKey})`).join("; ")}.` : null,
     ]
       .filter(Boolean)
       .join(" ");
@@ -713,6 +744,19 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
           topics: [PEP_LEVEL_LABELS[match.entry.level]],
           ...(match.birthDateMatch !== "unknown" ? { birthDateMatch: match.birthDateMatch } : {}),
           ...(match.entry.relatedTo ? { datasets: [`Related to: ${match.entry.relatedTo}`] } : {}),
+        })),
+        ...riskListMatches.map((match) => ({
+          source: "KE_RISK_LIST" as const,
+          sourceRecordId: match.entry._id,
+          entityName: match.entry.name,
+          program: [riskListSource(match.entry.sourceKey)?.label, match.entry.action, match.ended ? "ended" : null].filter(Boolean).join(" - "),
+          matchScore: match.nameScore,
+          matchMethod: match.method,
+          matchedCountry: "KE",
+          riskLevel: "high" as const,
+          categories: [(riskListSource(match.entry.sourceKey)?.category ?? "fitness_probity") as "fitness_probity" | "special_interest"],
+          topics: [match.entry.reason.slice(0, 200)],
+          datasets: [riskListSource(match.entry.sourceKey)?.authority ?? "Kenya", ...(match.entry.reference ? [`Ref. ${match.entry.reference}`] : [])],
         })),
         ...mediaHits.map((hit) => ({
           source: "ADVERSE_MEDIA" as const,
