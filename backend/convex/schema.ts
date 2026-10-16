@@ -381,7 +381,8 @@ export default defineSchema({
     settledAt: v.optional(v.number()),
   })
     .index("by_reference", ["reference"])
-    .index("by_invoice", ["invoiceId"]),
+    .index("by_invoice", ["invoiceId"])
+    .index("by_status_and_created_at", ["status", "createdAt"]),
 
   // Per-client billing options: billing email, the saved card (Paystack
   // authorization, server-side only) and automatic top-up.
