@@ -199,7 +199,7 @@ test("monitoring wiring: enrolment, schedule, baseline, alerts and API", () => {
   assert.match(aml, /intervalMs: monitoringIntervalMs\(settings\.screening\.monitoringFrequency\)/);
   assert.match(aml, /A customer reference is only used with monitor: true\./);
   assert.match(aml, /\/\/ Test-mode keys never enrol subjects for monitoring\./);
-  assert.match(aml, /export async function screenSubjects\(ctx: ActionCtx, subjects: ScreeningSubject\[\], rules\?: ScreeningRules\[\]\)/);
+  assert.match(aml, /export async function screenSubjects\(ctx: ActionCtx, subjects: ScreeningSubject\[\], rules\?: ScreeningRules\[\](, options\?: \{ adverseMedia\?: boolean \})?\)/);
 
   const monitoring = read("backend/convex/amlMonitoring.ts");
   assert.match(monitoring, /if \(!outcome\.complete\) \{\s*\/\/ A list or OpenSanctions was unavailable: keep the baseline, retry soon\./);

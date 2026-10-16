@@ -251,6 +251,56 @@ export default defineSchema({
     .index("by_client_and_type_and_created_at", ["clientId", "type", "createdAt"])
     .index("by_type_and_created_at", ["type", "createdAt"]),
 
+  // Transaction monitoring (transactions.ts): clients' customer
+  // transactions, the alerts the rules raise, and counterparty screenings.
+  transactions: defineTable({
+    clientId: v.id("clients"),
+    externalId: v.string(),
+    customerRef: v.string(),
+    occurredAt: v.number(),
+    amount: v.number(),
+    currency: v.union(v.literal("KES"), v.literal("USD")),
+    amountUsd: v.number(),
+    direction: v.union(v.literal("in"), v.literal("out")),
+    channel: v.union(v.literal("mpesa"), v.literal("cash"), v.literal("bank_transfer"), v.literal("rtgs"), v.literal("swift"), v.literal("card"), v.literal("cheque"), v.literal("other")),
+    counterpartyName: v.optional(v.string()),
+    counterpartyKey: v.optional(v.string()),
+    counterpartyCountry: v.optional(v.string()),
+    counterpartyAccount: v.optional(v.string()),
+    narration: v.optional(v.string()),
+    source: v.union(v.literal("api"), v.literal("upload")),
+    createdAt: v.number(),
+  })
+    .index("by_client_and_external", ["clientId", "externalId"])
+    .index("by_client_customer_time", ["clientId", "customerRef", "occurredAt"])
+    .index("by_client_counterparty", ["clientId", "counterpartyKey"]),
+
+  transactionAlerts: defineTable({
+    clientId: v.id("clients"),
+    customerRef: v.string(),
+    rule: v.union(v.literal("large_cash"), v.literal("structuring"), v.literal("velocity"), v.literal("high_risk_country"), v.literal("pass_through"), v.literal("dormant_reactivated"), v.literal("sanctioned_counterparty")),
+    severity: v.union(v.literal("high"), v.literal("medium")),
+    status: v.union(v.literal("open"), v.literal("closed"), v.literal("escalated")),
+    summary: v.string(),
+    transactionIds: v.array(v.id("transactions")),
+    key: v.string(),
+    createdAt: v.number(),
+    decidedAt: v.optional(v.number()),
+    decidedBy: v.optional(v.string()),
+    decisionNotes: v.optional(v.string()),
+  })
+    .index("by_client_and_status", ["clientId", "status"])
+    .index("by_client_customer_key", ["clientId", "customerRef", "key"]),
+
+  counterpartyScreenings: defineTable({
+    clientId: v.id("clients"),
+    key: v.string(),
+    name: v.string(),
+    verdict: v.union(v.literal("pass"), v.literal("review"), v.literal("reject")),
+    reason: v.string(),
+    screenedAt: v.number(),
+  }).index("by_client_and_key", ["clientId", "key"]),
+
   // Kenya capture links (capture.ts): the customer completes KYC on their
   // phone. Only the token's SHA-256 is kept.
   captureSessions: defineTable({

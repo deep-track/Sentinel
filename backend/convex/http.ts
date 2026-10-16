@@ -494,6 +494,49 @@ http.route({
 });
 
 
+// ── Transaction monitoring ────────────────────────────────────────────────
+// POST /v1/transactions: up to 500 of a customer's transactions per call,
+// checked against the monitoring rules (transactions.ts). Idempotent per
+// externalId. Test keys validate without storing.
+http.route({
+  path: "/v1/transactions",
+  method: "POST",
+  handler: apiAction("POST /v1/transactions", async (ctx, request, auth) => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Invalid JSON body" }, 400);
+    }
+    const list = body && typeof body === "object" && !Array.isArray(body) ? (body as { transactions?: unknown }).transactions : undefined;
+    if (!Array.isArray(list) || list.length === 0 || list.length > 500 || list.some((item) => !item || typeof item !== "object" || Array.isArray(item))) {
+      return json(
+        {
+          error: "Send { transactions: [...] } with 1 to 500 transactions.",
+          details: {
+            externalId: "required: your unique id for the transaction",
+            customerRef: "required: your customer id, or the Sentinel reference of their KYC or AML check",
+            occurredAt: "required: ISO 8601 date-time",
+            amount: "required: positive number",
+            currency: "KES (default) or USD",
+            direction: "required: in or out",
+            channel: "mpesa, cash, bank_transfer, rtgs, swift, card, cheque or other",
+            counterpartyName: "optional, screened against sanctions and watch lists",
+            counterpartyCountry: "optional: 2-letter ISO code",
+            counterpartyAccount: "optional",
+            narration: "optional",
+          },
+        },
+        400,
+      );
+    }
+    const keys = ["externalId", "customerRef", "occurredAt", "amount", "currency", "direction", "channel", "counterpartyName", "counterpartyCountry", "counterpartyAccount", "narration"] as const;
+    const transactions = (list as Array<Record<string, unknown>>).map((item) => Object.fromEntries(keys.filter((key) => item[key] !== undefined && item[key] !== null).map((key) => [key, item[key]])));
+    const result = await ctx.runMutation((internal as any).transactions._ingestFromApi, { clientId: auth.clientId, apiKeyId: auth.apiKeyId, environment: auth.environment, transactions });
+    return json(result, 202);
+  }),
+});
+
 // ── IDP: document verification ─────────────────────────────────────────────
 // POST /v1/verify/document: an identity document or a proof of address,
 // verified by Claude vision, AWS Textract OCR and forensic checks.

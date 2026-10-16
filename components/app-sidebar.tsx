@@ -25,6 +25,7 @@ import {
 	ClipboardCheck,
 	Flag,
 	Gauge,
+	ArrowLeftRight,
 	CreditCard,
 	FileBarChart,
 	Fingerprint,
@@ -55,6 +56,7 @@ const getMainItems = () => [
 	{ title: "Reviews", url: "/reviews", icon: ClipboardCheck },
 	{ title: "Disputes", url: "/disputes", icon: Flag },
 	{ title: "Customer risk", url: "/customers", icon: Gauge },
+	{ title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
 ];
 
 const developerItems = [
