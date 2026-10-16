@@ -26,14 +26,15 @@ test("AML report page: every finished screening links to it, with PDF, CSV and J
 
   const report = read("app/(platform)/aml-check/[id]/aml-report.tsx");
   assert.match(report, /useAuthedQuery\(anyApi\.amlReport\.forClient, \{ verificationId \}\)/);
-  assert.match(report, /onClick=\{\(\) => window\.print\(\)\}/);
+  assert.match(report, /downloadAmlReportPdf\(report\)/, "a real PDF, with printing as the fallback");
   assert.match(report, /\$\{fileBase\}-matches\.csv/);
   assert.match(report, /\$\{fileBase\}\.json/);
   for (const section of ["Risk summary", "Subject screened", "Findings", "Review", "Sources screened", "Method and definitions"]) {
     assert.match(report, new RegExp(`title="${section}"`), section);
   }
+  const content = read("components/reports/aml-report-content.ts");
   for (const category of ["sanctions", "pep", "special_interest", "fitness_probity", "adverse_media", "insolvency"]) {
-    assert.match(report, new RegExp(`  ${category}:\\s*\\n?\\s*"`), `next steps for ${category}`);
+    assert.match(content, new RegExp(`  ${category}:\\s*\\n?\\s*"`), `next steps for ${category}`);
   }
   assert.match(report, /print:hidden/, "buttons are left out of the PDF");
 });
