@@ -6,6 +6,7 @@ import { getActiveMembership } from "@/app/(platform)/_lib/active-client";
 import type { CurrentAccess } from "@/app/(platform)/_lib/active-client-constants";
 import { CreditUsageCard, type CreditSummary } from "./_components/credit-usage-card";
 import { StatsGrid } from "./_components/stats-grid";
+import { DeepfakeTile } from "./_components/deepfake-tile";
 import { RecentVerificationsTable, type RecentVerification } from "./_components/recent-verifications-table";
 import { VerificationBreakdown } from "./_components/verification-breakdown";
 
@@ -16,6 +17,7 @@ type Overview = {
   avgCompletionTimeMs: number | null;
   pendingReview: number;
   activeApiKeys: number;
+  deepfakes?: { detected: number; checked: number };
   breakdown: { type: string; count: number; percentage: number }[];
   recent: RecentVerification[];
 };
@@ -97,6 +99,8 @@ export default async function DashboardPage() {
             pendingReview={overview.pendingReview}
             activeApiKeys={overview.activeApiKeys}
           />
+
+          {overview.deepfakes ? <DeepfakeTile detected={overview.deepfakes.detected} checked={overview.deepfakes.checked} /> : null}
 
           <div className="grid gap-6 lg:grid-cols-2">
             <VerificationBreakdown data={overview.breakdown} />

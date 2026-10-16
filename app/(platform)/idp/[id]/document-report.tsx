@@ -1,6 +1,8 @@
 "use client";
 
 import { FraudNetworkDetail } from "@/components/risk/fraud-network";
+import { DeepfakeShield } from "@/components/risk/deepfake-shield";
+import { deepfakeShield } from "@/backend/convex/lib/deepfakeShield";
 import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
 import Link from "next/link";
 import { anyApi } from "convex/server";
@@ -307,6 +309,11 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
           {input.externalRef ? ` · your reference ${input.externalRef}` : ""}
         </p>
       </header>
+
+      {(() => {
+        const shield = verification.status === "completed" ? deepfakeShield("document", result) : null;
+        return shield ? <DeepfakeShield summary={shield} /> : null;
+      })()}
 
       {result.checks?.length ? (
         <Section title="Checks" hint="Every check that ran on this document.">

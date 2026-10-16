@@ -1,3 +1,5 @@
+import { deepfakeShield } from "@/backend/convex/lib/deepfakeShield";
+import { shieldSection } from "./deepfake-shield-section";
 import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
 import { FRAUD_NETWORK_HEADING, FRAUD_NETWORK_HINT, fraudNetworkRows } from "./fraud-network-rows";
 import { checkLabel, checkTone, dateTime, REVIEW_SIGNATURES, type ReportBlock, type ReportSection, type ReportSpec } from "./report-spec";
@@ -115,6 +117,8 @@ export function documentReportSpec(report: DocumentReportData): ReportSpec {
 
   const sections: ReportSection[] = [];
   if (aiFlags.length) sections.push({ heading: "Warning", blocks: [{ kind: "callout", tone: "red", label: "AI-generated document suspected", text: aiFlags.map((flag) => flag.message).join(" ") }] });
+  const shield = verification.status === "completed" ? deepfakeShield("document", result) : null;
+  if (shield) sections.push(shieldSection(shield));
   if (result.checks?.length) {
     sections.push({
       heading: "Checks",

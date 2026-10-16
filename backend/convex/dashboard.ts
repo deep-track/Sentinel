@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { isInternalAdmin } from "./lib/rbac";
+import { deepfakeShield } from "./lib/deepfakeShield";
 import { currentAccessResult, loadCurrentAccess } from "./lib/access";
 
 // Read caps so the dashboard stays within Convex query limits as data grows.
@@ -16,6 +17,9 @@ const dashboardResult = v.object({
   avgCompletionTimeMs: v.union(v.number(), v.null()),
   pendingReview: v.number(),
   activeApiKeys: v.number(),
+  // Deepfake shield (lib/deepfakeShield.ts): checks in the window where a
+  // deepfake or AI forgery was detected, and how many were checked at all.
+  deepfakes: v.optional(v.object({ detected: v.number(), checked: v.number() })),
   breakdown: v.array(
     v.object({
       type: v.string(),
@@ -147,8 +151,12 @@ export const overview = query({
           );
     const activeApiKeys = keyGroups.flat().filter((key) => !key.revoked).length;
 
+    const shields = rows.filter((row) => row.status === "completed").map((row) => deepfakeShield(row.type, row.result)).filter((shield) => shield && shield.status !== "not_checked");
+    const deepfakes = { detected: shields.filter((shield) => shield!.status === "detected").length, checked: shields.length };
+
     return {
       total: rows.length,
+      deepfakes,
       avgCompletionTimeMs,
       pendingReview: rows.filter((row) => row.verdict === "review").length,
       activeApiKeys,
