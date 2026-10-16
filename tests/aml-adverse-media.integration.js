@@ -213,7 +213,7 @@ test("screening many: disabled, not configured, isolated failures, GDELT spacing
 
 test("adverse media wiring: stricter verdict only, coverage reported, monitoring keeps hits through outages", () => {
   const aml = read("backend/convex/aml.ts");
-  assert.match(aml, /const verdict = mediaHits\.length > 0 && decision\.verdict === "pass" \? "review" : decision\.verdict;/);
+  assert.match(aml, /const verdict = \(mediaHits\.length > 0 \|\| pepMatches\.length > 0\) && decision\.verdict === "pass" \? "review" : decision\.verdict;/);
   assert.match(aml, /adverseMedia: adverseMedia\.status,/);
   assert.match(aml, /process\.env\.ADVERSE_MEDIA_PROVIDER\?\.trim\(\)\.toLowerCase\(\) \|\| WEB_SEARCH_PROVIDER/, "web search is the default");
   assert.match(aml, /provider: providerName === "none" \? null : providerName === "gdelt" \? gdeltProvider\(\) : WEB_SEARCH_PROVIDER/);

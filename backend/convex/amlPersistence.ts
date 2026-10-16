@@ -197,7 +197,7 @@ const completeArgs = {
       // Only set for Sentinel-owned watchlist matches.
       entryId: v.optional(v.id("watchlistEntries")),
       versionId: v.optional(v.id("watchlistVersions")),
-      source: v.union(sourceKeyValidator, v.literal("OPENSANCTIONS"), v.literal("ADVERSE_MEDIA")),
+      source: v.union(sourceKeyValidator, v.literal("OPENSANCTIONS"), v.literal("ADVERSE_MEDIA"), v.literal("KE_PEP")),
       sourceRecordId: v.string(),
       entityName: v.string(),
       program: v.string(),

@@ -542,9 +542,10 @@ export function parseJsonArticles(text: string): WebSearchArticle[] | null {
 // Kenya Gazette and court records (insolvency, winding-up, receivership,
 // judgments), the financial regulators' enforcement and fit-and-proper
 // notices, procurement debarment and the anti-corruption commission.
+// kenyalaw.org isn't searched: its robots.txt blocks AI crawlers and its
+// terms of use require following it (Kenya Gazette data comes in through
+// the PEP register's uploads instead).
 export const KENYA_RECORD_DOMAINS = [
-  "kenyalaw.org",
-  "new.kenyalaw.org",
   "judiciary.go.ke",
   "centralbank.go.ke",
   "cma.or.ke",
@@ -557,7 +558,7 @@ export const KENYA_RECORD_DOMAINS = [
   "brs.go.ke",
 ];
 
-const KENYA_RECORDS_FOCUS = `This search is limited to Kenyan official sources. Look for the subject in: Kenya Gazette notices (bankruptcy, insolvency, winding-up, receivership, administration, liquidation, deregistration, disqualified directors), court judgments and rulings (kenyalaw.org, judiciary.go.ke), enforcement actions, licence revocations, fit-and-proper rejections and warnings by the Central Bank of Kenya, Capital Markets Authority, Insurance Regulatory Authority, SASRA and RBA, the Financial Reporting Centre, PPRA debarment lists, and the Ethics and Anti-Corruption Commission. Classify gazette insolvency notices as insolvency and regulator actions as regulatory_action.`;
+const KENYA_RECORDS_FOCUS = `This search is limited to Kenyan official sources. Look for the subject in: court judgments, rulings and cause lists (judiciary.go.ke), business registration notices (brs.go.ke), enforcement actions, licence revocations, fit-and-proper rejections and warnings by the Central Bank of Kenya, Capital Markets Authority, Insurance Regulatory Authority, SASRA and RBA, the Financial Reporting Centre, PPRA debarment lists, and the Ethics and Anti-Corruption Commission. Classify gazette insolvency notices as insolvency and regulator actions as regulatory_action.`;
 
 export function isKenyanSubject(subject: Pick<AdverseMediaSubject, "country" | "nationality" | "jurisdiction">): boolean {
   return [subject.country, subject.nationality, subject.jurisdiction].some((value) => typeof value === "string" && /^(ke|ken|kenya)$/i.test(value.trim()));
