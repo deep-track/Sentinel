@@ -163,6 +163,8 @@ export default defineSchema({
     signupSource: v.optional(v.literal("self_service")),
     signupOwner: v.optional(v.string()),
     signupDomain: v.optional(v.string()),
+    // The invented "Demo Bank Ltd" (demoSeed.ts) for the manual and videos.
+    isDemo: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_signup_owner", ["signupOwner"])
