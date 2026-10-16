@@ -51,8 +51,7 @@ const OUTLINE = {
   ],
 };
 
-// Manuals written so far; each manual's PR adds its letter.
-const WRITTEN = ["b", "a", "c"];
+const WRITTEN = Object.keys(OUTLINE);
 
 const SECTIONS = ["What it's for", "Who can use it", "Step by step", "What each result means", "Common questions", "Related chapters"];
 const ALL_IDS = new Set(Object.entries(OUTLINE).flatMap(([manual, titles]) => titles.map((_, i) => `${manual}${i + 1}`)));
@@ -119,4 +118,15 @@ test("Help is in the sidebar and client routes never serve Manual D", () => {
     assert.doesNotMatch(source, /"d"/, page);
   }
   assert.match(read("next.config.ts"), /"\/help\/\*": \["\.\/content\/help\/\{a,b,c\}\/\*\*\/\*"\]/);
+});
+
+test("Manual D is served only inside the Back Office", () => {
+  assert.match(read("backend/lib/help.ts"), /export const INTERNAL_MANUALS: ManualId\[\] = \["d"\];/);
+  for (const page of ["app/internal-ops/help/page.tsx", "app/internal-ops/help/[chapter]/page.tsx"]) {
+    assert.match(read(page), /INTERNAL_MANUALS/, page);
+  }
+  assert.match(read("app/internal-ops/ops-nav.tsx"), /\{ title: "Runbook", url: "\/internal-ops\/help", icon: BookOpen \}/);
+  assert.match(read("next.config.ts"), /"\/internal-ops\/help\/\*": \["\.\/content\/help\/d\/\*\*\/\*"\]/);
+  // The Back Office layout is what keeps the runbook internal.
+  assert.match(read("app/internal-ops/layout.tsx"), /if \(!isInternalOpsRole\(user\.role\)\) redirect\("\/dashboard"\);/);
 });

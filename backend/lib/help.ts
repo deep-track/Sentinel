@@ -21,6 +21,7 @@ export const MANUALS: Record<ManualId, { letter: string; title: string; audience
 };
 
 export const CLIENT_MANUALS: ManualId[] = ["a", "b", "c"];
+export const INTERNAL_MANUALS: ManualId[] = ["d"];
 
 export type ChapterMeta = {
   id: string;

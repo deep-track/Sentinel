@@ -86,6 +86,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/help": ["./content/help/{a,b,c}/**/*"],
     "/help/*": ["./content/help/{a,b,c}/**/*"],
+    "/internal-ops/help": ["./content/help/d/**/*"],
+    "/internal-ops/help/*": ["./content/help/d/**/*"],
   },
   images: {
     remotePatterns: [

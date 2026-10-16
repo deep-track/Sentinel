@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowLeft, Building2, ClipboardCheck, FileCheck2, FlaskConical, Gauge, HeartPulse, Landmark, ListX, Radar, Receipt, ShieldAlert, ShieldX, type LucideIcon } from "lucide-react";
+import { Activity, ArrowLeft, BookOpen, Building2, ClipboardCheck, FileCheck2, FlaskConical, Gauge, HeartPulse, Landmark, ListX, Radar, Receipt, ShieldAlert, ShieldX, type LucideIcon } from "lucide-react";
 import { cn } from "@/backend/lib/utils";
 
 type NavItem = { title: string; url: string; icon: LucideIcon };
@@ -15,6 +15,7 @@ const SECTIONS: Array<{ label: string; items: NavItem[] }> = [
       { title: "Overview", url: "/internal-ops/overview", icon: Radar },
       { title: "Service health", url: "/internal-ops/health", icon: Activity },
       { title: "Revenue & billing", url: "/internal-ops/billing", icon: Receipt },
+      { title: "Runbook", url: "/internal-ops/help", icon: BookOpen },
     ],
   },
   {
