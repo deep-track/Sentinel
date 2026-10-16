@@ -40,4 +40,5 @@ test("wiring: internal only, the key from Convex env, timestamps endpoint, audio
   assert.match(source, /process\.env\.ELEVENLABS_API_KEY/);
   assert.match(source, /\/with-timestamps\?output_format=mp3_44100_128/);
   assert.match(source, /ctx\.storage\.store\(new Blob/);
+  assert.match(source, /\/v1\/shared-voices\?/, "the Voice Library search");
 });
