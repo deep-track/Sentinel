@@ -10,6 +10,8 @@ import { ReportPdfButton } from "@/components/reports/report-pdf-button";
 import { kycReportSpec } from "@/components/reports/kyc-report-spec";
 import { ClientDate } from "@/components/client-date";
 import { DisputeButton } from "@/components/disputes/dispute-button";
+import { DeepfakeShield } from "@/components/risk/deepfake-shield";
+import { deepfakeShield } from "@/backend/convex/lib/deepfakeShield";
 import { FraudNetworkDetail } from "@/components/risk/fraud-network";
 import { describeFaceMatch } from "@/backend/convex/lib/faceMatch";
 
@@ -270,6 +272,11 @@ export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
                 View review status →
               </Link>
             ) : null}
+
+            {(() => {
+              const shield = deepfakeShield("idp", record.result);
+              return shield ? <DeepfakeShield summary={shield} /> : null;
+            })()}
 
             {/* Verification report — what was actually checked, and why */}
             <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">

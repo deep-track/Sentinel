@@ -1,3 +1,5 @@
+import { deepfakeShield } from "@/backend/convex/lib/deepfakeShield";
+import { shieldSection } from "./deepfake-shield-section";
 import { describeFaceMatch } from "@/backend/convex/lib/faceMatch";
 import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
 import { FRAUD_NETWORK_HEADING, FRAUD_NETWORK_HINT, fraudNetworkRows } from "./fraud-network-rows";
@@ -115,6 +117,10 @@ export function kycReportSpec(record: KycRecord, organization: string | null = n
       ["Checks passed", `${steps.filter((step) => step.tone === "green").length} of ${steps.length}`],
     ],
     sections: [
+      ...(() => {
+        const shield = deepfakeShield("idp", result);
+        return shield ? [shieldSection(shield)] : [];
+      })(),
       {
         heading: "Person verified",
         blocks: [
