@@ -11,6 +11,7 @@ import { withoutMedia } from "./verifications";
 import { recordClearedMatches } from "./amlCleared";
 import { notify } from "./notifications";
 import { rateAmlScreening, rateKyb } from "./riskRatings";
+import { recordFraudOutcome } from "./fraudNetwork";
 
 // ─────────────────────────────────────────────────────────
 // Section 11.2 (engineering doc) — authoritative per Brian's directive
@@ -333,6 +334,10 @@ export async function resolveReviewItem(
     if (verification.type === "aml") await rateAmlScreening(ctx, verification._id, { cleared: true });
     if (verification.type === "kyb") await rateKyb(ctx, verification._id, [], { cleared: true });
   }
+
+  // The fraud network remembers the outcome: a rejection for fraud flags the
+  // identifiers in later checks.
+  await recordFraudOutcome(ctx, verification, finalVerdict, client?.reasonCode ?? null);
 
   // A client dispute: tell the client's team what DeepTrack decided.
   if (reviewRow.triggerType === "client_dispute") {

@@ -1,3 +1,4 @@
+import { FRAUD_NETWORK_HEADING, FRAUD_NETWORK_HINT, fraudNetworkRows } from "./fraud-network-rows";
 import { PEP_CLASS_LABELS, RISK_CATEGORIES, RISK_CATEGORY_LABELS } from "@/backend/convex/lib/amlCategories";
 import { topics as TOPIC_LABELS } from "@/backend/lib/topics";
 import {
@@ -121,6 +122,10 @@ export async function buildAmlReportPdf(report: Report, logo: Uint8Array | Array
       ["Periodic review", rating.reviewMonths === null ? "Exit or don't onboard (confirmed sanctions match)" : `Every ${rating.reviewMonths} months`],
       ...rating.factors.map((factor) => [`${factor.factor} (+${factor.points})`, factor.detail] as [string, unknown]),
     ]);
+  }
+  if (result.fraudNetwork) {
+    pdf.heading(FRAUD_NETWORK_HEADING, FRAUD_NETWORK_HINT);
+    pdf.rows(fraudNetworkRows(result.fraudNetwork));
   }
 
   pdf.heading("Subject screened");

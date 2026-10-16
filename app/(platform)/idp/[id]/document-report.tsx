@@ -1,5 +1,7 @@
 "use client";
 
+import { FraudNetworkDetail } from "@/components/risk/fraud-network";
+import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
 import Link from "next/link";
 import { anyApi } from "convex/server";
 import { ChevronLeft, FileJson } from "lucide-react";
@@ -26,6 +28,7 @@ type Mrz = {
 };
 
 type Result = {
+  fraudNetwork?: NetworkSummary;
   reason?: string;
   riskScore?: number;
   sandbox?: boolean;
@@ -294,6 +297,12 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
           {result.checks.map((check) => (
             <CheckRow key={check.name} check={check} />
           ))}
+        </Section>
+      ) : null}
+
+      {result.fraudNetwork ? (
+        <Section title="Fraud network" hint="The document and ID numbers compared, as keyed fingerprints, with earlier checks for reuse by another person or in a fraud rejection.">
+          <FraudNetworkDetail summary={result.fraudNetwork} />
         </Section>
       ) : null}
 

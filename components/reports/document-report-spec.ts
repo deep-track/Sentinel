@@ -1,3 +1,5 @@
+import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
+import { FRAUD_NETWORK_HEADING, FRAUD_NETWORK_HINT, fraudNetworkRows } from "./fraud-network-rows";
 import { checkLabel, checkTone, dateTime, REVIEW_SIGNATURES, type ReportBlock, type ReportSection, type ReportSpec } from "./report-spec";
 import type { Tone } from "./pdf-document";
 
@@ -16,6 +18,7 @@ export type DocumentReportData = {
     completedAt?: number;
     input?: { documentKind?: string; pages?: number; expectedName?: string | null; expectedAddress?: string | null; expectedDateOfBirth?: string | null; externalRef?: string | null } | null;
     result?: {
+      fraudNetwork?: NetworkSummary;
       reason?: string;
       riskScore?: number;
       documentKind?: string;
@@ -242,6 +245,7 @@ export function documentReportSpec(report: DocumentReportData): ReportSpec {
       ]
     : [{ kind: "paragraph", text: verification.verdict === "pass" ? "No review was needed." : "No review item is recorded." }];
   if (verification.verdict && verification.verdict !== "pass") reviewBlocks.push(REVIEW_SIGNATURES);
+  if (result.fraudNetwork) sections.push({ heading: FRAUD_NETWORK_HEADING, hint: FRAUD_NETWORK_HINT, blocks: [{ kind: "rows", rows: fraudNetworkRows(result.fraudNetwork) }] });
   sections.push({ heading: "Review", blocks: reviewBlocks });
   sections.push({
     heading: "About this report",

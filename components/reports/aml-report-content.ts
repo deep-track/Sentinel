@@ -1,3 +1,4 @@
+import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
 import { PEP_CLASS_LABELS, RISK_CATEGORY_LABELS, type PepClass, type RiskCategory } from "@/backend/convex/lib/amlCategories";
 
 // Shared by the AML report page and its PDF (aml-report-pdf.ts): the
@@ -67,6 +68,7 @@ export type Report = {
       // Hits left out because they were cleared for this customer before.
       suppressedMatches?: Array<{ source: string; sourceRecordId: string; entityName: string; clearedAt: number; clearedByName: string | null; reasonCode: string | null }>;
       categories?: Partial<Record<RiskCategory, { hits: number; highestPepClass?: PepClass | null }>>;
+      fraudNetwork?: NetworkSummary;
       riskRating?: { score: number; level: "low" | "medium" | "high" | "prohibited"; factors: Array<{ factor: string; points: number; detail: string }>; reviewMonths: number | null; ratedAt?: number };
       coverage?: {
         checkedSources?: Array<{ sourceKey: string; fetchedAt: number; stale: boolean }>;

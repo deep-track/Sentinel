@@ -1,3 +1,5 @@
+import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
+import { FRAUD_NETWORK_HEADING, FRAUD_NETWORK_HINT, fraudNetworkRows } from "./fraud-network-rows";
 import { checkLabel, checkTone, dateTime, REVIEW_SIGNATURES, type ReportBlock, type ReportSection, type ReportSpec } from "./report-spec";
 import { maskId } from "./kyc-report-spec";
 import type { Tone } from "./pdf-document";
@@ -21,6 +23,7 @@ type KybResult = {
   };
   parties?: Array<{ name: string; role: string; verdict: string; complete: boolean; reason: string; hits: number; suppressed: number }>;
   riskRating?: { score: number; level: string; factors: Array<{ factor: string; points: number; detail: string }>; reviewMonths: number | null };
+  fraudNetwork?: NetworkSummary;
 };
 type Ownership = {
   thresholdPct: number;
@@ -180,6 +183,7 @@ export function kybReportSpec(record: KybRecord, directors: KybDirector[], count
       ],
     });
   }
+  if (data.fraudNetwork) sections.push({ heading: FRAUD_NETWORK_HEADING, hint: FRAUD_NETWORK_HINT, blocks: [{ kind: "rows", rows: fraudNetworkRows(data.fraudNetwork) }] });
   if (checks.length) sections.push({ heading: "Automated checks", blocks: checks });
   else if (data.reason) sections.push({ heading: "Automated checks", blocks: [{ kind: "paragraph", text: data.reason }] });
 

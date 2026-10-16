@@ -135,6 +135,9 @@ export const screeningSettingsValidator = v.object({
   rememberClearedMatches: v.optional(v.boolean()),
   // Claude reviews each AML hit and recommends a decision (aiHitReview.ts).
   aiHitReview: v.optional(v.boolean()),
+  // Take part in Sentinel's fraud network (fraudNetwork.ts): see identifier
+  // reuse across other participating clients, and share fingerprints.
+  shareFraudNetwork: v.optional(v.boolean()),
   // Periodic review of monitored customers, in months, by risk rating.
   reviewMonths: v.optional(v.object({ high: v.optional(v.number()), medium: v.optional(v.number()), low: v.optional(v.number()) })),
 });
@@ -298,6 +301,7 @@ export type ResolvedSettings = {
     acceptedPoaDocuments: string[] | null; // null = every recognised type
     rememberClearedMatches: boolean;
     aiHitReview: boolean;
+    shareFraudNetwork: boolean;
     reviewMonths: { high: number; medium: number; low: number };
   };
   notifications: {
@@ -358,6 +362,7 @@ export const DEFAULTS: ResolvedSettings = {
     acceptedPoaDocuments: null,
     rememberClearedMatches: true,
     aiHitReview: true,
+    shareFraudNetwork: false,
     reviewMonths: { high: 12, medium: 24, low: 36 },
   },
   notifications: {

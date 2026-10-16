@@ -982,6 +982,28 @@ kybDirectors: defineTable({
     .index("by_client_and_requested_at", ["clientId", "requestedAt"])
     .index("by_status", ["status"]),
 
+  // Sentinel's fraud network (fraudNetwork.ts): keyed fingerprints of the
+  // identifiers in each check. Never the identifier, name or date of birth.
+  fraudSignals: defineTable({
+    hash: v.string(), // HMAC of the identifier type and normalized value
+    kind: v.union(v.literal("id_number"), v.literal("document_number"), v.literal("phone"), v.literal("email")),
+    clientId: v.id("clients"),
+    verificationId: v.id("verifications"),
+    nameParts: v.array(v.string()), // HMACs of the canonical name parts
+    dob: v.optional(v.string()), // HMAC of the date of birth
+    outcome: v.union(v.literal("pass"), v.literal("review"), v.literal("reject"), v.literal("fraud")),
+    createdAt: v.number(),
+  })
+    .index("by_hash", ["hash"])
+    .index("by_verification", ["verificationId"]),
+
+  // The fraud network's HMAC key, generated once by Sentinel. One row.
+  fraudNetworkKeys: defineTable({
+    key: v.literal("default"),
+    secret: v.string(),
+    createdAt: v.number(),
+  }).index("by_key", ["key"]),
+
   // Country risk for customer risk ratings: the FATF lists, kept current by
   // DeepTrack after each plenary (riskRatings.ts). One row, key "default".
   riskSettings: defineTable({

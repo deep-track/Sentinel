@@ -1,3 +1,5 @@
+import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
+import { FRAUD_NETWORK_HEADING, FRAUD_NETWORK_HINT, fraudNetworkRows } from "./fraud-network-rows";
 import { checkTone, dateTime, REVIEW_SIGNATURES, type ReportBlock, type ReportSpec } from "./report-spec";
 import type { Tone } from "./pdf-document";
 
@@ -11,7 +13,7 @@ export type KycRecord = {
   status: string;
   verdict?: "pass" | "review" | "reject" | null;
   input: unknown;
-  result?: { liveness?: Step; docScan?: Step; iprs?: Step; aml?: Step } | null;
+  result?: { liveness?: Step; docScan?: Step; iprs?: Step; aml?: Step; fraudNetwork?: NetworkSummary } | null;
   failureReason?: string | null;
   disputeReason?: string | null;
   createdAt: number;
@@ -131,6 +133,7 @@ export function kycReportSpec(record: KycRecord, organization: string | null = n
           { kind: "table", headers: ["Step", "Result", "Detail"], rows: steps.map((step) => [step.name, step.result, step.detail]), widths: [0.26, 0.16, 0.58], toneColumn: 1, tones: steps.map((step) => step.tone) },
         ],
       },
+      ...(result?.fraudNetwork ? [{ heading: FRAUD_NETWORK_HEADING, hint: FRAUD_NETWORK_HINT, blocks: [{ kind: "rows", rows: fraudNetworkRows(result.fraudNetwork) } as ReportBlock] }] : []),
       ...(record.disputeReason ? [{ heading: "Dispute", blocks: [{ kind: "rows", rows: [["Reason given", record.disputeReason]] } as ReportBlock] }] : []),
       ...(record.verdict && record.verdict !== "pass" ? [{ heading: "Review", hint: "For the reviewer's decision.", blocks: [REVIEW_SIGNATURES] }] : []),
       {
