@@ -303,6 +303,7 @@ test("reconciliation settles final answers and waits on checkouts still open", (
   assert.equal(billing.reconcileDecision("abandoned", 2 * HOUR), "wait", "the customer may still come back");
   assert.equal(billing.reconcileDecision("abandoned", 25 * HOUR), "settle");
   assert.match(read("backend/convex/crons.ts"), /billing\.reconcilePayments/);
+});
 
 // ── Choosing a plan ─────────────────────────────────────────────────────────
 
