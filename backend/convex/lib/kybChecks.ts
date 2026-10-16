@@ -35,7 +35,14 @@ export type BusinessRegistrationFields = {
   jurisdiction: string | null;
   issuingAuthority: string | null;
   directors: string[];
+  // The date the document was issued or the search was done (a CR12's
+  // date), and the shareholders it lists.
+  documentDate: string | null;
+  shareholders: Array<{ name: string; shares: string | null }>;
 };
+
+// Kenyan banks accept a CR12 issued in the last 90 days.
+export const CR12_MAX_AGE_DAYS = 90;
 
 const BUSINESS_SCHEMA = {
   type: "object",
@@ -46,7 +53,7 @@ const BUSINESS_SCHEMA = {
     fields: {
       type: "object",
       additionalProperties: false,
-      required: ["documentType", "companyName", "registrationNumber", "incorporationDate", "jurisdiction", "issuingAuthority", "directors"],
+      required: ["documentType", "companyName", "registrationNumber", "incorporationDate", "jurisdiction", "issuingAuthority", "directors", "documentDate", "shareholders"],
       properties: {
         documentType: { type: "string", enum: [...BUSINESS_DOCUMENT_TYPES] },
         companyName: nullableString,
@@ -55,6 +62,11 @@ const BUSINESS_SCHEMA = {
         jurisdiction: nullableString,
         issuingAuthority: nullableString,
         directors: { type: "array", items: { type: "string" } },
+        documentDate: nullableString,
+        shareholders: {
+          type: "array",
+          items: { type: "object", additionalProperties: false, required: ["name", "shares"], properties: { name: { type: "string" }, shares: nullableString } },
+        },
       },
     },
     fraud: FRAUD_SCHEMA,
@@ -63,7 +75,7 @@ const BUSINESS_SCHEMA = {
 
 const BUSINESS_PROMPT = `${SHARED_RULES}
 
-The document should be a company registration document: a certificate of incorporation or registration, a business name certificate, or a CR12 (Kenya's official search showing directors and shareholders), or the equivalent from another country. Set isBusinessRegistrationDocument false if it is not. Extract the registered name exactly as printed, the registration or company number, the date of incorporation or registration, the jurisdiction (country), the issuing authority (e.g. Registrar of Companies, Business Registration Service), and the names of any directors or officers listed (empty list if none are listed).`;
+The document should be a company registration document: a certificate of incorporation or registration, a business name certificate, or a CR12 (Kenya's official search showing directors and shareholders), or the equivalent from another country. Set isBusinessRegistrationDocument false if it is not. Extract the registered name exactly as printed, the registration or company number, the date of incorporation or registration, the jurisdiction (country), the issuing authority (e.g. Registrar of Companies, Business Registration Service), and the names of any directors or officers listed (empty list if none are listed). documentDate is the date the document was issued or, for a CR12, the date of the search. shareholders are the shareholders listed with their shares as printed (e.g. "500 ordinary shares"), or an empty list if none are listed.`;
 
 export async function readBusinessRegistration(client: Anthropic, images: DocumentImage[]): Promise<VisionResult<BusinessRegistrationFields>> {
   const response = await client.beta.messages.parse({
@@ -88,7 +100,11 @@ export async function readBusinessRegistration(client: Anthropic, images: Docume
     flags.push({ code: "not_a_registration_document", severity: "critical", source: "vision", message: "The document is not a company registration document." });
   }
   return {
-    fields: { ...raw.fields, directors: raw.fields.directors.slice(0, 50).map((name) => name.slice(0, 200)) },
+    fields: {
+      ...raw.fields,
+      directors: raw.fields.directors.slice(0, 50).map((name) => name.slice(0, 200)),
+      shareholders: (raw.fields.shareholders ?? []).slice(0, 50).map((holder) => ({ name: holder.name.slice(0, 200), shares: holder.shares?.slice(0, 100) ?? null })),
+    },
     isExpectedDocument: raw.isBusinessRegistrationDocument,
     flags,
     signals: raw.fraud.signals,
@@ -143,6 +159,22 @@ export function certificateRules(
     flags.push({ code: "incorporation_date_in_future", severity: "critical", source: "rules", message: "The incorporation date is in the future." });
   }
 
+  // A CR12 is a snapshot of the register: it must be recent.
+  if (fields.documentType === "cr12") {
+    if (!isIsoDate(fields.documentDate)) {
+      flags.push({ code: "cr12_date_unreadable", severity: "medium", source: "rules", message: "The CR12's date couldn't be read, so how recent it is can't be checked." });
+      checks.push({ name: `CR12 issued in the last ${CR12_MAX_AGE_DAYS} days`, status: "failed", detail: "No date" });
+    } else {
+      const ageDays = Math.floor((now - Date.parse(`${fields.documentDate}T00:00:00Z`)) / 86_400_000);
+      if (ageDays < 0) {
+        flags.push({ code: "cr12_date_in_future", severity: "critical", source: "rules", message: "The CR12 is dated in the future." });
+      } else if (ageDays > CR12_MAX_AGE_DAYS) {
+        flags.push({ code: "cr12_out_of_date", severity: "medium", source: "rules", message: `The CR12 is ${ageDays} days old; ask for one from the last ${CR12_MAX_AGE_DAYS} days.` });
+      }
+      checks.push({ name: `CR12 issued in the last ${CR12_MAX_AGE_DAYS} days`, status: ageDays >= 0 && ageDays <= CR12_MAX_AGE_DAYS ? "passed" : "failed", detail: `${fields.documentDate} (${ageDays} days old)` });
+    }
+  }
+
   // A certificate that lists directors (e.g. a CR12) should list the ones
   // the client declared.
   if (fields.directors.length > 0) {
@@ -153,6 +185,28 @@ export function certificateRules(
     checks.push({ name: "Declared directors are on the document", status: missing.length ? "failed" : "passed", detail: `${declared.directors.length - missing.length}/${declared.directors.length} found` });
   }
   return { flags, checks, nameMatch };
+}
+
+// A CR12 against the live BRS register: shareholders on the CR12 but not on
+// the register point to a forged or altered CR12; ones on the register but
+// not on the CR12 to an old one.
+export function cr12AgainstRegistry(fields: BusinessRegistrationFields, registryShareholders: string[]): { flags: FraudFlag[]; checks: CertificateCheck[] } {
+  if (fields.documentType !== "cr12" || !fields.shareholders.length || !registryShareholders.length) return { flags: [], checks: [] };
+  const listed = (name: string, names: string[]) => names.some((other) => nameMatchScore(normalizeCompanyName(name), normalizeCompanyName(other)) >= 0.67);
+  const cr12Names = fields.shareholders.map((holder) => holder.name);
+  const notOnRegister = cr12Names.filter((name) => !listed(name, registryShareholders));
+  const notOnCr12 = registryShareholders.filter((name) => !listed(name, cr12Names));
+  const flags: FraudFlag[] = [];
+  if (notOnRegister.length) {
+    flags.push({ code: "cr12_shareholder_not_on_register", severity: "high", source: "rules", message: `On the CR12 but not on the BRS register: ${notOnRegister.slice(0, 5).join(", ")}.` });
+  }
+  if (notOnCr12.length) {
+    flags.push({ code: "cr12_missing_shareholder", severity: "medium", source: "rules", message: `On the BRS register but not on the CR12 (it may be out of date): ${notOnCr12.slice(0, 5).join(", ")}.` });
+  }
+  return {
+    flags,
+    checks: [{ name: "CR12 shareholders match the BRS register", status: flags.length ? "failed" : "passed", detail: `${cr12Names.length - notOnRegister.length}/${cr12Names.length} on the register` }],
+  };
 }
 
 export type PartyOutcome = { name: string; role: "business" | "director" | "ubo" | "shareholder"; verdict: "pass" | "review" | "reject"; complete: boolean; reason: string };

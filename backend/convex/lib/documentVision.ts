@@ -5,11 +5,11 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { betaJSONSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/beta/json-schema";
-import { POA_DOCUMENT_TYPES, type FraudFlag, type IdentityFields, type PoaFields } from "./documentChecks";
+import { POA_DOCUMENT_TYPES, type FraudFlag, type IdentityFields, type KraPinFields, type PoaFields } from "./documentChecks";
 
 export const DOCUMENT_VISION_MODEL = "claude-opus-5-5";
 
-export type DocumentKind = "identity" | "proof_of_address";
+export type DocumentKind = "identity" | "proof_of_address" | "kra_pin";
 
 export type DocumentImage = { mediaType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf"; base64: string; side: "front" | "back" };
 
@@ -97,7 +97,7 @@ const IDENTITY_SCHEMA = {
       required: [
         "documentType", "issuingCountry", "documentNumber", "surname", "givenNames", "fullName", "dateOfBirth", "sex",
         "nationality", "placeOfBirth", "issueDate", "expiryDate", "issuingAuthority", "address", "personalNumber",
-        "mrzLines", "hasFacePhoto", "hasSignature",
+        "serialNumber", "kenyanIdType", "mrzLines", "hasFacePhoto", "hasSignature",
       ],
       properties: {
         documentType: { type: "string", enum: ["passport", "national_id", "drivers_licence", "residence_permit", "other"] },
@@ -115,6 +115,8 @@ const IDENTITY_SCHEMA = {
         issuingAuthority: nullableString,
         address: nullableString,
         personalNumber: nullableString,
+        serialNumber: nullableString,
+        kenyanIdType: { anyOf: [{ type: "string", enum: ["maisha_card", "second_generation"] }, { type: "null" }] },
         mrzLines: { type: "array", items: { type: "string" } },
         hasFacePhoto: { type: "boolean" },
         hasSignature: { type: "boolean" },
@@ -146,6 +148,29 @@ const POA_SCHEMA = {
   },
 } as const;
 
+const KRA_PIN_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["fields", "fraud"],
+  properties: {
+    fields: {
+      type: "object",
+      additionalProperties: false,
+      required: ["pin", "taxpayerName", "taxpayerType", "email", "certificateDate", "obligations", "issuedByKra"],
+      properties: {
+        pin: nullableString,
+        taxpayerName: nullableString,
+        taxpayerType: { anyOf: [{ type: "string", enum: ["individual", "non_individual"] }, { type: "null" }] },
+        email: nullableString,
+        certificateDate: nullableString,
+        obligations: { type: "array", items: { type: "string" } },
+        issuedByKra: { type: "boolean" },
+      },
+    },
+    fraud: FRAUD_SCHEMA,
+  },
+} as const;
+
 export const SHARED_RULES = `You work for a regulated identity-verification provider. Read the document exactly as printed. Never guess or fill in a value you cannot read: use null. Dates must be YYYY-MM-DD; convert from the document's format and say null if the day or month is ambiguous. Countries are ISO 3166-1 alpha-3 codes when you can tell them.
 
 Then examine the document as a forensic document examiner and report fraud signals only where you see concrete evidence, with the evidence in one sentence:
@@ -159,11 +184,20 @@ Report nothing when the document looks genuine; an empty list is the expected an
 
 const IDENTITY_PROMPT = `${SHARED_RULES}
 
-The document should be an identity document (passport, national ID card, driver's licence or residence permit). Set isIdentityDocument false if it is not. Extract every field. mrzLines are the machine-readable zone lines exactly as printed, with every < character, or an empty list if there is no MRZ. hasFacePhoto and hasSignature say whether the holder's photo and signature are on the document. address is the holder's address if printed.`;
+The document should be an identity document (passport, national ID card, driver's licence or residence permit). Set isIdentityDocument false if it is not. Extract every field. mrzLines are the machine-readable zone lines exactly as printed, with every < character, or an empty list if there is no MRZ. hasFacePhoto and hasSignature say whether the holder's photo and signature are on the document. address is the holder's address if printed.
+
+Kenyan national ID cards (issuingCountry KEN):
+- The second-generation card (green and white, "JAMHURI YA KENYA / REPUBLIC OF KENYA", issued until 2023): documentNumber is the printed ID NUMBER; serialNumber is the printed SERIAL NUMBER; it has no expiry date (expiryDate null); the back carries a machine-readable zone. kenyanIdType "second_generation".
+- The Maisha card (issued from 2023): documentNumber is the card number as printed; personalNumber is the Maisha Namba (the person's unique number) if printed separately; it has an expiry date. kenyanIdType "maisha_card".
+For any other document kenyanIdType is null and serialNumber is null unless a separate card serial number is printed.`;
 
 const POA_PROMPT = `${SHARED_RULES}
 
 The document should be a proof of address: a utility bill, bank or card statement, salary slip, tax or government letter, rental agreement or similar, issued by an organisation to the holder. Extract the document type, the issuing organisation, the account holder's name, their full postal address as printed, the issue or statement date, and any account or reference number.`;
+
+const KRA_PIN_PROMPT = `${SHARED_RULES}
+
+The document should be a KRA PIN certificate issued by the Kenya Revenue Authority (iTax). issuedByKra says whether it is one. Extract the Personal Identification Number (PIN) exactly as printed, the taxpayer's name, whether the taxpayer is an individual or a non-individual (company, partnership, trust or other), the email address on the certificate, the certificate date, and the tax obligations listed (e.g. Income Tax - Resident Individual, VAT, PAYE).`;
 
 export type VisionResult<F> = {
   fields: F;
@@ -206,7 +240,7 @@ async function readDocument<T>(
   kind: DocumentKind,
   images: DocumentImage[],
 ): Promise<T> {
-  const schema = kind === "identity" ? IDENTITY_SCHEMA : POA_SCHEMA;
+  const schema = kind === "identity" ? IDENTITY_SCHEMA : kind === "kra_pin" ? KRA_PIN_SCHEMA : POA_SCHEMA;
   const response = await client.beta.messages.parse({
     model: DOCUMENT_VISION_MODEL,
     max_tokens: 16000,
@@ -214,7 +248,7 @@ async function readDocument<T>(
     output_config: { effort: "medium", format: betaJSONSchemaOutputFormat(schema) },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
-    system: kind === "identity" ? IDENTITY_PROMPT : POA_PROMPT,
+    system: kind === "identity" ? IDENTITY_PROMPT : kind === "kra_pin" ? KRA_PIN_PROMPT : POA_PROMPT,
     messages: [
       {
         role: "user",
@@ -251,6 +285,18 @@ export async function readProofOfAddress(client: Anthropic, images: DocumentImag
   return {
     fields: raw.fields,
     isExpectedDocument: raw.fields.documentType !== "other",
+    flags: signalsToFlags(raw.fraud.signals),
+    signals: raw.fraud.signals,
+    summary: raw.fraud.summary.slice(0, 1000),
+    model: DOCUMENT_VISION_MODEL,
+  };
+}
+
+export async function readKraPinCertificate(client: Anthropic, images: DocumentImage[]): Promise<VisionResult<KraPinFields>> {
+  const raw = await readDocument<{ fields: KraPinFields; fraud: RawFraud }>(client, "kra_pin", images);
+  return {
+    fields: { ...raw.fields, obligations: raw.fields.obligations.slice(0, 20).map((item) => item.slice(0, 200)) },
+    isExpectedDocument: raw.fields.issuedByKra,
     flags: signalsToFlags(raw.fraud.signals),
     signals: raw.fraud.signals,
     summary: raw.fraud.summary.slice(0, 1000),

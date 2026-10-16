@@ -8,7 +8,7 @@ import { buildVerificationReference } from "./lib/crypto";
 import { assertCreditsForNewVerification, assertMediaSize, creditsForVerification } from "./lib/verificationTypes";
 import { chargeVerification } from "./lib/credits";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
-import { DEFAULT_POA_MAX_AGE_DAYS } from "./lib/documentChecks";
+import { DEFAULT_POA_MAX_AGE_DAYS, KRA_PIN_PATTERN } from "./lib/documentChecks";
 import { withoutMedia } from "./verifications";
 import { queueReview } from "./clientReviews";
 import { checkFraudNetwork } from "./fraudNetwork";
@@ -25,7 +25,7 @@ const internalApi: any = internal;
 export const MAX_TEXT_LENGTH = 300;
 export const MAX_POA_AGE_DAYS = 365;
 
-export const documentKindValidator = v.union(v.literal("identity"), v.literal("proof_of_address"));
+export const documentKindValidator = v.union(v.literal("identity"), v.literal("proof_of_address"), v.literal("kra_pin"));
 
 export const documentInputValidator = {
   documentKind: documentKindValidator,
@@ -36,6 +36,8 @@ export const documentInputValidator = {
   expectedName: v.optional(v.string()),
   expectedAddress: v.optional(v.string()),
   expectedDateOfBirth: v.optional(v.string()),
+  // KRA PIN certificate only: the PIN the customer declared.
+  expectedKraPin: v.optional(v.string()),
   // Proof of address only: the oldest acceptable issue date, in days.
   maxDocumentAgeDays: v.optional(v.number()),
   // The client's own reference for the document or customer.
@@ -46,12 +48,13 @@ export const documentInputValidator = {
 };
 
 export type DocumentInput = {
-  documentKind: "identity" | "proof_of_address";
+  documentKind: "identity" | "proof_of_address" | "kra_pin";
   documentFrontBase64: string;
   documentBackBase64?: string;
   expectedName?: string;
   expectedAddress?: string;
   expectedDateOfBirth?: string;
+  expectedKraPin?: string;
   maxDocumentAgeDays?: number;
   externalRef?: string;
   resized?: boolean;
@@ -75,7 +78,10 @@ export function normalizeDocumentInput(args: DocumentInput) {
   const documentFrontBase64 = stripDataUrl(args.documentFrontBase64);
   if (!documentFrontBase64) invalid("documentFrontBase64 is required.");
   const documentBackBase64 = args.documentBackBase64 ? stripDataUrl(args.documentBackBase64) : undefined;
-  if (args.documentKind === "proof_of_address" && documentBackBase64) invalid("Proof of address takes one document (documentFrontBase64).");
+  if (args.documentKind !== "identity" && documentBackBase64) invalid("This document type takes one file (documentFrontBase64).");
+  const expectedKraPin = text(args.expectedKraPin, "Expected KRA PIN")?.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (expectedKraPin && args.documentKind !== "kra_pin") invalid("expectedKraPin applies to KRA PIN certificates only.");
+  if (expectedKraPin && !KRA_PIN_PATTERN.test(expectedKraPin)) invalid("Expected KRA PIN must be a letter A or P, nine digits and a letter (e.g. A012345678Z).");
   assertMediaSize({ documentFrontBase64, documentBackBase64 });
   const expectedDateOfBirth = text(args.expectedDateOfBirth, "Expected date of birth");
   if (expectedDateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(expectedDateOfBirth)) invalid("Expected date of birth must be YYYY-MM-DD.");
@@ -94,6 +100,7 @@ export function normalizeDocumentInput(args: DocumentInput) {
       name: text(args.expectedName, "Expected name"),
       address: text(args.expectedAddress, "Expected address"),
       dateOfBirth: expectedDateOfBirth,
+      kraPin: expectedKraPin,
     },
     maxDocumentAgeDays: args.documentKind === "proof_of_address" ? maxDocumentAgeDays ?? DEFAULT_POA_MAX_AGE_DAYS : undefined,
     externalRef: text(args.externalRef, "External reference"),
@@ -134,6 +141,7 @@ async function createDocumentVerification(
       expectedName: input.expected.name ?? null,
       expectedAddress: input.expected.address ?? null,
       expectedDateOfBirth: input.expected.dateOfBirth ?? null,
+      ...(input.expected.kraPin ? { expectedKraPin: input.expected.kraPin } : {}),
       maxDocumentAgeDays: input.maxDocumentAgeDays ?? null,
       externalRef: input.externalRef ?? null,
       resized: input.resized,
@@ -151,6 +159,7 @@ async function createDocumentVerification(
     expectedName: input.expected.name,
     expectedAddress: input.expected.address,
     expectedDateOfBirth: input.expected.dateOfBirth,
+    ...(input.expected.kraPin ? { expectedKraPin: input.expected.kraPin } : {}),
     maxDocumentAgeDays: input.maxDocumentAgeDays,
     resized: input.resized,
   });

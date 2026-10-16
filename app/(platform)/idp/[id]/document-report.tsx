@@ -32,7 +32,7 @@ type Result = {
   reason?: string;
   riskScore?: number;
   sandbox?: boolean;
-  documentKind?: "identity" | "proof_of_address";
+  documentKind?: "identity" | "proof_of_address" | "kra_pin";
   flags?: Flag[];
   checks?: Check[];
   identity?: {
@@ -43,6 +43,10 @@ type Result = {
     isExpired: boolean | null;
     expectedNameMatch: number | null;
     expectedDateOfBirthMatch: boolean | null;
+  };
+  kraPin?: {
+    fields: { pin: string | null; taxpayerName: string | null; taxpayerType: "individual" | "non_individual" | null; email: string | null; certificateDate: string | null; obligations: string[]; issuedByKra: boolean };
+    nameMatch: number | null;
   };
   proofOfAddress?: {
     fields: { documentType: string; issuerName: string | null; holderName: string | null; address: string | null; issueDate: string | null; accountReference: string | null };
@@ -132,6 +136,8 @@ const IDENTITY_FIELDS: Array<[string, string]> = [
   ["expiryDate", "Expiry date"],
   ["issuingAuthority", "Issuing authority"],
   ["personalNumber", "Personal number"],
+  ["serialNumber", "Serial number"],
+  ["kenyanIdType", "Kenyan ID card"],
   ["address", "Address"],
 ];
 
@@ -162,9 +168,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+const KENYAN_ID_LABELS: Record<string, string> = { maisha_card: "Maisha card", second_generation: "Second-generation ID" };
+// Shown only when the document has them.
+const OPTIONAL_FIELDS = new Set(["serialNumber", "kenyanIdType"]);
+
 function value(raw: unknown, key?: string): React.ReactNode {
   if (raw === null || raw === undefined || raw === "") return <span className="text-slate-400">Not found</span>;
   if (key === "documentType") return DOCUMENT_TYPE_LABELS[String(raw)] ?? String(raw);
+  if (key === "kenyanIdType") return KENYAN_ID_LABELS[String(raw)] ?? String(raw);
   return String(raw);
 }
 
@@ -224,14 +235,18 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
   const identity = result.identity;
   const poa = result.proofOfAddress;
   const verdict = verdictLabel(verification);
-  const isIdentity = (result.documentKind ?? input.documentKind) !== "proof_of_address";
+  const kind = result.documentKind ?? input.documentKind;
+  const isIdentity = kind !== "proof_of_address" && kind !== "kra_pin";
+  const kra = result.kraPin;
+  const kindLabel = kind === "proof_of_address" ? "Proof of address" : kind === "kra_pin" ? "KRA PIN certificate" : "Identity document";
   const aiFlags = flags.filter((flag) => /ai_generat|c2pa_ai|visual_ai_generated/.test(flag.code));
   const title =
     (identity?.fields.fullName as string | undefined) ??
     ([identity?.fields.givenNames, identity?.fields.surname].filter(Boolean).join(" ") || undefined) ??
     poa?.fields.holderName ??
+    kra?.fields.taxpayerName ??
     input.expectedName ??
-    (isIdentity ? "Identity document" : "Proof of address");
+    kindLabel;
   const generatedAt = Date.now();
 
   return (
@@ -260,7 +275,7 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
 
       <header className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
         <p className="text-xs uppercase tracking-wide text-slate-500">
-          {isIdentity ? "Identity document report" : "Proof of address report"}
+          {`${kindLabel} report`}
           {clientName ? ` · ${clientName}` : ""}
         </p>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
@@ -328,7 +343,7 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
 
       {identity ? (
         <Section title="Extracted data" hint="As printed on the document.">
-          {IDENTITY_FIELDS.map(([key, label]) => (
+          {IDENTITY_FIELDS.filter(([key]) => !OPTIONAL_FIELDS.has(key) || identity.fields[key]).map(([key, label]) => (
             <Row key={key} label={label}>
               {value(identity.fields[key], key)}
             </Row>
@@ -358,6 +373,19 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
           <Row label="Check digits">
             {identity.mrz.checks.map((check) => `${check.name} ${check.valid ? "✓" : "✗"}`).join(" · ")}
           </Row>
+        </Section>
+      ) : null}
+
+      {kra ? (
+        <Section title="KRA PIN certificate" hint="Read from the certificate and checked against the KRA PIN format and the customer's details.">
+          <Row label="KRA PIN">{value(kra.fields.pin)}</Row>
+          <Row label="Taxpayer">{value(kra.fields.taxpayerName)}</Row>
+          <Row label="Taxpayer type">{kra.fields.taxpayerType === "individual" ? "Individual" : kra.fields.taxpayerType === "non_individual" ? "Company or other non-individual" : value(null)}</Row>
+          <Row label="Email on the certificate">{value(kra.fields.email)}</Row>
+          <Row label="Certificate date">{value(kra.fields.certificateDate)}</Row>
+          <Row label="Tax obligations">{kra.fields.obligations.length ? kra.fields.obligations.join("; ") : value(null)}</Row>
+          <Row label="Declared name">{input.expectedName ?? "Not provided"}</Row>
+          <Row label="Name match">{percent(kra.nameMatch)}</Row>
         </Section>
       ) : null}
 

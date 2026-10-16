@@ -32,6 +32,10 @@ export type DocumentReportData = {
         expectedNameMatch: number | null;
         expectedDateOfBirthMatch: boolean | null;
       };
+      kraPin?: {
+        fields: { pin: string | null; taxpayerName: string | null; taxpayerType: "individual" | "non_individual" | null; email: string | null; certificateDate: string | null; obligations: string[]; issuedByKra: boolean };
+        nameMatch: number | null;
+      };
       proofOfAddress?: {
         fields: { documentType: string; issuerName: string | null; holderName: string | null; address: string | null; issueDate: string | null; accountReference: string | null };
         nameMatch: number | null;
@@ -64,12 +68,18 @@ const IDENTITY_FIELDS: Array<[string, string]> = [
   ["issueDate", "Issue date"],
   ["expiryDate", "Expiry date"],
   ["issuingAuthority", "Issuing authority"],
+  ["serialNumber", "Serial number"],
+  ["kenyanIdType", "Kenyan ID card"],
   ["address", "Address"],
 ];
 
+const KENYAN_ID_LABELS: Record<string, string> = { maisha_card: "Maisha card", second_generation: "Second-generation ID" };
+// Shown only when the document has them.
+const OPTIONAL_FIELDS = new Set(["serialNumber", "kenyanIdType"]);
 const show = (value: unknown, key?: string): string => {
   if (value === null || value === undefined || value === "") return "Not found";
   if (key === "documentType") return DOCUMENT_TYPE_LABELS[String(value)] ?? String(value);
+  if (key === "kenyanIdType") return KENYAN_ID_LABELS[String(value)] ?? String(value);
   return String(value);
 };
 const percent = (score: number | null) => (score === null ? "Not checked" : `${Math.round(score * 100)}%`);
@@ -89,13 +99,17 @@ export function documentReportSpec(report: DocumentReportData): ReportSpec {
   const flags = result.flags ?? [];
   const identity = result.identity;
   const poa = result.proofOfAddress;
-  const isIdentity = (result.documentKind ?? input.documentKind) !== "proof_of_address";
+  const kind = result.documentKind ?? input.documentKind;
+  const isIdentity = kind !== "proof_of_address" && kind !== "kra_pin";
+  const kra = result.kraPin;
+  const kindLabel = kind === "proof_of_address" ? "Proof of address" : kind === "kra_pin" ? "KRA PIN certificate" : "Identity document";
   const subject =
     (identity?.fields.fullName as string | undefined) ??
     ([identity?.fields.givenNames, identity?.fields.surname].filter(Boolean).join(" ") || undefined) ??
     poa?.fields.holderName ??
+    kra?.fields.taxpayerName ??
     input.expectedName ??
-    (isIdentity ? "Identity document" : "Proof of address");
+    kindLabel;
   const aiFlags = flags.filter((flag) => /ai_generat|c2pa_ai|visual_ai_generated/.test(flag.code));
 
   const sections: ReportSection[] = [];
@@ -134,7 +148,7 @@ export function documentReportSpec(report: DocumentReportData): ReportSpec {
         {
           kind: "rows",
           rows: [
-            ...IDENTITY_FIELDS.map(([key, label]) => [label, show(identity.fields[key], key)] as [string, string]),
+            ...IDENTITY_FIELDS.filter(([key]) => !OPTIONAL_FIELDS.has(key) || identity.fields[key]).map(([key, label]) => [label, show(identity.fields[key], key)] as [string, string]),
             ["Age", identity.age === null ? "Not found" : `${identity.age} (${identity.isAdult ? "adult, 18+" : "under 18"})`],
             ["Holder photo", identity.fields.hasFacePhoto ? "Present" : "Not found"],
             ["Signature", identity.fields.hasSignature ? "Present" : "Not found"],
@@ -162,6 +176,27 @@ export function documentReportSpec(report: DocumentReportData): ReportSpec {
             ["Expiry date", show(mrz.expiryDate)],
             ["Nationality / issuer", `${mrz.nationality} / ${mrz.issuingCountry}`],
             ["Check digits", mrz.checks.map((check) => `${check.name} ${check.valid ? "valid" : "INVALID"}`).join(", ")],
+          ],
+        },
+      ],
+    });
+  }
+  if (kra) {
+    sections.push({
+      heading: "KRA PIN certificate",
+      hint: "Read from the certificate and checked against the KRA PIN format and the customer's details.",
+      blocks: [
+        {
+          kind: "rows",
+          rows: [
+            ["KRA PIN", show(kra.fields.pin)],
+            ["Taxpayer", show(kra.fields.taxpayerName)],
+            ["Taxpayer type", kra.fields.taxpayerType === "individual" ? "Individual" : kra.fields.taxpayerType === "non_individual" ? "Company or other non-individual" : "-"],
+            ["Email on the certificate", show(kra.fields.email)],
+            ["Certificate date", show(kra.fields.certificateDate)],
+            ["Tax obligations", kra.fields.obligations.length ? kra.fields.obligations.join("; ") : "-"],
+            ["Declared name", input.expectedName ?? "Not provided"],
+            ["Name match", percent(kra.nameMatch)],
           ],
         },
       ],
@@ -253,10 +288,10 @@ export function documentReportSpec(report: DocumentReportData): ReportSpec {
   });
 
   return {
-    title: isIdentity ? "Identity Document Report" : "Proof of Address Report",
+    title: kind === "kra_pin" ? "KRA PIN Certificate Report" : isIdentity ? "Identity Document Report" : "Proof of Address Report",
     reference: verification.reference,
     organization: clientName,
-    eyebrow: `${isIdentity ? "Identity document verification" : "Proof of address verification"}${clientName ? ` - ${clientName}` : ""}`,
+    eyebrow: `${kindLabel} verification${clientName ? ` - ${clientName}` : ""}`,
     subject,
     verdict: verdictOf(verification),
     summary: verification.failureReason ?? result.reason ?? null,
@@ -267,6 +302,6 @@ export function documentReportSpec(report: DocumentReportData): ReportSpec {
       ["Your reference", input.externalRef ?? "-"],
     ],
     sections,
-    fileName: `${isIdentity ? "ID-document" : "Proof-of-address"}-report-${verification.reference}.pdf`,
+    fileName: `${kind === "kra_pin" ? "KRA-PIN" : isIdentity ? "ID-document" : "Proof-of-address"}-report-${verification.reference}.pdf`,
   };
 }
