@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { anyApi } from "convex/server";
-import { ChevronLeft, Download, FileJson } from "lucide-react";
+import { ChevronLeft, FileJson } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
+import { ReportPdfButton } from "@/components/reports/report-pdf-button";
+import { documentReportSpec, type DocumentReportData } from "@/components/reports/document-report-spec";
 
 type Flag = { code: string; severity: "critical" | "high" | "medium" | "low"; source: "file" | "mrz" | "rules" | "vision" | "ocr"; message: string };
 type Check = { name: string; status: "passed" | "failed" | "not_applicable"; detail?: string };
@@ -236,9 +238,7 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
           <ChevronLeft className="h-4 w-4" /> Back to IDP
         </Link>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => window.print()}>
-            <Download className="mr-2 h-4 w-4" /> Download report (PDF)
-          </Button>
+          <ReportPdfButton spec={documentReportSpec(report as DocumentReportData)} />
           <Button
             type="button"
             variant="outline"

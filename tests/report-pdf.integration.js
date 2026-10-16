@@ -97,3 +97,91 @@ test("wiring: the report page downloads the PDF; browser printing is A4 portrait
   assert.match(read("app/globals.css"), /@page \{\s*size: A4 portrait;/);
   assert.doesNotMatch(read("components/reports/pdf-document.ts").replace(/signatureLines[\s\S]*?\n  \}/, ""), /drawRectangle|drawLine/, "no boxes or rules (only the signature lines)");
 });
+
+// ── KYC, KYB and document reports ───────────────────────────────────────────
+
+const { renderReportSpec } = load(path.join(root, "components/reports/report-spec.ts"));
+const { kycReportSpec } = load(path.join(root, "components/reports/kyc-report-spec.ts"));
+const { kybReportSpec } = load(path.join(root, "components/reports/kyb-report-spec.ts"));
+const { documentReportSpec } = load(path.join(root, "components/reports/document-report-spec.ts"));
+
+const allText = (spec) => JSON.stringify(spec);
+
+test("KYC report: steps with results, the ID number masked, review lines when held", async () => {
+  const spec = kycReportSpec({
+    reference: "ver_k",
+    status: "completed",
+    verdict: "review",
+    createdAt: t,
+    updatedAt: t,
+    completedAt: t + 5000,
+    input: { firstName: "Grace", lastName: "Achieng", dateOfBirth: "1991-05-14", gender: "female", idNumber: "29384756", documentFrontBase64: "AAAA" },
+    result: { docScan: { fakeScore: 0.6, flags: ["font_mismatch"], documentType: "National ID" }, iprs: { error: "upstream_timeout" }, aml: { status: "CLEAR", matches: [] } },
+  });
+  assert.equal(spec.title, "KYC Identity Report");
+  assert.equal(spec.subject, "Grace Achieng");
+  assert.deepEqual(spec.verdict, { label: "Needs review", tone: "amber" });
+  const steps = spec.sections.find((section) => section.heading === "Verification steps").blocks.find((block) => block.kind === "table");
+  assert.deepEqual(steps.rows.map((row) => row[1]), ["Failed", "Not run", "Error", "CLEAR"]);
+  assert.match(allText(spec), /\*\*\*\*4756/);
+  assert.doesNotMatch(allText(spec), /29384756|AAAA/, "no full ID number or images in the report");
+  assert.ok(spec.sections.some((section) => section.heading === "Review"));
+  const doc = await PDFDocument.load(await renderReportSpec(spec, logo, t));
+  assert.equal(doc.getTitle(), "KYC Identity Report ver_k");
+});
+
+test("KYB report: the checks, the registry, every party's screening and the directors", async () => {
+  const spec = kybReportSpec(
+    {
+      reference: "ver_b",
+      status: "completed",
+      verdict: "pass",
+      createdAt: t,
+      updatedAt: t,
+      input: { businessName: "Savannah Logistics Limited", registrationNumber: "PVT-1" },
+      result: {
+        automated: true,
+        reason: "Business verified.",
+        certificate: { verdict: "pass", reason: "Matches.", checks: [{ name: "Registered name matches", status: "passed" }] },
+        registry: { verdict: "pass", reason: "Matches BRS.", record: { companyName: "SAVANNAH", kraPin: "P051234567X", shareholders: [{ name: "GRACE" }] } },
+        parties: [{ name: "Savannah", role: "business", verdict: "pass", complete: true, reason: "clear", hits: 0, suppressed: 0 }],
+      },
+    },
+    [{ firstName: "Grace", lastName: "Achieng", email: "g@s.co.ke", position: "director", shareholding: "50", idNumber: "28374651", status: "verified" }],
+    "Kenya",
+  );
+  assert.deepEqual(spec.verdict, { label: "Approved", tone: "green" });
+  const text = allText(spec);
+  for (const expected of ["Registration certificate: Passed", "Company registry (Kenya BRS): Passed", "P051234567X", "AML screening of the business and its people", "Directors and beneficial owners (1)", "****4651"]) {
+    assert.ok(text.includes(expected), expected);
+  }
+  assert.doesNotMatch(text, /28374651/);
+  assert.ok(!spec.sections.some((section) => section.heading === "Review"), "no signature lines on an approved business");
+  assert.ok((await PDFDocument.load(await renderReportSpec(spec, logo, t))).getPageCount() >= 1);
+});
+
+test("document report: identity and proof of address titles, findings by severity", async () => {
+  const base = { reference: "ver_d", status: "completed", verdict: "reject", createdAt: t, completedAt: t };
+  const identity = documentReportSpec({
+    clientName: "Acme",
+    review: null,
+    verification: { ...base, input: { documentKind: "identity" }, result: { riskScore: 92, flags: [{ code: "visual_ai_generated", severity: "critical", source: "vision", message: "Looks AI-generated." }], identity: { fields: { fullName: "JOHN DOE" }, mrz: null, age: null, isAdult: null, expectedNameMatch: null, expectedDateOfBirthMatch: null } } },
+  });
+  assert.equal(identity.title, "Identity Document Report");
+  assert.equal(identity.subject, "JOHN DOE");
+  assert.deepEqual(identity.verdict, { label: "Rejected", tone: "red" });
+  assert.equal(identity.sections[0].heading, "Warning", "an AI-generated document is called out first");
+  const findings = identity.sections.find((section) => section.heading === "Fraud and authenticity findings").blocks[0];
+  assert.deepEqual(findings.tones, ["red"]);
+  const poa = documentReportSpec({ clientName: null, review: null, verification: { ...base, verdict: "pass", input: { documentKind: "proof_of_address", expectedName: "Jane" }, result: { documentKind: "proof_of_address" } } });
+  assert.equal(poa.title, "Proof of Address Report");
+  assert.equal(poa.fileName, "Proof-of-address-report-ver_d.pdf");
+  assert.ok((await PDFDocument.load(await renderReportSpec(identity, logo, t))).getPageCount() >= 1);
+});
+
+test("wiring: KYC, KYB and document pages download the new PDFs", () => {
+  assert.match(read("app/(platform)/kyc/[id]/page.tsx"), /<ReportPdfButton spec=\{kycReportSpec\(record\)\} \/>/);
+  assert.match(read("app/(platform)/kyb/[id]/page.tsx"), /<ReportPdfButton spec=\{kybReportSpec\(verification, directors, country\)\} \/>/);
+  assert.match(read("app/(platform)/idp/[id]/document-report.tsx"), /<ReportPdfButton spec=\{documentReportSpec\(report as DocumentReportData\)\} \/>/);
+  assert.equal(fs.existsSync(path.join(root, "app/(platform)/kyc/[id]/report-actions.tsx")), false, "the old print button is gone");
+});

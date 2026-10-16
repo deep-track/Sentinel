@@ -6,7 +6,8 @@ import { ChevronLeft, CheckCircle2, XCircle, AlertTriangle } from "lucide-react"
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import type { KYCStatus } from "@/backend/lib/kyc-types";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
-import { DownloadReportButton } from "../[id]/report-actions";
+import { ReportPdfButton } from "@/components/reports/report-pdf-button";
+import { kycReportSpec } from "@/components/reports/kyc-report-spec";
 import { ClientDate } from "@/components/client-date";
 import { DisputeButton } from "@/components/disputes/dispute-button";
 
@@ -214,7 +215,7 @@ export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
               </div>
               <div className="flex items-center gap-3">
                 <KYCStatusBadge status={normalizeStatus(record)} size="lg" />
-                <DownloadReportButton />
+                <ReportPdfButton spec={kycReportSpec(record)} />
                 <DisputeButton verificationId={id} />
               </div>
             </div>
