@@ -157,7 +157,7 @@ test("Kenyan subjects: a second search limited to Kenyan official sources, merge
         parse: async (request) => {
           calls.push(request);
           return request.tools[0].allowed_domains
-            ? reply(["https://news.example/a", "https://new.kenyalaw.org/gazette/1"])
+            ? reply(["https://news.example/a", "https://www.judiciary.go.ke/judgment/1"])
             : reply(["https://news.example/a"]);
         },
       },
@@ -167,7 +167,8 @@ test("Kenyan subjects: a second search limited to Kenyan official sources, merge
   assert.equal(calls.length, 2);
   assert.equal(calls[0].tools[0].allowed_domains, undefined, "the news search is open");
   assert.deepEqual(calls[1].tools[0].allowed_domains, media.KENYA_RECORD_DOMAINS);
-  assert.match(calls[1].system, /Kenya Gazette/);
+  assert.match(calls[1].system, /judiciary\.go\.ke/);
+  assert.ok(!media.KENYA_RECORD_DOMAINS.some((domain) => domain.includes("kenyalaw")), "kenyalaw.org's robots.txt blocks AI crawlers");
   assert.equal(outcome.status, "screened");
   assert.equal(outcome.hits.length, 2, "the URL found by both searches counts once");
 

@@ -506,6 +506,7 @@ export default defineSchema({
       v.literal("FBI_MOST_WANTED"),
       v.literal("OPENSANCTIONS"),
       v.literal("ADVERSE_MEDIA"),
+      v.literal("KE_PEP"),
     ),
     program: v.string(),
     matchScore: v.number(), // 0-100
@@ -972,6 +973,43 @@ kybDirectors: defineTable({
   })
     .index("by_client_and_requested_at", ["clientId", "requestedAt"])
     .index("by_status", ["status"]),
+
+  // Sentinel's Kenyan PEP register (pepRegister.ts), curated by DeepTrack
+  // from Kenya Gazette notices, imports and manual entries.
+  pepRegister: defineTable({
+    fullName: v.string(),
+    aliases: v.array(v.string()),
+    position: v.string(),
+    organisation: v.optional(v.string()),
+    level: v.union(v.literal("national_executive"), v.literal("parliament"), v.literal("judiciary"), v.literal("constitutional_office"), v.literal("security"), v.literal("diplomatic"), v.literal("county_executive"), v.literal("county_government"), v.literal("state_corporation"), v.literal("political_party"), v.literal("family_associate")),
+    county: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    birthDate: v.optional(v.string()),
+    relatedTo: v.optional(v.string()),
+    source: v.union(v.literal("gazette"), v.literal("import"), v.literal("manual")),
+    sourceRef: v.optional(v.string()),
+    active: v.boolean(),
+    addedBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_active", ["active"])
+    .index("by_full_name", ["fullName"]),
+
+  // Kenya Gazette issues uploaded to the PEP register and what was found in
+  // them, waiting for DeepTrack to approve.
+  gazetteImports: defineTable({
+    label: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("reading"), v.literal("ready"), v.literal("failed"), v.literal("approved")),
+    proposals: v.optional(v.any()),
+    error: v.optional(v.string()),
+    uploadedBy: v.string(),
+    createdAt: v.number(),
+    approvedAt: v.optional(v.number()),
+    approvedCount: v.optional(v.number()),
+  }).index("by_created_at", ["createdAt"]),
 
   // Kenya BRS lookups through MetaMap, which may answer at the callback URL.
   // Only the SHA-256 of the callback token is stored.

@@ -52,6 +52,7 @@ const SOURCE_LABELS: Record<string, string> = {
   OPENSANCTIONS: "OpenSanctions",
   FBI_MOST_WANTED: "FBI Most Wanted",
   ADVERSE_MEDIA: "Adverse media",
+  KE_PEP: "Kenyan PEP register",
 };
 
 // Fixed order and colours so a list keeps its colour across weeks.

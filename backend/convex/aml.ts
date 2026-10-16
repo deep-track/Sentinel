@@ -31,6 +31,8 @@ import {
 import { MAX_EXTERNAL_REF_LENGTH, enrolMonitoredSubject } from "./lib/amlMonitoringStore";
 import { DEFAULTS, loadClientSettings, monitoringIntervalMs, type ScreeningRules } from "./lib/clientSettings";
 import { hitKey as clearedKey, stillCleared, subjectKeyFor } from "./lib/amlClearedMatches";
+import { isCurrent, matchPepEntry, PEP_LEVEL_CLASS, PEP_LEVEL_LABELS, type PepEntry, type PepMatch } from "./lib/kenyaPep";
+import { loadPepRegister } from "./pepRegister";
 import { clearedHitsFor } from "./amlCleared";
 import {
   OPENSANCTIONS_STRONG_MATCH_SCORE,
@@ -566,10 +568,37 @@ export function applyScreeningRules<C extends { nameScore: number; sourceKey: st
   return { ...result, suppressed };
 }
 
+// Register hits for one subject, under the client's match threshold and
+// cleared-hit memory (cleared ones are added to `suppressed`).
+function kenyanPepMatches(subject: ScreeningSubject, register: PepEntry[], rules: ScreeningRules | undefined, suppressed: SuppressedMatch[]): PepMatch[] {
+  if (subject.entityType !== "individual" || register.length === 0) return [];
+  const threshold = rules?.matchThreshold ?? DEFAULTS.screening.matchThreshold;
+  const cleared = new Map((rules?.cleared ?? []).map((hit) => [hit.key, hit]));
+  const matches: PepMatch[] = [];
+  for (const entry of register) {
+    const match = matchPepEntry({ name: subject.subjectName, dateOfBirth: subject.dateOfBirth }, entry);
+    if (!match || match.nameScore < threshold) continue;
+    const hit = cleared.get(clearedKey("KE_PEP", entry._id));
+    if (hit && stillCleared({ categories: ["pep"], pepClass: PEP_LEVEL_CLASS[entry.level], riskLevel: "high" }, hit)) {
+      suppressed.push({ source: "KE_PEP", sourceRecordId: entry._id, entityName: entry.fullName, clearedAt: hit.clearedAt, clearedByName: hit.clearedByName ?? null, reasonCode: hit.reasonCode ?? null });
+      continue;
+    }
+    matches.push(match);
+  }
+  return matches.sort((left, right) => right.nameScore - left.nameScore).slice(0, MATCH_LIMIT);
+}
+
 export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[], rules?: ScreeningRules[]): Promise<ScreeningOutcome[]> {
   // Both run alongside the local watchlist scan; neither rejects.
   const openSanctionsPromise = screenOpenSanctions(subjects);
   const adverseMediaPromise = screenAdverseMedia(subjects);
+  // Sentinel's Kenyan PEP register. Unavailable never blocks screening.
+  const pepRegisterPromise: Promise<PepEntry[]> = subjects.some((subject) => subject.entityType === "individual")
+    ? loadPepRegister(ctx).catch((error) => {
+        console.error("[aml] PEP register unavailable", error instanceof Error ? error.message.slice(0, 120) : "unknown");
+        return [];
+      })
+    : Promise.resolve([]);
   const coverage: Coverage = await ctx.runQuery(internalApi.amlPersistence.getActiveVersions, { now: Date.now() });
   const candidates: Array<Array<Candidate<Entry>>> = subjects.map(() => []);
   for (const version of coverage.versions) {
@@ -592,9 +621,11 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
   }
   const openSanctionsOutcomes = await openSanctionsPromise;
   const adverseMediaOutcomes = await adverseMediaPromise;
+  const pepRegister = await pepRegisterPromise;
 
   return subjects.map((_, index) => {
     const ruled = applyScreeningRules(candidates[index], openSanctionsOutcomes[index], adverseMediaOutcomes[index], rules?.[index]);
+    const pepMatches = kenyanPepMatches(subjects[index], pepRegister, rules?.[index], ruled.suppressed);
     const subjectCandidates = ruled.candidates.sort(compareCandidates);
     const openSanctions = ruled.openSanctions;
     // Decide on ALL candidates, then keep only the strongest for storage.
@@ -604,9 +635,16 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
     const adverseMedia = ruled.media;
     const mediaHits = adverseMedia.status === "screened" ? adverseMedia.hits.slice(0, MATCH_LIMIT) : [];
     const hasAnyMatch = stored.length > 0 || openSanctionsMatches.length > 0 || mediaHits.length > 0;
-    // Adverse media can only make a verdict stricter (pass → review).
-    const verdict = mediaHits.length > 0 && decision.verdict === "pass" ? "review" : decision.verdict;
-    const reason = mediaHits.length > 0 ? `${decision.reason} ${describeAdverseMedia(mediaHits)}` : decision.reason;
+    // Adverse media and Kenyan PEP hits can only make a verdict stricter
+    // (pass → review).
+    const verdict = (mediaHits.length > 0 || pepMatches.length > 0) && decision.verdict === "pass" ? "review" : decision.verdict;
+    const reason = [
+      decision.reason,
+      mediaHits.length > 0 ? describeAdverseMedia(mediaHits) : null,
+      pepMatches.length > 0 ? `Possible Kenyan PEP: ${pepMatches.slice(0, 3).map((match) => `${match.entry.fullName} (${match.entry.position})`).join("; ")}.` : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
     return {
       verdict,
       reason,
@@ -658,6 +696,23 @@ export async function screenSubjects(ctx: ActionCtx, subjects: ScreeningSubject[
           ...(match.birthDateMatch ? { birthDateMatch: match.birthDateMatch } : {}),
           ...(match.pepStatus ? { pepStatus: match.pepStatus } : {}),
           ...(match.pepPositions?.length ? { pepPositions: match.pepPositions.slice(0, 5) } : {}),
+        })),
+        ...pepMatches.map((match) => ({
+          source: "KE_PEP" as const,
+          sourceRecordId: match.entry._id,
+          entityName: match.entry.fullName,
+          program: [match.entry.position, match.entry.organisation, match.entry.county ? `${match.entry.county} County` : null].filter(Boolean).join(", "),
+          matchScore: match.nameScore,
+          matchMethod: match.method,
+          matchedCountry: "KE",
+          riskLevel: "high" as const,
+          categories: ["pep" as const],
+          pepClass: PEP_LEVEL_CLASS[match.entry.level],
+          pepStatus: isCurrent(match.entry) ? ("current" as const) : ("former" as const),
+          pepPositions: [{ title: `${match.entry.position}${match.entry.organisation ? `, ${match.entry.organisation}` : ""}`, country: "ke", startDate: match.entry.startDate, endDate: match.entry.endDate, current: isCurrent(match.entry) }],
+          topics: [PEP_LEVEL_LABELS[match.entry.level]],
+          ...(match.birthDateMatch !== "unknown" ? { birthDateMatch: match.birthDateMatch } : {}),
+          ...(match.entry.relatedTo ? { datasets: [`Related to: ${match.entry.relatedTo}`] } : {}),
         })),
         ...mediaHits.map((hit) => ({
           source: "ADVERSE_MEDIA" as const,

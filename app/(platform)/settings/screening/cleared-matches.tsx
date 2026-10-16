@@ -34,6 +34,7 @@ const SOURCE_LABELS: Record<string, string> = {
   UK_SANCTIONS: "UK list",
   OPENSANCTIONS: "OpenSanctions",
   ADVERSE_MEDIA: "Adverse media",
+  KE_PEP: "Kenyan PEP register",
 };
 
 export function ClearedMatches({ clientId }: { clientId: string }) {

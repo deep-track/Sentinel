@@ -194,7 +194,7 @@ export const _screenParties = internalAction({
 });
 
 const hitValidator = v.object({
-  source: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS"), v.literal("OPENSANCTIONS"), v.literal("ADVERSE_MEDIA")),
+  source: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS"), v.literal("OPENSANCTIONS"), v.literal("ADVERSE_MEDIA"), v.literal("KE_PEP")),
   sourceRecordId: v.string(),
   entityName: v.string(),
   program: v.string(),
