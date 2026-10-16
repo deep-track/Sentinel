@@ -17,9 +17,18 @@ type KybResult = {
   registry?: Component & {
     record?: { companyName?: string | null; registrationNumber?: string | null; registrationDate?: string | null; kraPin?: string | null; shareholders?: Array<{ name: string; shares?: string | null }> };
     lateResponse?: { status: string; record?: { companyName?: string | null; active?: boolean | null } };
+    ownership?: Ownership;
   };
   parties?: Array<{ name: string; role: string; verdict: string; complete: boolean; reason: string; hits: number; suppressed: number }>;
 };
+type Ownership = {
+  thresholdPct: number;
+  nodes: Array<{ name: string; kind: "person" | "company"; depth: number; path: string[]; directPct: number | null; effectivePct: number | null; resolved: boolean; note: string | null; registrationNumber: string | null }>;
+  beneficialOwners: string[];
+  untraced: string[];
+  sharesKnown: boolean;
+};
+
 export type KybRecord = {
   reference: string;
   status: string;
@@ -119,6 +128,24 @@ export function kybReportSpec(record: KybRecord, directors: KybDirector[], count
       ]),
     );
   }
+  const ownership = data.registry?.ownership;
+  if (ownership?.nodes.length) {
+    checks.push({ kind: "subheading", text: `Ownership (beneficial owners: ${ownership.thresholdPct}% or more)` });
+    checks.push({
+      kind: "table",
+      headers: ["Holder", "Type", "Holds", "Of the business", "Note"],
+      rows: ownership.nodes.map((node) => [
+        `${"> ".repeat(node.depth - 1)}${node.name}`,
+        node.kind === "company" ? "Company" : "Person",
+        node.directPct !== null ? `${node.directPct}%` : "-",
+        node.effectivePct !== null ? `${node.effectivePct}%` : "unknown",
+        [ownership.beneficialOwners.includes(node.name) ? "Beneficial owner" : null, node.note].filter(Boolean).join(". "),
+      ]),
+      widths: [0.32, 0.12, 0.11, 0.15, 0.3],
+      toneColumn: 3,
+      tones: ownership.nodes.map((node) => (node.kind === "person" && (node.effectivePct ?? 100) >= ownership.thresholdPct ? "amber" : node.note ? "amber" : "neutral")),
+    });
+  }
   if (data.parties?.length) {
     checks.push({ kind: "subheading", text: "AML screening of the business and its people" });
     checks.push({
@@ -126,7 +153,7 @@ export function kybReportSpec(record: KybRecord, directors: KybDirector[], count
       headers: ["Name", "Role", "Result", "Detail"],
       rows: data.parties.map((party) => [
         party.name,
-        party.role === "ubo" ? "Beneficial owner" : party.role === "business" ? "Business" : "Director",
+        party.role === "ubo" ? "Beneficial owner" : party.role === "business" ? "Business" : party.role === "shareholder" ? "Company shareholder" : "Director",
         party.complete ? checkLabel(party.verdict) : "Incomplete",
         `${party.hits ? `${party.hits} hit${party.hits === 1 ? "" : "s"}` : "No hits"}${party.suppressed ? `, ${party.suppressed} cleared before` : ""}${party.verdict !== "pass" ? `. ${party.reason.slice(0, 240)}` : ""}`,
       ]),

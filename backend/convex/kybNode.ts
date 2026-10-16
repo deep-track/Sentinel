@@ -18,6 +18,7 @@ import {
   type PartyOutcome,
 } from "./lib/kybChecks";
 import { compareBrs, isKenya, metamapConfigured, readBrsResponse, requestBrs, type BrsLookup, type BrsShareholder } from "./lib/kenyaBrs";
+import { buildOwnership, traceOwnership, undeclaredOwners, UBO_THRESHOLD_PCT, type OwnershipNode } from "./lib/ownership";
 import { textractOcr } from "./documentsNode";
 import { createHash, randomBytes } from "node:crypto";
 import type { ScreeningOutcome } from "./aml";
@@ -176,6 +177,7 @@ export const processKyb = internalAction({
       let registry: ComponentOutcome | undefined;
       let registryDetail: Record<string, unknown> | null = null;
       let undeclaredShareholders: BrsShareholder[] = [];
+      let ownersToScreen: OwnershipNode[] = [];
       if (isKenya(input.incorporationCountry) && metamapConfigured()) {
         const lookup = await lookUpBrs(ctx, args.verificationId, input.registrationNumber);
         const compared = compareBrs(lookup, {
@@ -185,12 +187,29 @@ export const processKyb = internalAction({
         });
         registry = compared.outcome;
         undeclaredShareholders = compared.undeclaredShareholders.slice(0, 10);
+        // Beneficial ownership: follow company shareholders through BRS.
+        const declaredPeople = [...declaredDirectors, ...(certificateDetail ? ((certificateDetail.fields as { directors?: string[] })?.directors ?? []) : [])];
+        const companies = lookup.status === "found" ? await traceOwnership(lookup, (number) => lookUpBrs(ctx, args.verificationId, number)) : new Map<string, BrsLookup>();
+        const tree = buildOwnership(lookup, companies);
+        const missingOwners = undeclaredOwners(tree, declaredPeople);
+        const ownershipIssues = [
+          missingOwners.length ? `beneficial owners (${UBO_THRESHOLD_PCT}% or more) not declared: ${missingOwners.slice(0, 5).map((owner) => `${owner.name}${owner.effectivePct !== null ? ` (${owner.effectivePct}%)` : ""}`).join(", ")}` : null,
+          tree.untraced.length ? `ownership can't be traced through ${tree.untraced.slice(0, 3).map((node) => node.name).join(", ")}` : null,
+        ].filter(Boolean);
+        if (ownershipIssues.length && registry.verdict === "pass") registry = { verdict: "review", reason: `Ownership: ${ownershipIssues.join("; ")}.` };
+        else if (ownershipIssues.length && registry.verdict === "review") registry = { ...registry, reason: `${registry.reason} Ownership: ${ownershipIssues.join("; ")}.` };
+        // Screen every beneficial owner and company shareholder found, not
+        // only those already on the direct register.
+        const screenedNames = new Set(undeclaredShareholders.map((holder) => holder.name.toUpperCase()));
+        ownersToScreen = [...missingOwners, ...tree.nodes.filter((node) => node.kind === "company")].filter((node) => !screenedNames.has(node.name.toUpperCase())).slice(0, 15);
+        undeclaredShareholders = undeclaredShareholders.filter((holder) => !tree.nodes.some((node) => node.kind === "company" && node.name === holder.name));
         registryDetail = {
           provider: "metamap_brs",
           verdict: registry.verdict,
           reason: registry.reason,
           checks: compared.checks,
           ...(lookup.status === "found" ? { record: lookup.record } : {}),
+          ownership: { thresholdPct: UBO_THRESHOLD_PCT, nodes: tree.nodes, beneficialOwners: tree.beneficialOwners.map((owner) => owner.name), untraced: tree.untraced.map((node) => node.name), sharesKnown: tree.sharesKnown, lookups: companies.size },
         };
       }
 
@@ -210,14 +229,30 @@ export const processKyb = internalAction({
           country: "KE",
           ...(holder.idNumber ? { idNumber: holder.idNumber } : {}),
         })),
+        ...ownersToScreen.map((node) =>
+          node.kind === "company"
+            ? { subjectName: node.name, entityType: "entity" as const, country: "KE", ...(node.registrationNumber ? { registrationNumber: node.registrationNumber } : {}) }
+            : { subjectName: node.name, entityType: "individual" as const, country: "KE" },
+        ),
       ];
       const outcomes: ScreeningOutcome[] = await ctx.runAction(internalApi.kyb._screenParties, { clientId: args.clientId, subjects });
+      // Where each party past the declared ones came from.
+      const found = [
+        ...undeclaredShareholders.map(() => ({ role: "ubo" as const, note: "Shareholder on the register, not declared." })),
+        ...ownersToScreen.map((node) => {
+          const share = node.effectivePct !== null ? ` (${node.effectivePct}% of the business)` : "";
+          const via = node.path.length ? ` through ${node.path.join(" > ")}` : "";
+          return node.kind === "company"
+            ? { role: "shareholder" as const, note: `Company shareholder${share}${via}.` }
+            : { role: "ubo" as const, note: `Beneficial owner found on the register${via}${share}, not declared.` };
+        }),
+      ];
       const parties: Array<PartyOutcome & { directorId?: Id<"kybDirectors">; outcome: ScreeningOutcome }> = outcomes.map((outcome, index) => ({
         name: subjects[index].subjectName,
-        role: index === 0 ? "business" : index > directors.length || /owner|ubo|shareholder/i.test(directors[index - 1].position) ? "ubo" : "director",
+        role: index === 0 ? "business" : index > directors.length ? found[index - directors.length - 1]?.role ?? "ubo" : /owner|ubo|shareholder/i.test(directors[index - 1].position) ? "ubo" : "director",
         verdict: outcome.verdict,
         complete: outcome.complete,
-        reason: index > directors.length ? `Shareholder on the register, not declared. ${outcome.reason}` : outcome.reason,
+        reason: index > directors.length ? `${found[index - directors.length - 1]?.note ?? "Found on the register."} ${outcome.reason}` : outcome.reason,
         ...(index > 0 && index <= directors.length ? { directorId: directors[index - 1]._id } : {}),
         outcome,
       }));
