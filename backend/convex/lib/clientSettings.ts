@@ -4,6 +4,7 @@ import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { ClientRole } from "./rbac";
 import type { ClearedHit } from "./amlClearedMatches";
+import { MONITORING_LIMITS, thresholdsFromConfig, type MonitoringThresholds } from "./transactionRules";
 
 // A client's own settings (Settings in the client portal), managed by its
 // Admin: the review workflow, screening rules, notifications, security, data
@@ -145,6 +146,23 @@ export const screeningSettingsValidator = v.object({
   duplicateFaceSearch: v.optional(v.boolean()),
   // Periodic review of monitored customers, in months, by risk rating.
   reviewMonths: v.optional(v.object({ high: v.optional(v.number()), medium: v.optional(v.number()), low: v.optional(v.number()) })),
+  // Transaction monitoring thresholds (lib/transactionRules.ts
+  // MONITORING_LIMITS); unset = DEFAULT_MONITORING.
+  transactionMonitoring: v.optional(
+    v.object({
+      largeCashUsd: v.optional(v.number()),
+      structuringPercent: v.optional(v.number()),
+      structuringMinCount: v.optional(v.number()),
+      structuringWindowDays: v.optional(v.number()),
+      velocityMultiple: v.optional(v.number()),
+      velocityMinUsd: v.optional(v.number()),
+      passThroughPercent: v.optional(v.number()),
+      passThroughHours: v.optional(v.number()),
+      passThroughMinUsd: v.optional(v.number()),
+      dormantDays: v.optional(v.number()),
+      dormantMinUsd: v.optional(v.number()),
+    }),
+  ),
 });
 
 export const NOTIFICATION_EVENTS = [
@@ -313,6 +331,7 @@ export type ResolvedSettings = {
     faceMatch: boolean;
     duplicateFaceSearch: boolean;
     reviewMonths: { high: number; medium: number; low: number };
+    transactionMonitoring: MonitoringThresholds;
   };
   notifications: {
     events: Record<NotificationEvent, { enabled: boolean; email: boolean; roles: ClientRole[] }>;
@@ -376,6 +395,7 @@ export const DEFAULTS: ResolvedSettings = {
     faceMatch: true,
     duplicateFaceSearch: false,
     reviewMonths: { high: 12, medium: 24, low: 36 },
+    transactionMonitoring: thresholdsFromConfig(),
   },
   notifications: {
     events: {
@@ -428,6 +448,7 @@ export function resolveSettings(row: Partial<Pick<Doc<"clientSettings">, "review
       ...DEFAULTS.screening,
       ...definedOnly(screening),
       reviewMonths: { ...DEFAULTS.screening.reviewMonths, ...definedOnly(screening.reviewMonths ?? {}) },
+      transactionMonitoring: { ...DEFAULTS.screening.transactionMonitoring, ...definedOnly(screening.transactionMonitoring ?? {}) },
     } as ResolvedSettings["screening"],
     notifications: { events, lowCreditBalance: notifications.lowCreditBalance ?? null },
     security: { ...DEFAULTS.security, ...definedOnly(security) } as ResolvedSettings["security"],
@@ -492,6 +513,9 @@ export function validateScreeningSettings(input: ScreeningSettingsInput, known: 
   wholeNumber(input.reviewMonths?.medium, "The review period for medium-risk customers (months)", 1, 60);
   wholeNumber(input.reviewMonths?.low, "The review period for low-risk customers (months)", 1, 120);
   if (input.reviewMonths?.high && input.reviewMonths?.medium && input.reviewMonths.high > input.reviewMonths.medium) invalid("High-risk customers must be reviewed at least as often as medium-risk ones.");
+  for (const [key, limit] of Object.entries(MONITORING_LIMITS) as Array<[keyof MonitoringThresholds, (typeof MONITORING_LIMITS)[keyof MonitoringThresholds]]>) {
+    wholeNumber(input.transactionMonitoring?.[key], limit.label, limit.min, limit.max);
+  }
   const adverseMediaCategories = input.adverseMediaCategories ? [...new Set(input.adverseMediaCategories)] : undefined;
   if (adverseMediaCategories) {
     if (adverseMediaCategories.length === 0) invalid("Choose at least one adverse media category, or screen all of them.");

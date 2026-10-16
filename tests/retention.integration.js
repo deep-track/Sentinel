@@ -224,7 +224,7 @@ test("a pending removal can be cancelled; with nothing past retention there's no
     await assert.rejects(mod.approve.handler(ctx, { purgeId }), /no longer waiting/);
     tables.verifications = tables.verifications.filter((row) => row.createdAt > YEARS(3));
     ctx.db = fakeDb(tables);
-    await assert.rejects(mod.request.handler(ctx, { clientId: "c1" }), /No checks are past/);
+    await assert.rejects(mod.request.handler(ctx, { clientId: "c1" }), /No checks or transactions are past/);
   }));
 
 test("large removals run in batches, and DeepTrack can approve", () =>

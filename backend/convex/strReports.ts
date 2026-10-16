@@ -77,6 +77,7 @@ export const prepare = mutation({
   args: {
     verificationId: v.id("verifications"),
     reviewId: v.optional(v.id("reviewQueue")),
+    transactionAlertId: v.optional(v.id("transactionAlerts")),
     reportCode: v.union(v.literal("STR"), v.literal("SAR")),
     reason: v.string(),
     action: v.string(),
@@ -113,12 +114,17 @@ export const prepare = mutation({
       const review = await ctx.db.get(args.reviewId);
       if (!review || review.verificationId !== verification._id) invalid("That case doesn't belong to this check.");
     }
+    if (args.transactionAlertId) {
+      const alert = await ctx.db.get(args.transactionAlertId);
+      if (!alert || alert.clientId !== verification.clientId || alert.customerRef !== verification.reference) invalid("That transaction alert isn't for this customer.");
+    }
     const now = Date.now();
     const entityReference = `STR-${new Date(now).toISOString().slice(0, 10).replace(/-/g, "")}-${randomKeySegment(6).toUpperCase()}`;
     const strId = await ctx.db.insert("strReports", {
       clientId: verification.clientId,
       verificationId: verification._id,
       ...(args.reviewId ? { reviewId: args.reviewId } : {}),
+      ...(args.transactionAlertId ? { transactionAlertId: args.transactionAlertId } : {}),
       reportCode: args.reportCode,
       status: "draft",
       entityReference,

@@ -4,15 +4,15 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireClientRole } from "./lib/rbac";
-import { REVIEW_WORK_ROLES } from "./lib/clientSettings";
+import { REVIEW_WORK_ROLES, loadClientSettings } from "./lib/clientSettings";
 import { recordAudit, actorTypeForClientRole } from "./auditLog";
 import { notify } from "./notifications";
 import { ratingConfig } from "./riskRatings";
 import { normalizeName } from "./lib/amlMatching";
 import { screenSubjects } from "./aml";
 import {
-  DEFAULT_MONITORING,
   RULE_LABELS,
+  configFromThresholds,
   cleanTransaction,
   evaluateTransactions,
   forRisk,
@@ -39,6 +39,7 @@ const MAX_HISTORY = 3000;
 const MAX_SCREENINGS_PER_BATCH = 20;
 const SCREENING_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const UPLOAD_ROLES = ["client_admin", "compliance_analyst", "reviewer", "developer"] as const;
+const STR_ROLES = ["client_admin", "reviewer", "internal_admin"];
 
 const COMPANY_WORDS = /\b(LTD|LIMITED|PLC|CO|COMPANY|ENTERPRISES?|SACCO|BANK|GROUP|HOLDINGS|INVESTMENTS?|TRADING|SERVICES|LLC|INC|CORP|FOUNDATION|TRUST)\b/;
 
@@ -174,8 +175,8 @@ async function customerRisk(ctx: Pick<QueryCtx, "db">, clientId: Id<"clients">, 
 }
 
 async function monitoringConfig(ctx: Pick<QueryCtx, "db">, clientId: Id<"clients">): Promise<MonitoringConfig> {
-  const { config, homeCountry } = await ratingConfig(ctx, clientId);
-  return { ...DEFAULT_MONITORING, callForAction: config.callForAction, increasedMonitoring: config.increasedMonitoring, homeCountry };
+  const [{ config, homeCountry }, settings] = await Promise.all([ratingConfig(ctx, clientId), loadClientSettings(ctx, clientId)]);
+  return { ...configFromThresholds(settings.screening.transactionMonitoring), callForAction: config.callForAction, increasedMonitoring: config.increasedMonitoring, homeCountry };
 }
 
 async function raiseAlerts(ctx: MutationCtx, clientId: Id<"clients">, customerRef: string, alerts: Alert[]): Promise<number> {
@@ -216,6 +217,14 @@ export const evaluateCustomer = internalMutation({
       .query("transactions")
       .withIndex("by_client_customer_time", (q) => q.eq("clientId", args.clientId).eq("customerRef", args.customerRef).gte("occurredAt", since))
       .take(MAX_HISTORY);
+    // The last transaction before the window, so a dormancy longer than the
+    // window is still seen.
+    const before = await ctx.db
+      .query("transactions")
+      .withIndex("by_client_customer_time", (q) => q.eq("clientId", args.clientId).eq("customerRef", args.customerRef).lt("occurredAt", since))
+      .order("desc")
+      .first();
+    if (before) rows.unshift(before);
     const config = forRisk(await monitoringConfig(ctx, args.clientId), await customerRisk(ctx, args.clientId, args.customerRef));
     const alerts = evaluateTransactions(rows.map(toTxn), new Set<string>(args.newIds), config);
     return await raiseAlerts(ctx, args.clientId, args.customerRef, alerts);
@@ -305,13 +314,15 @@ export const alert = query({
   handler: async (ctx, args) => {
     const row = await ctx.db.get(args.alertId);
     if (!row) return null;
-    await requireClientRole(ctx, row.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
+    const actor = await requireClientRole(ctx, row.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     const txns = (await Promise.all(row.transactionIds.map((id) => ctx.db.get(id)))).filter(Boolean) as Doc<"transactions">[];
     const verification = await ctx.db.query("verifications").withIndex("by_reference", (q) => q.eq("reference", row.customerRef)).first();
     return {
       ...row,
-      transactions: txns.sort((a, b) => a.occurredAt - b.occurredAt).map((txn) => ({ _id: txn._id, externalId: txn.externalId, occurredAt: txn.occurredAt, amount: txn.amount, currency: txn.currency, direction: txn.direction, channel: txn.channel, counterpartyName: txn.counterpartyName ?? null, counterpartyCountry: txn.counterpartyCountry ?? null, narration: txn.narration ?? null })),
-      customerCheck: verification && verification.clientId === row.clientId ? { id: verification._id, type: verification.type } : null,
+      transactions: txns.sort((a, b) => a.occurredAt - b.occurredAt).map((txn) => ({ _id: txn._id, externalId: txn.externalId, occurredAt: txn.occurredAt, amount: txn.amount, currency: txn.currency, amountUsd: txn.amountUsd, direction: txn.direction, channel: txn.channel, counterpartyName: txn.counterpartyName ?? null, counterpartyCountry: txn.counterpartyCountry ?? null, counterpartyAccount: txn.counterpartyAccount ?? null, narration: txn.narration ?? null })),
+      customerCheck: verification && verification.clientId === row.clientId && !verification.purgedAt ? { id: verification._id, type: verification.type } : null,
+      // STRs are confidential (strReports.ts): Admins and Reviewers only.
+      canReport: STR_ROLES.includes(actor.role),
     };
   },
 });

@@ -82,6 +82,71 @@ export const DEFAULT_MONITORING: Omit<MonitoringConfig, "callForAction" | "incre
   dormantMinUsd: 5_000,
 };
 
+// A client's own thresholds (Settings → Screening, stored as
+// screening.transactionMonitoring), in the units the page shows: whole
+// percentages, US dollars, days and hours.
+export type MonitoringThresholds = {
+  largeCashUsd: number;
+  structuringPercent: number;
+  structuringMinCount: number;
+  structuringWindowDays: number;
+  velocityMultiple: number;
+  velocityMinUsd: number;
+  passThroughPercent: number;
+  passThroughHours: number;
+  passThroughMinUsd: number;
+  dormantDays: number;
+  dormantMinUsd: number;
+};
+
+// Allowed values. Large cash can be lowered but not raised: US$15,000 is the
+// reporting threshold set by law.
+export const MONITORING_LIMITS: Record<keyof MonitoringThresholds, { min: number; max: number; label: string }> = {
+  largeCashUsd: { min: 1_000, max: 15_000, label: "The large cash threshold (US$)" },
+  structuringPercent: { min: 50, max: 95, label: "The structuring band (% of the cash threshold)" },
+  structuringMinCount: { min: 2, max: 20, label: "The number of transactions for structuring" },
+  structuringWindowDays: { min: 1, max: 30, label: "The structuring window (days)" },
+  velocityMultiple: { min: 2, max: 50, label: "The velocity multiple" },
+  velocityMinUsd: { min: 100, max: 1_000_000, label: "The velocity minimum (US$)" },
+  passThroughPercent: { min: 50, max: 100, label: "The pass-through share (% of inflows)" },
+  passThroughHours: { min: 1, max: 168, label: "The pass-through window (hours)" },
+  passThroughMinUsd: { min: 100, max: 1_000_000, label: "The pass-through minimum (US$)" },
+  dormantDays: { min: 30, max: 730, label: "The dormancy period (days)" },
+  dormantMinUsd: { min: 100, max: 1_000_000, label: "The dormant reactivation minimum (US$)" },
+};
+
+export function thresholdsFromConfig(config: Omit<MonitoringConfig, "callForAction" | "increasedMonitoring" | "homeCountry"> = DEFAULT_MONITORING): MonitoringThresholds {
+  return {
+    largeCashUsd: config.largeCashUsd,
+    structuringPercent: Math.round(config.structuringFloorPct * 100),
+    structuringMinCount: config.structuringMinCount,
+    structuringWindowDays: config.structuringWindowDays,
+    velocityMultiple: config.velocityMultiple,
+    velocityMinUsd: config.velocityMinUsd,
+    passThroughPercent: Math.round(config.passThroughPct * 100),
+    passThroughHours: config.passThroughHours,
+    passThroughMinUsd: config.passThroughMinUsd,
+    dormantDays: config.dormantDays,
+    dormantMinUsd: config.dormantMinUsd,
+  };
+}
+
+export function configFromThresholds(thresholds: MonitoringThresholds): Omit<MonitoringConfig, "callForAction" | "increasedMonitoring" | "homeCountry"> {
+  return {
+    largeCashUsd: thresholds.largeCashUsd,
+    structuringFloorPct: thresholds.structuringPercent / 100,
+    structuringMinCount: thresholds.structuringMinCount,
+    structuringWindowDays: thresholds.structuringWindowDays,
+    velocityMultiple: thresholds.velocityMultiple,
+    velocityMinUsd: thresholds.velocityMinUsd,
+    passThroughPct: thresholds.passThroughPercent / 100,
+    passThroughHours: thresholds.passThroughHours,
+    passThroughMinUsd: thresholds.passThroughMinUsd,
+    dormantDays: thresholds.dormantDays,
+    dormantMinUsd: thresholds.dormantMinUsd,
+  };
+}
+
 export type Alert = { rule: RuleKey; severity: "high" | "medium"; summary: string; transactionIds: string[]; key: string };
 
 const HOUR = 60 * 60 * 1000;
@@ -196,6 +261,28 @@ export function evaluateTransactions(history: Txn[], newIds: Set<string>, config
   // One alert per key.
   const seen = new Set<string>();
   return alerts.filter((alert) => (seen.has(alert.key) ? false : (seen.add(alert.key), true)));
+}
+
+// An STR from an alert (alert page → Prepare STR): the alert's largest
+// transaction (in US dollars) and its summary as the reason.
+export function strFromAlert(
+  alert: { rule: RuleKey; summary: string },
+  txns: Array<Pick<Txn, "occurredAt" | "amount" | "currency" | "amountUsd" | "direction" | "channel" | "counterpartyName"> & { externalId: string; counterpartyAccount: string | null; narration: string | null }>,
+) {
+  const largest = txns.reduce<(typeof txns)[number] | null>((best, txn) => (!best || txn.amountUsd > best.amountUsd ? txn : best), null);
+  return {
+    reason: `${RULE_LABELS[alert.rule]}: ${alert.summary}`,
+    transaction: largest
+      ? {
+          number: largest.externalId,
+          occurredAt: largest.occurredAt,
+          amount: largest.amount,
+          description: `${CHANNEL_LABELS[largest.channel]} ${largest.direction === "in" ? "received" : "sent"}: ${largest.currency} ${largest.amount.toLocaleString("en-US")}${largest.narration ? ` (${largest.narration})` : ""}`.slice(0, 1000),
+          counterpartyName: largest.counterpartyName ?? "",
+          counterpartyAccount: largest.counterpartyAccount ?? "",
+        }
+      : null,
+  };
 }
 
 export type RawTransaction = {

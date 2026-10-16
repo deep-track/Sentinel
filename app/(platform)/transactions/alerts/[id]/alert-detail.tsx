@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { getErrorMessage } from "@/modules/shared/errors";
-import { CHANNEL_LABELS, RULE_LABELS, type Channel, type RuleKey } from "@/backend/convex/lib/transactionRules";
+import { StrPanel } from "@/components/reports/str-dialog";
+import { CHANNEL_LABELS, RULE_LABELS, strFromAlert, type Channel, type RuleKey } from "@/backend/convex/lib/transactionRules";
 
 type Detail = {
   _id: string;
@@ -25,10 +26,31 @@ type Detail = {
   decidedAt?: number;
   decisionNotes?: string;
   customerCheck: { id: string; type: string } | null;
-  transactions: Array<{ _id: string; externalId: string; occurredAt: number; amount: number; currency: string; direction: "in" | "out"; channel: Channel; counterpartyName: string | null; counterpartyCountry: string | null; narration: string | null }>;
+  canReport: boolean;
+  transactions: Array<{
+    _id: string;
+    externalId: string;
+    occurredAt: number;
+    amount: number;
+    currency: "KES" | "USD";
+    amountUsd: number;
+    direction: "in" | "out";
+    channel: Channel;
+    counterpartyName: string | null;
+    counterpartyCountry: string | null;
+    counterpartyAccount: string | null;
+    narration: string | null;
+  }>;
 };
 
 const CHECK_PATHS: Record<string, string> = { idp: "/kyc", aml: "/aml-check", kyb: "/kyb", document: "/idp" };
+
+// For the dialog's datetime-local input (the viewer's time zone).
+function localDateTime(ms: number) {
+  const date = new Date(ms);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 export function AlertDetail({ alertId }: { alertId: string }) {
   const alert = useAuthedQuery(anyApi.transactions.alert, { alertId }) as Detail | null | undefined;
@@ -54,6 +76,7 @@ export function AlertDetail({ alertId }: { alertId: string }) {
 
   const checkPath = alert.customerCheck ? `${CHECK_PATHS[alert.customerCheck.type] ?? "/kyc"}/${alert.customerCheck.id}` : null;
   const total = (direction: "in" | "out") => alert.transactions.filter((txn) => txn.direction === direction).reduce((sum, txn) => sum + txn.amount, 0);
+  const str = strFromAlert(alert, alert.transactions);
 
   return (
     <>
@@ -138,7 +161,9 @@ export function AlertDetail({ alertId }: { alertId: string }) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            To report it to the FRC, escalate, then file an STR from {checkPath ? "the customer's check" : "the customer's KYC or AML check"} (goAML export).
+            {checkPath
+              ? `If it's suspicious, escalate it and prepare an STR ${alert.canReport ? "below" : "(Admins and Reviewers)"} as a goAML file.`
+              : "If it's suspicious, escalate it, then file an STR from the customer's KYC or AML check (goAML export). The customer reference doesn't match a Sentinel check, so it can't be prepared here."}
           </p>
         </Card>
       ) : (
@@ -152,6 +177,30 @@ export function AlertDetail({ alertId }: { alertId: string }) {
           {alert.decisionNotes ? <p className="mt-2 whitespace-pre-wrap">{alert.decisionNotes}</p> : null}
         </Card>
       )}
+
+      {alert.customerCheck && alert.canReport ? (
+        <StrPanel
+          verificationId={alert.customerCheck.id}
+          defaultReason={str.reason}
+          prefill={{
+            reportCode: str.transaction ? "STR" : "SAR",
+            action: "Transaction monitoring alert escalated for investigation; account placed under enhanced monitoring.",
+            transactionAlertId: alert._id,
+            ...(str.transaction
+              ? {
+                  transaction: {
+                    number: str.transaction.number,
+                    date: localDateTime(str.transaction.occurredAt),
+                    amount: String(str.transaction.amount),
+                    description: str.transaction.description,
+                    counterpartyName: str.transaction.counterpartyName,
+                    counterpartyAccount: str.transaction.counterpartyAccount,
+                  },
+                }
+              : {}),
+          }}
+        />
+      ) : null}
     </>
   );
 }
