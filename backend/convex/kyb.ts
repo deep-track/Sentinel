@@ -13,6 +13,7 @@ import type { ScreeningRules } from "./lib/clientSettings";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
 import { queueReview } from "./clientReviews";
 import { screenSubjects, type ScreeningOutcome } from "./aml";
+import { rateKyb } from "./riskRatings";
 
 const internalApi: any = internal;
 
@@ -258,6 +259,12 @@ export const _completeAutomated = internalMutation({
         await ctx.db.patch(party.directorId, { status: party.verdict === "pass" ? "verified" : party.verdict === "reject" ? "failed" : "pending" });
       }
     }
+    // The business's customer risk rating, from every party's hits.
+    await rateKyb(
+      ctx,
+      verification._id,
+      args.parties.flatMap((party) => party.hits.map((hit) => ({ source: hit.source, categories: hit.categories ?? [], pepClass: hit.pepClass ?? null, riskLevel: hit.riskLevel }))),
+    );
     if (args.verdict !== "pass") {
       await queueReview(ctx, {
         verificationId: verification._id,

@@ -73,6 +73,8 @@ export const amlSubjectDetailsValidator = {
   idNumber: v.optional(v.string()),
   registrationNumber: v.optional(v.string()),
   jurisdiction: v.optional(v.string()),
+  // For the customer risk rating (lib/riskRating.ts HIGH_RISK_INDUSTRIES, or free text).
+  industry: v.optional(v.string()),
 };
 
 export type AmlSubjectDetails = {
@@ -82,6 +84,7 @@ export type AmlSubjectDetails = {
   idNumber?: string;
   registrationNumber?: string;
   jurisdiction?: string;
+  industry?: string;
 };
 
 type AmlRequest = AmlSubjectDetails & {
@@ -130,7 +133,9 @@ export function normalizeAmlRequest(args: AmlRequest) {
   if ((registrationNumber || jurisdiction) && individual) {
     invalid("Registration number and jurisdiction apply to companies only.");
   }
+  const industry = optionalText(args.industry, "Industry", 100);
   const details: AmlSubjectDetails = {
+    ...(industry ? { industry } : {}),
     ...(aliases.length ? { aliases } : {}),
     ...(dateOfBirth ? { dateOfBirth } : {}),
     ...(nationality ? { nationality } : {}),

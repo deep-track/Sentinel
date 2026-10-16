@@ -113,6 +113,16 @@ export async function buildAmlReportPdf(report: Report, logo: Uint8Array | Array
   });
   pdf.table(["Category", "Result"], summaryRows.map((row) => [row.label, row.value]), [0.6, 0.4], { toneColumn: 1, tones: summaryRows.map((row) => row.tone) });
 
+  if (result.riskRating) {
+    const rating = result.riskRating;
+    pdf.heading("Customer risk rating", "From geography, PEP status, hits still standing, customer type and industry.");
+    pdf.rows([
+      ["Rating", `${rating.level.charAt(0).toUpperCase()}${rating.level.slice(1)} (score ${rating.score} / 100)`],
+      ["Periodic review", rating.reviewMonths === null ? "Exit or don't onboard (confirmed sanctions match)" : `Every ${rating.reviewMonths} months`],
+      ...rating.factors.map((factor) => [`${factor.factor} (+${factor.points})`, factor.detail] as [string, unknown]),
+    ]);
+  }
+
   pdf.heading("Subject screened");
   pdf.rows([
     ["Name", input.subjectName ?? "-"],

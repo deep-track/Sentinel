@@ -628,9 +628,16 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     removedAt: v.optional(v.number()),
+    // Customer risk rating (lib/riskRating.ts) and the periodic review it sets.
+    riskRating: v.optional(v.any()),
+    nextReviewAt: v.optional(v.number()),
+    lastReviewedAt: v.optional(v.number()),
+    lastReviewedBy: v.optional(v.string()),
+    reviewDueNotifiedAt: v.optional(v.number()),
   })
     .index("by_client_and_status", ["clientId", "status", "createdAt"])
     .index("by_status_and_next_screen", ["status", "nextScreenAt"])
+    .index("by_status_and_next_review", ["status", "nextReviewAt"])
     .index("by_reference", ["reference"])
     .index("by_client_and_external_ref", ["clientId", "externalRef"])
     .index("by_enrolled_verification", ["enrolledVerificationId"]),
@@ -974,6 +981,17 @@ kybDirectors: defineTable({
   })
     .index("by_client_and_requested_at", ["clientId", "requestedAt"])
     .index("by_status", ["status"]),
+
+  // Country risk for customer risk ratings: the FATF lists, kept current by
+  // DeepTrack after each plenary (riskRatings.ts). One row, key "default".
+  riskSettings: defineTable({
+    key: v.literal("default"),
+    callForAction: v.array(v.string()),
+    increasedMonitoring: v.array(v.string()),
+    asOf: v.string(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_key", ["key"]),
 
   // Sentinel's Kenyan PEP register (pepRegister.ts), curated by DeepTrack
   // from Kenya Gazette notices, imports and manual entries.

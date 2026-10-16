@@ -10,6 +10,7 @@ import { recordAudit } from "./auditLog";
 import { withoutMedia } from "./verifications";
 import { recordClearedMatches } from "./amlCleared";
 import { notify } from "./notifications";
+import { rateAmlScreening, rateKyb } from "./riskRatings";
 
 // ─────────────────────────────────────────────────────────
 // Section 11.2 (engineering doc) — authoritative per Brian's directive
@@ -325,6 +326,12 @@ export async function resolveReviewItem(
       notes,
       createdAt: now,
     });
+  }
+
+  // Cleared hits no longer count towards the customer's risk rating.
+  if (finalVerdict === "pass") {
+    if (verification.type === "aml") await rateAmlScreening(ctx, verification._id, { cleared: true });
+    if (verification.type === "kyb") await rateKyb(ctx, verification._id, [], { cleared: true });
   }
 
   // A client dispute: tell the client's team what DeepTrack decided.
