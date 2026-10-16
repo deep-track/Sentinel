@@ -1,6 +1,7 @@
 // Pure sanctions-list matching logic shared by aml.ts (screening) and
 // amlPersistence.ts / watchlists.ts (coverage). No Convex imports, so it can be
 // unit tested directly.
+import { canonicalKey, isMultiPart, tokenAlignmentScore } from "./nameMatching";
 
 export const SOURCE_KEYS = ["OFAC_SDN", "UN_CONSOLIDATED", "EU_FSF", "UK_SANCTIONS"] as const;
 export type SourceKey = (typeof SOURCE_KEYS)[number];
@@ -40,6 +41,8 @@ export const STRONG_MATCH_THRESHOLD = 94;
 // Score assigned when the subject and a listed name contain the same tokens in
 // a different order ("DOE JOHN" vs "JOHN DOE").
 export const TOKEN_ORDER_MATCH_SCORE = 97;
+// The same name in another spelling, or without connectors and titles.
+export const VARIANT_MATCH_SCORE = 96;
 
 export type SubjectEntityType = "individual" | "entity";
 export type EntryEntityType = "individual" | "entity" | "unknown";
@@ -133,6 +136,8 @@ export function scoreCandidate<E extends ScreeningEntry>(
   const primary = normalizeName(entry.primaryName);
   const others = [...entry.aliases, ...entry.normalizedNames].map(normalizeName).filter(Boolean);
   const subjectTokens = tokenKey(subject);
+  const subjectCanonical = canonicalKey(subject);
+  const subjectMultiPart = isMultiPart(subject);
 
   let nameScore = 0;
   let method: MatchMethod = "fuzzy";
@@ -145,11 +150,18 @@ export function scoreCandidate<E extends ScreeningEntry>(
   } else if ([primary, ...others].some((name) => name && tokenKey(name) === subjectTokens)) {
     nameScore = TOKEN_ORDER_MATCH_SCORE;
     method = "normalized";
+  } else if (subjectCanonical && [primary, ...others].some((name) => name && canonicalKey(name) === subjectCanonical)) {
+    // Same name in another spelling (MOHAMMED / MAXAMED), or with
+    // connectors and titles (BIN, HON) left out.
+    nameScore = VARIANT_MATCH_SCORE;
+    method = "normalized";
   } else {
+    // Multi-part names are compared part by part (lib/nameMatching.ts);
+    // others by character similarity.
     let best = 0;
     for (const name of [primary, ...others]) {
       if (!name) continue;
-      const score = diceSimilarity(subject, name);
+      const score = subjectMultiPart && isMultiPart(name) ? tokenAlignmentScore(subject, name) / 100 : diceSimilarity(subject, name);
       if (score > best) best = score;
     }
     nameScore = Math.round(best * 100);
