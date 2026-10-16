@@ -126,3 +126,8 @@
     display: none !important;
   }
 }
+/* Reports printed from the browser: always A4 portrait. */
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
