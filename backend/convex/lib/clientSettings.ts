@@ -133,6 +133,8 @@ export const screeningSettingsValidator = v.object({
   // Don't raise an AML hit again for a customer it was cleared for
   // (lib/amlClearedMatches.ts), unless it became more severe.
   rememberClearedMatches: v.optional(v.boolean()),
+  // Claude reviews each AML hit and recommends a decision (aiHitReview.ts).
+  aiHitReview: v.optional(v.boolean()),
 });
 
 export const NOTIFICATION_EVENTS = [
@@ -290,6 +292,7 @@ export type ResolvedSettings = {
     poaMaxAgeDays: number;
     acceptedPoaDocuments: string[] | null; // null = every recognised type
     rememberClearedMatches: boolean;
+    aiHitReview: boolean;
   };
   notifications: {
     events: Record<NotificationEvent, { enabled: boolean; email: boolean; roles: ClientRole[] }>;
@@ -348,6 +351,7 @@ export const DEFAULTS: ResolvedSettings = {
     poaMaxAgeDays: 90,
     acceptedPoaDocuments: null,
     rememberClearedMatches: true,
+    aiHitReview: true,
   },
   notifications: {
     events: {
