@@ -997,6 +997,16 @@ kybDirectors: defineTable({
     .index("by_hash", ["hash"])
     .index("by_verification", ["verificationId"]),
 
+  // Faces indexed in a client's Rekognition collection for duplicate-face
+  // search (faceMatchNode.ts): the face's id, never the image.
+  faceRecords: defineTable({
+    verificationId: v.id("verifications"),
+    clientId: v.id("clients"),
+    collectionId: v.string(),
+    faceId: v.string(),
+    createdAt: v.number(),
+  }).index("by_verification", ["verificationId"]),
+
   // The fraud network's HMAC key, generated once by Sentinel. One row.
   fraudNetworkKeys: defineTable({
     key: v.literal("default"),

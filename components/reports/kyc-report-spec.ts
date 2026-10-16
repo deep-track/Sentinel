@@ -1,3 +1,4 @@
+import { describeFaceMatch } from "@/backend/convex/lib/faceMatch";
 import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
 import { FRAUD_NETWORK_HEADING, FRAUD_NETWORK_HINT, fraudNetworkRows } from "./fraud-network-rows";
 import { checkTone, dateTime, REVIEW_SIGNATURES, type ReportBlock, type ReportSpec } from "./report-spec";
@@ -13,7 +14,7 @@ export type KycRecord = {
   status: string;
   verdict?: "pass" | "review" | "reject" | null;
   input: unknown;
-  result?: { liveness?: Step; docScan?: Step; iprs?: Step; aml?: Step; fraudNetwork?: NetworkSummary } | null;
+  result?: { liveness?: Step; docScan?: Step; iprs?: Step; aml?: Step; faceMatch?: Step; fraudNetwork?: NetworkSummary } | null;
   failureReason?: string | null;
   disputeReason?: string | null;
   createdAt: number;
@@ -91,6 +92,9 @@ export function kycReportSpec(record: KycRecord, organization: string | null = n
       };
     }, "This step did not run."),
   ];
+
+  const face = describeFaceMatch(result.faceMatch);
+  if (face) steps.splice(2, 0, { name: "Face match", ...face });
 
   const verdict = kycVerdict(record);
   const notes: ReportBlock[] = [];

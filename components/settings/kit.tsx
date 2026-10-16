@@ -38,6 +38,8 @@ export type ResolvedSettings = {
     rememberClearedMatches: boolean;
     aiHitReview: boolean;
     shareFraudNetwork: boolean;
+    faceMatch: boolean;
+    duplicateFaceSearch: boolean;
     reviewMonths: { high: number; medium: number; low: number };
   };
   notifications: {

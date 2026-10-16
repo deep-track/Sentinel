@@ -138,6 +138,11 @@ export const screeningSettingsValidator = v.object({
   // Take part in Sentinel's fraud network (fraudNetwork.ts): see identifier
   // reuse across other participating clients, and share fingerprints.
   shareFraudNetwork: v.optional(v.boolean()),
+  // KYC face match (faceMatchNode.ts): the selfie against the ID photo, and
+  // the search for the same face among the client's customers (biometric
+  // templates kept in the client's own collection, so off by default).
+  faceMatch: v.optional(v.boolean()),
+  duplicateFaceSearch: v.optional(v.boolean()),
   // Periodic review of monitored customers, in months, by risk rating.
   reviewMonths: v.optional(v.object({ high: v.optional(v.number()), medium: v.optional(v.number()), low: v.optional(v.number()) })),
 });
@@ -302,6 +307,8 @@ export type ResolvedSettings = {
     rememberClearedMatches: boolean;
     aiHitReview: boolean;
     shareFraudNetwork: boolean;
+    faceMatch: boolean;
+    duplicateFaceSearch: boolean;
     reviewMonths: { high: number; medium: number; low: number };
   };
   notifications: {
@@ -363,6 +370,8 @@ export const DEFAULTS: ResolvedSettings = {
     rememberClearedMatches: true,
     aiHitReview: true,
     shareFraudNetwork: false,
+    faceMatch: true,
+    duplicateFaceSearch: false,
     reviewMonths: { high: 12, medium: 24, low: 36 },
   },
   notifications: {
