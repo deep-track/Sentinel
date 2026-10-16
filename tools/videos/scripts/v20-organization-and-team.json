@@ -1,0 +1,176 @@
+{
+  "video": "v20-organization-and-team",
+  "title": "Your organization and your team",
+  "chapter": "a4",
+  "course": "Get started",
+  "order": 20,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Before your team starts work, tell Sentinel who you are and who works with you. In this video, you'll fill in your organization profile and set up your team.",
+      "show": [
+        {
+          "card": "Your organization and your team",
+          "subtitle": "Sentinel by DeepTrack · Get started"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click Settings in the menu on the left, then the Organization tab. Your profile tells Sentinel who you are as a regulated institution. Sentinel prints it on your screening reports, your monthly report, your STRs for goAML, and your invoices.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Settings"
+        },
+        {
+          "click": "sidebar:Organization"
+        }
+      ]
+    },
+    {
+      "id": "logo",
+      "say": "Start with the Logo card. Click Upload and choose a PNG, JPEG or WebP image of up to 1 MB. A wide logo on a transparent background works best. The logo saves straight away.",
+      "show": [
+        {
+          "highlight": "card:Logo"
+        }
+      ]
+    },
+    {
+      "id": "details",
+      "say": "Under Organization details, type your legal name exactly as registered. For Demo Bank Ltd, that's Demo Bank Limited. Then add your registration number.",
+      "show": [
+        {
+          "scroll": "card:Organization details"
+        },
+        {
+          "zoom": "field:Legal name"
+        }
+      ]
+    },
+    {
+      "id": "regulator",
+      "say": "Choose your regulator. Banks and microfinance banks choose Central Bank of Kenya. SACCOs choose the Sacco Societies Regulatory Authority. Then type the number on your licence.",
+      "show": [
+        {
+          "zoom": "field:Regulator"
+        },
+        {
+          "highlight": "field:Licence number"
+        }
+      ]
+    },
+    {
+      "id": "contact",
+      "say": "In Compliance contact, name your MLRO or chief risk officer, with their email and phone. At Demo Bank, that's Faith Demo. She is the reporting person on every STR. Add the goAML reporting entity ID the Financial Reporting Centre gave you. Without it, your team can't prepare an STR.",
+      "show": [
+        {
+          "zoom": "field:Compliance contact"
+        },
+        {
+          "zoom": "field:goAML reporting entity ID"
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "say": "When you're done, click Save changes at the bottom, or Discard to undo your edits. Each save goes into the audit log. Only an Admin can change the profile. Everyone else can read it.",
+      "show": [
+        {
+          "highlight": "button:Save changes"
+        }
+      ]
+    },
+    {
+      "id": "team",
+      "say": "Now open the Team tab. Everyone who uses Sentinel for your organization is a team member with one role. The seat bar shows how many seats you've used, counting members and pending invitations.",
+      "show": [
+        {
+          "click": "sidebar:Team"
+        },
+        {
+          "highlight": "card:Invite a team member"
+        }
+      ]
+    },
+    {
+      "id": "invite",
+      "say": "To invite someone, type their work email and choose a role. Analyst is the default. Then click Invite. Sentinel emails the invitation, and they join the first time they sign in with that address. Invitations expire after seven days.",
+      "show": [
+        {
+          "type": "field:Email",
+          "text": "wanjiku.kamau@demo-bank.example"
+        },
+        {
+          "select": "field:Role",
+          "option": "Reviewer"
+        },
+        {
+          "highlight": "button:Invite"
+        }
+      ]
+    },
+    {
+      "id": "members",
+      "say": "The Members table lists everyone. Demo Bank has one Admin, Bryan Koyundi. Here you change a person's role, and choose which review queues they get cases from. When someone leaves, click Deactivate. Their open cases go back to the unassigned queue, and their history is kept.",
+      "show": [
+        {
+          "scroll": "card:Members"
+        },
+        {
+          "zoom": "card:Members"
+        },
+        {
+          "highlight": "button:Deactivate"
+        }
+      ]
+    },
+    {
+      "id": "roles",
+      "say": "The Roles guide sums up each role. An Admin can do everything. A Reviewer approves senior cases. An Analyst runs checks and decides standard cases. A Developer looks after API keys and webhooks. A Viewer or Auditor can only read.",
+      "show": [
+        {
+          "scroll": "card:Roles"
+        },
+        {
+          "highlight": "card:Roles"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's your profile and your team. To learn more, open chapters A4 and A5 in Help.",
+      "show": [
+        {
+          "card": "Help → A4 Organization profile · A5 Team and roles",
+          "subtitle": "sentinel.deeptrack.io/help/a4 · sentinel.deeptrack.io/help/a5"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The invite scene types an example email and picks Reviewer in the invite form but never clicks Invite. If you'd rather not touch the form at all, change those two steps to highlights.",
+    "field:Role resolves to the invite form's Role list because it comes before the members' 'Role for …' lists in the page. Don't select on a member's Role list: that saves at once.",
+    "button:Deactivate is disabled on Bryan's own row (you can't deactivate yourself). It is only highlighted, never clicked.",
+    "button:Save changes only renders for an Admin and is greyed out until something changes, so it is highlighted, not clicked.",
+    "Assumes Demo Bank's profile is already filled in (Demo Bank Limited, CBK, CBK/DEMO/001, Faith Demo, DEMO-0001). Nothing is typed into the profile."
+  ]
+}

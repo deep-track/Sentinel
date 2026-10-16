@@ -23,7 +23,7 @@ Actions:
 Targets:
 
 - `sidebar:<link>`, `button:<name>`, `case:<name>`
-- `card:<heading>`, `field:<label>`, `form:decision`
+- `card:<heading>`, `text:<text>` (the box around it), `heading:<text>`, `field:<label>`, `form:decision`
 - `queue-filter:<queue>`, `views`
 
 Needs ffmpeg (`winget install Gyan.FFmpeg`) and Google Chrome.

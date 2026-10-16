@@ -1,0 +1,152 @@
+{
+  "video": "v01-dashboard-tour",
+  "title": "Tour of the dashboard",
+  "chapter": "a3",
+  "course": "Get started",
+  "order": 1,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Welcome to Sentinel by DeepTrack. In this first video, we'll take a tour of the dashboard, the page you see every time you sign in.",
+      "show": [
+        {
+          "card": "Tour of the dashboard",
+          "subtitle": "Sentinel by DeepTrack · Get started"
+        }
+      ]
+    },
+    {
+      "id": "overview",
+      "say": "Click Overview at the top of the menu. The Dashboard shows the last thirty days of activity for your organization, here Demo Bank Limited.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Overview"
+        },
+        {
+          "highlight": "heading:Dashboard"
+        }
+      ]
+    },
+    {
+      "id": "credits",
+      "say": "At the top is your credit balance. Every check uses credits when it completes. If the balance reaches zero, new checks are rejected, so keep an eye on it.",
+      "show": [
+        {
+          "highlight": "text:Credit balance"
+        },
+        {
+          "zoom": "text:Credit balance"
+        }
+      ]
+    },
+    {
+      "id": "tiles",
+      "say": "The four tiles give you the numbers that matter: checks run in the last thirty days, the average time a check takes, how many are flagged and waiting for a person, and your active API keys.",
+      "show": [
+        {
+          "highlight": "text:Scans (30 days)"
+        },
+        {
+          "highlight": "text:Avg. verification"
+        },
+        {
+          "highlight": "text:Flagged / review"
+        },
+        {
+          "highlight": "text:Active API keys"
+        }
+      ]
+    },
+    {
+      "id": "deepfakes",
+      "say": "This tile is DeepTrack's deepfake shield. It counts the checks where Sentinel caught a deepfake face or an AI-generated document, out of every check it screened.",
+      "show": [
+        {
+          "highlight": "text:Deepfakes and AI forgeries stopped"
+        },
+        {
+          "zoom": "text:Deepfakes and AI forgeries stopped"
+        }
+      ]
+    },
+    {
+      "id": "mix",
+      "say": "Verification mix shows how your work splits by type: identity checks, business checks, documents, AML screening and liveness.",
+      "show": [
+        {
+          "scroll": "text:Verification mix"
+        },
+        {
+          "highlight": "text:Verification mix"
+        }
+      ]
+    },
+    {
+      "id": "recent",
+      "say": "Recent verifications lists your ten latest checks, with each verdict. Approved means it passed. Needs review means a person must decide, in Reviews. Rejected means it failed.",
+      "show": [
+        {
+          "highlight": "text:Recent verifications"
+        }
+      ]
+    },
+    {
+      "id": "menu",
+      "say": "The menu on the left takes you everywhere else. Run identity, business, document and AML checks. Send liveness links. Work cases in Reviews, follow disputes, customer risk and transactions.",
+      "show": [
+        {
+          "highlight": "sidebar:Identity (KYC)"
+        },
+        {
+          "highlight": "sidebar:AML Screening"
+        },
+        {
+          "highlight": "sidebar:Reviews"
+        },
+        {
+          "highlight": "sidebar:Transactions"
+        }
+      ]
+    },
+    {
+      "id": "developers",
+      "say": "Developers find API keys and webhooks at the bottom. And Help is always there, with a chapter for every page you see.",
+      "show": [
+        {
+          "highlight": "sidebar:API Keys"
+        },
+        {
+          "highlight": "sidebar:Help"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's the dashboard. Next, we'll see how Sentinel decides whether a check passes, fails or needs a person.",
+      "show": [
+        {
+          "card": "Help → A3 The dashboard at a glance",
+          "subtitle": "sentinel.deeptrack.io/help/a3"
+        }
+      ]
+    }
+  ]
+}

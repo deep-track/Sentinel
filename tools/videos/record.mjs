@@ -17,7 +17,7 @@ for (const file of fs.readdirSync(dir)) fs.rmSync(path.join(dir, file));
 // On-screen helpers: a pointer that glides to what is clicked, a highlight
 // ring, and title cards with the DeepTrack logo.
 const helpers = `(() => {
-  const css = '#vh-ptr{position:fixed;z-index:2147483647;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:rgba(124,58,237,.35);border:2px solid #7c3aed;pointer-events:none;transition:left .55s ease,top .55s ease,transform .15s}#vh-ptr.down{transform:scale(.7)}.vh-ring{outline:4px solid #7c3aed!important;outline-offset:6px!important;border-radius:10px;transition:outline-color .3s}#vh-card{position:fixed;inset:0;z-index:2147483646;background:#0b1020;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,Segoe UI,sans-serif;gap:18px}#vh-card img{height:56px;filter:invert(1)}#vh-card h1{font-size:64px;margin:24px 0 0;font-weight:700}#vh-card p{font-size:28px;margin:0;opacity:.75}a[href^="/internal-ops"]{display:none!important}';
+  const css = '#vh-ptr{position:fixed;z-index:2147483647;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:rgba(124,58,237,.35);border:2px solid #7c3aed;pointer-events:none;transition:left .55s ease,top .55s ease,transform .15s}#vh-ptr.down{transform:scale(.7)}.vh-ring{outline:4px solid #7c3aed!important;outline-offset:6px!important;border-radius:10px;transition:outline-color .3s}#vh-card{position:fixed;inset:0;z-index:2147483646;background:#0b1020;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,Segoe UI,sans-serif;gap:18px}#vh-card img{height:56px;filter:invert(1)}#vh-card h1{font-size:64px;margin:24px 0 0;font-weight:700}#vh-card p{font-size:28px;margin:0;opacity:.75}' + (window.__vhInternal ? '' : 'a[href^="/internal-ops"]{display:none!important}');
   const ensure = () => { if (document.getElementById('vh-style') || !document.head) return; const s = document.createElement('style'); s.id = 'vh-style'; s.textContent = css; document.head.appendChild(s); const p = document.createElement('div'); p.id = 'vh-ptr'; p.style.left = '50%'; p.style.top = '60%'; document.body.appendChild(p); };
   window.__vh = {
     ensure,
@@ -47,6 +47,9 @@ if (script.prepare?.length) {
 }
 
 const context = await browser.newContext({ storageState: AUTH, viewport, deviceScaleFactor: 1, recordVideo: { dir, size: viewport } });
+// Client videos hide the Back Office link (clients never see it); the
+// Back Office videos ("internal": true) keep it.
+if (script.internal) await context.addInitScript(() => { window.__vhInternal = true; });
 await context.addInitScript(helpers);
 // Open on Demo Bank Ltd, the organization every video shows.
 await context.addCookies(demoCookie);
@@ -63,6 +66,8 @@ async function settle() {
   await page.evaluate(() => window.__vh?.ensure());
 }
 
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 function target(spec) {
   const [kind, ...rest] = spec.split(":");
   const value = rest.join(":");
@@ -74,7 +79,13 @@ function target(spec) {
     case "case":
       return page.getByRole("link", { name: value }).first().or(page.getByText(value).first()).first();
     case "card":
-      return page.getByRole("heading", { name: new RegExp(`^\s*${value}`) }).first().locator("xpath=ancestor::*[contains(@class,'rounded')][1]");
+      // Matches a heading that starts with the text (brackets and dots taken literally).
+      return page.getByRole("heading", { name: new RegExp("^\\s*" + escapeRegex(value)) }).first().locator("xpath=ancestor::*[contains(@class,'rounded')][1]");
+    case "heading":
+      return page.getByRole("heading", { name: value }).first();
+    case "text":
+      // The box (card, tile) around a piece of text.
+      return page.getByText(value).first().locator("xpath=ancestor-or-self::*[contains(@class,'rounded')][1]");
     case "field":
       return page.getByLabel(value).first();
     case "form":

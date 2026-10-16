@@ -1,0 +1,155 @@
+{
+  "video": "v09-remote-liveness",
+  "title": "Remote liveness",
+  "chapter": "b4",
+  "course": "Analyst training",
+  "order": 9,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "A liveness check confirms that a real, live person was in front of the camera, not a printed photo, a screen replay or a deepfake. In this video, you'll send a liveness link and follow the result.",
+      "show": [
+        {
+          "card": "Remote liveness",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "why",
+      "say": "A still selfie can't prove presence. That's why a KYC check from New Verification or a capture link ends in Needs Review, even when everything else passes. Send a liveness link when that's the only thing missing, or before a high-risk action, such as changing the phone number on an M-Pesa account.",
+      "show": [
+        {
+          "card": "Why remote liveness?",
+          "subtitle": "A still selfie can't prove the person was present"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click Liveness in the menu. The Liveness page opens, with the form to send a liveness verification link.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Liveness"
+        },
+        {
+          "highlight": "text:Send a liveness verification link"
+        }
+      ]
+    },
+    {
+      "id": "number",
+      "say": "Type the end user's mobile number in international format. Spaces and dashes are fine.",
+      "show": [
+        {
+          "type": "field:End user's mobile number",
+          "text": "+254 722 000111"
+        }
+      ]
+    },
+    {
+      "id": "method",
+      "say": "Under Send via, choose SMS or WhatsApp. Liveness links don't go by email.",
+      "show": [
+        {
+          "click": "button:WhatsApp"
+        },
+        {
+          "highlight": "button:SMS"
+        }
+      ]
+    },
+    {
+      "id": "send",
+      "say": "Then click Send verification link. The customer gets a message with the link, in English. They open it on their phone and do a short camera check. A liveness check costs one credit on Kenya shilling plans, charged when the message is accepted for delivery.",
+      "show": [
+        {
+          "highlight": "button:Send verification link"
+        }
+      ]
+    },
+    {
+      "id": "requests",
+      "say": "Sent requests shows your 50 most recent requests, newest first, with the contact, the method, the status and when it was sent. The list updates by itself. If a request failed, hold the pointer over the badge to see why.",
+      "show": [
+        {
+          "scroll": "text:Sent requests"
+        },
+        {
+          "highlight": "text:Sent requests"
+        }
+      ]
+    },
+    {
+      "id": "result",
+      "say": "When the customer finishes, the request shows completed, and Sentinel records a liveness check with its own verdict. Click Overview, and find the row with type Liveness under Recent verifications.",
+      "show": [
+        {
+          "click": "sidebar:Overview"
+        },
+        {
+          "scroll": "text:Recent verifications"
+        },
+        {
+          "highlight": "text:Recent verifications"
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "say": "If the verdict is needs review, decide it in Reviews. Choose the Liveness queue to find it. A rejected result means the customer didn't pass, so follow your fraud procedure.",
+      "show": [
+        {
+          "click": "sidebar:Reviews"
+        },
+        {
+          "select": "queue-filter:Liveness"
+        }
+      ]
+    },
+    {
+      "id": "separate",
+      "say": "A liveness check stays separate from the KYC check. Sentinel doesn't attach it to the KYC report. So when you decide a KYC case that was held for liveness, note the liveness check's reference in your decision.",
+      "show": [
+        {
+          "card": "Liveness is its own check",
+          "subtitle": "Note its reference when you decide the KYC case"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's remote liveness. To learn more, open chapter B4 in Help, Remote liveness.",
+      "show": [
+        {
+          "card": "Help → B4 Remote liveness",
+          "subtitle": "sentinel.deeptrack.io/help/b4"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Demo Bank Ltd has no seeded liveness requests or liveness checks, so Sent requests may say 'No liveness requests sent yet' and Recent verifications has no Liveness row; the narration describes them generally.",
+    "button:SMS highlights the SMS toggle; on this page no other button contains 'SMS'.",
+    "Clicking WhatsApp only changes local form state; Send verification link is highlighted, never clicked.",
+    "No KYC record in the demo is held only because liveness wasn't collected, so the 'why' scene is a title card."
+  ]
+}

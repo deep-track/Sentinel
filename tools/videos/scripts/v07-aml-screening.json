@@ -1,0 +1,192 @@
+{
+  "video": "v07-aml-screening",
+  "title": "AML screening",
+  "chapter": "b6",
+  "course": "Analyst training",
+  "order": 7,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "AML screening checks a person or company against sanctions lists, PEPs, Kenyan risk lists and adverse media. In this video, you'll run a screening and read two real results.",
+      "show": [
+        {
+          "card": "AML screening",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "form",
+      "say": "Click AML Screening in the menu. Type the full name in Subject name, and choose Individual or Company.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:AML Screening"
+        },
+        {
+          "type": "field:Subject name",
+          "text": "Grace Achieng"
+        },
+        {
+          "highlight": "field:Entity type"
+        }
+      ]
+    },
+    {
+      "id": "details",
+      "say": "Add a date of birth or ID number if you have one. It matters. Without one, matches are on name and country only, and you'll see more look-alikes to review.",
+      "show": [
+        {
+          "type": "field:Date of birth",
+          "text": "1995-09-02"
+        },
+        {
+          "type": "field:Nationality",
+          "text": "KE"
+        }
+      ]
+    },
+    {
+      "id": "run",
+      "say": "To keep watching this customer, tick Keep monitoring. Then click Run AML screening. One screening covers every source at once.",
+      "show": [
+        {
+          "highlight": "field:Keep monitoring (re-screen daily, alert on new hits)"
+        },
+        {
+          "highlight": "button:Run AML screening"
+        }
+      ]
+    },
+    {
+      "id": "recent",
+      "say": "Results appear under Recent screenings. A chip shows each category with hits. Daniel Kipruto Langat has a PEP Class 2 hit. A PEP is someone who holds or held a prominent public role.",
+      "show": [
+        {
+          "scroll": "text:Recent screenings"
+        },
+        {
+          "highlight": "case:PEP Class 2"
+        }
+      ]
+    },
+    {
+      "id": "pep",
+      "say": "Click his outcome button to open the report. The header shows the verdict, Needs review, and the reason in plain words: a possible Kenyan PEP, a Member of the County Assembly in Nakuru.",
+      "show": [
+        {
+          "click": "case:Needs review · View report"
+        },
+        {
+          "highlight": "card:Daniel Kipruto Langat"
+        }
+      ]
+    },
+    {
+      "id": "summary",
+      "say": "Risk summary counts the hits in each category.",
+      "show": [
+        {
+          "highlight": "card:Risk summary"
+        }
+      ]
+    },
+    {
+      "id": "findings",
+      "say": "Findings groups the hits by category. Each group starts with what to do, then one card per match, with its source, PEP class and match strength. Compare the date of birth and ID with your customer before you act. A hit is a lead, not proof.",
+      "show": [
+        {
+          "scroll": "card:Findings"
+        },
+        {
+          "zoom": "card:Findings"
+        }
+      ]
+    },
+    {
+      "id": "case",
+      "say": "A PEP hit never rejects on its own. It always goes to review, and a Class 2 PEP opens as high priority. Click Open the case to decide it, to work it in Reviews.",
+      "show": [
+        {
+          "scroll": "case:Open the case to decide it"
+        },
+        {
+          "highlight": "case:Open the case to decide it"
+        }
+      ]
+    },
+    {
+      "id": "sources",
+      "say": "Sources screened shows each list and when it was downloaded. If a sanctions list couldn't be reached, the screening can't be Clear.",
+      "show": [
+        {
+          "scroll": "card:Sources screened"
+        },
+        {
+          "highlight": "card:Sources screened"
+        }
+      ]
+    },
+    {
+      "id": "sanctions",
+      "say": "Now Viktor Petrovich Orlov. His name matches a sanctions list exactly, so the verdict is Match, do not proceed. Don't onboard or transact. Escalate to whoever clears sanctions hits, by default an Admin.",
+      "show": [
+        {
+          "goto": "/aml-check"
+        },
+        {
+          "click": "case:Match · View report"
+        },
+        {
+          "highlight": "card:Viktor Petrovich Orlov"
+        }
+      ]
+    },
+    {
+      "id": "keep",
+      "say": "To keep a copy, download the PDF, the matches as CSV, or the evidence as JSON.",
+      "show": [
+        {
+          "highlight": "button:Download report (PDF)"
+        },
+        {
+          "highlight": "button:Matches (CSV)"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's AML screening. To learn more, open chapter B6 in Help, AML screening.",
+      "show": [
+        {
+          "card": "Help → B6 AML screening",
+          "subtitle": "sentinel.deeptrack.io/help/b6"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The Recent screenings rows have no link on the name; the report opens from the outcome link. case:Needs review · View report assumes Daniel Kipruto Langat is the only screening with Needs review, and case:Match · View report that Viktor Petrovich Orlov is the only Match.",
+    "case:PEP Class 2 highlights the category chip on Daniel's row.",
+    "card:Daniel Kipruto Langat and card:Viktor Petrovich Orlov target the report header (the subject name is its h1).",
+    "The form is filled with Grace Achieng's details as an example and never submitted.",
+    "Open the case to decide it only shows while Daniel's case is open; if an earlier b11 take decided it, the scene's highlight is skipped."
+  ]
+}

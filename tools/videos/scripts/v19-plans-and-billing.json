@@ -1,0 +1,177 @@
+{
+  "video": "v19-plans-and-billing",
+  "title": "Plans and billing",
+  "chapter": "a2",
+  "course": "Get started",
+  "order": 19,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Sentinel runs on credits. Each check costs a set number of credits, charged only when it completes. In this video, you'll see your plan and balance, and the ways to pay.",
+      "show": [
+        {
+          "card": "Plans and billing",
+          "subtitle": "Sentinel by DeepTrack · Get started"
+        }
+      ]
+    },
+    {
+      "id": "overview",
+      "say": "Click Billing and Credits in the menu on the left. The two cards at the top show your current plan, your currency and your credit balance. Demo Bank is on Business, billed in Kenya shillings.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Billing & Credits"
+        },
+        {
+          "highlight": "case:Current plan"
+        },
+        {
+          "highlight": "case:Credit balance"
+        }
+      ]
+    },
+    {
+      "id": "prices",
+      "say": "On KES plans, one credit is 40 shillings, and bigger plans add bonus credits to every payment. Your prices shows exactly what each check costs on your plan.",
+      "show": [
+        {
+          "scroll": "case:Your prices"
+        },
+        {
+          "highlight": "case:Your prices"
+        }
+      ]
+    },
+    {
+      "id": "plans",
+      "say": "Plans are billed yearly, in advance. Prices are shown in US dollars, and you pay the equivalent in shillings. Choose and pay opens Paystack's checkout. Your current plan is marked Current.",
+      "show": [
+        {
+          "scroll": "case:Billed yearly, in advance"
+        },
+        {
+          "highlight": "button:Choose and pay"
+        }
+      ]
+    },
+    {
+      "id": "bank",
+      "say": "Prefer a bank transfer or M-Pesa paybill? Click Pay by bank or M-Pesa. Sentinel creates an invoice. Use the invoice number as your payment reference. You have 14 days to pay.",
+      "show": [
+        {
+          "highlight": "button:Pay by bank / M-Pesa"
+        }
+      ]
+    },
+    {
+      "id": "enterprise",
+      "say": "Enterprise is arranged by contract. Click Speak to us to email DeepTrack's sales team.",
+      "show": [
+        {
+          "highlight": "case:Speak to us"
+        }
+      ]
+    },
+    {
+      "id": "top-up",
+      "say": "Need more credits during the year? Under Top up credits, pick a suggested amount or type your own. Then click Pay, and pay by card or mobile money on Paystack.",
+      "show": [
+        {
+          "scroll": "case:Top up credits"
+        },
+        {
+          "highlight": "field:Amount (KES)"
+        },
+        {
+          "highlight": "button:Pay"
+        }
+      ]
+    },
+    {
+      "id": "save-card",
+      "say": "Leave Save the card ticked if you want automatic top-ups later. When you come back, Sentinel adds the credits and downloads your receipt.",
+      "show": [
+        {
+          "highlight": "field:Save the card for automatic top-ups"
+        }
+      ]
+    },
+    {
+      "id": "invoices",
+      "say": "Every payment has an invoice, listed here, newest first. Click View to open it, or download the PDF. Once it's paid, you get a receipt for your finance team.",
+      "show": [
+        {
+          "scroll": "case:Invoices"
+        },
+        {
+          "highlight": "case:Invoices"
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "say": "Before you pay, fill in Billing settings once. Add a billing email for receipts, and your KRA PIN, so it's printed on every invoice for VAT. Then save.",
+      "show": [
+        {
+          "scroll": "case:Billing settings"
+        },
+        {
+          "highlight": "field:Billing email (receipts and payment links)"
+        },
+        {
+          "highlight": "field:KRA PIN (shown on invoices)"
+        },
+        {
+          "highlight": "button:Save billing settings"
+        }
+      ]
+    },
+    {
+      "id": "auto",
+      "say": "With a saved card, automatic top-up charges it when your balance falls to the level you choose, at most once every 12 hours. Only Admins can pay or change these settings.",
+      "show": [
+        {
+          "card": "Automatic top-up",
+          "subtitle": "Saved card · charged when the balance falls to your level · at most once every 12 hours"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's plans and billing. To learn more, open chapter A2 in Help, Choosing a plan and paying.",
+      "show": [
+        {
+          "card": "Help → A2 Choosing a plan and paying",
+          "subtitle": "sentinel.deeptrack.io/help/a2"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Nothing that pays or saves is clicked: Choose and pay, Pay by bank / M-Pesa, Pay and Save billing settings are only highlighted.",
+    "Billing section titles (Current plan, Credit balance, Your prices, Top up credits, Invoices, Billing settings) are <p> elements, not headings, so they use case:<text> (getByText fallback); card: would not find them.",
+    "Top up credits, Plans payment buttons and Billing settings only render for an Admin. Top up credits' amount field, presets and Pay only render if Paystack is enabled; otherwise those highlights are skipped.",
+    "On Business, the current plan's button reads 'Renew and pay', so button:Choose and pay highlights the first other plan (Starter). If the KES exchange rate isn't set, plans show 'Ask for a quote' instead and that highlight is skipped.",
+    "button:Pay is a substring match; it should hit the top-up Pay button, which is first in the page, but could hit another button containing 'Pay' if the top-up card is hidden.",
+    "case:Speak to us matches the Enterprise 'Speak to us' link first (the later link reads 'Speak to our sales team').",
+    "Automatic top-up is shown as a title card because its controls only appear once a card is saved, and 'case:Automatic top-up' would first match 'Save the card for automatic top-ups'."
+  ]
+}
