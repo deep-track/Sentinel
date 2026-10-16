@@ -498,7 +498,7 @@ http.route({
 // POST /v1/verify/document: an identity document or a proof of address,
 // verified by Claude vision, AWS Textract OCR and forensic checks.
 
-const DOCUMENT_TEXT_FIELDS = ["expectedName", "expectedAddress", "expectedDateOfBirth", "externalRef"] as const;
+const DOCUMENT_TEXT_FIELDS = ["expectedName", "expectedAddress", "expectedDateOfBirth", "expectedKraPin", "externalRef"] as const;
 
 http.route({
   path: "/v1/verify/document",
@@ -513,7 +513,7 @@ http.route({
     if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Request body must be a JSON object" }, 400);
     const b = body as Record<string, unknown>;
     const invalid: string[] = [];
-    if (b.documentKind !== "identity" && b.documentKind !== "proof_of_address") invalid.push("documentKind");
+    if (b.documentKind !== "identity" && b.documentKind !== "proof_of_address" && b.documentKind !== "kra_pin") invalid.push("documentKind");
     if (typeof b.documentFrontBase64 !== "string" || !b.documentFrontBase64.trim()) invalid.push("documentFrontBase64");
     if (b.documentBackBase64 !== undefined && b.documentBackBase64 !== null && typeof b.documentBackBase64 !== "string") invalid.push("documentBackBase64");
     for (const field of DOCUMENT_TEXT_FIELDS) {
@@ -525,12 +525,13 @@ http.route({
         {
           error: `Invalid fields: ${invalid.join(", ")}`,
           details: {
-            documentKind: ["identity", "proof_of_address"],
+            documentKind: ["identity", "proof_of_address", "kra_pin"],
             documentFrontBase64: "required: base64 JPEG, PNG, WebP or PDF",
             documentBackBase64: "optional, identity documents only: the back of the card",
             expectedName: "optional: name to match",
             expectedAddress: "optional, proof of address: declared address to match",
             expectedDateOfBirth: "optional, identity documents: YYYY-MM-DD to match",
+            expectedKraPin: "optional, KRA PIN certificates: the declared PIN to match",
             maxDocumentAgeDays: "optional, proof of address: oldest acceptable issue date in days (default 90)",
             externalRef: "optional: your reference",
           },
@@ -544,12 +545,13 @@ http.route({
         clientId: auth.clientId,
         apiKeyId: auth.apiKeyId,
         environment: auth.environment,
-        documentKind: b.documentKind as "identity" | "proof_of_address",
+        documentKind: b.documentKind as "identity" | "proof_of_address" | "kra_pin",
         documentFrontBase64: b.documentFrontBase64 as string,
         ...(typeof b.documentBackBase64 === "string" && b.documentBackBase64.trim() ? { documentBackBase64: b.documentBackBase64 } : {}),
         ...(optionalText("expectedName") ? { expectedName: optionalText("expectedName") } : {}),
         ...(optionalText("expectedAddress") ? { expectedAddress: optionalText("expectedAddress") } : {}),
         ...(optionalText("expectedDateOfBirth") ? { expectedDateOfBirth: optionalText("expectedDateOfBirth") } : {}),
+        ...(optionalText("expectedKraPin") ? { expectedKraPin: optionalText("expectedKraPin") } : {}),
         ...(optionalText("externalRef") ? { externalRef: optionalText("externalRef") } : {}),
         ...(typeof b.maxDocumentAgeDays === "number" ? { maxDocumentAgeDays: b.maxDocumentAgeDays } : {}),
       }),
@@ -566,6 +568,7 @@ function documentSummary(result: unknown) {
     documentKind: r.documentKind ?? null,
     identity: r.identity ?? null,
     proofOfAddress: r.proofOfAddress ?? null,
+    kraPin: r.kraPin ?? null,
     checks: Array.isArray(r.checks) ? r.checks : [],
     flags: Array.isArray(r.flags) ? r.flags : [],
     ocr: r.ocr ?? null,

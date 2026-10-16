@@ -109,7 +109,10 @@ export function kybReportSpec(record: KybRecord, directors: KybDirector[], count
     const fields = data.certificate.fields ?? {};
     checks.push(
       ...componentBlocks("Registration certificate", data.certificate, [
-        ["Read as", [fields.companyName, fields.registrationNumber ? `no. ${String(fields.registrationNumber)}` : null, fields.incorporationDate ? `incorporated ${String(fields.incorporationDate)}` : null].filter(Boolean).join(", ") || null],
+        ["Read as", [fields.companyName, fields.registrationNumber ? `no. ${String(fields.registrationNumber)}` : null, fields.incorporationDate ? `incorporated ${String(fields.incorporationDate)}` : null, fields.documentDate ? `dated ${String(fields.documentDate)}` : null].filter(Boolean).join(", ") || null],
+        ...(Array.isArray(fields.shareholders) && fields.shareholders.length
+          ? ([["Shareholders on the document", (fields.shareholders as Array<{ name: string; shares: string | null }>).map((holder) => `${holder.name}${holder.shares ? ` (${holder.shares})` : ""}`).join("; ")]] as Array<[string, string | null]>)
+          : []),
       ]),
     );
   }

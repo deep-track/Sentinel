@@ -14,7 +14,7 @@ export async function creditsForVerification(
   ctx: { db: MutationCtx["db"] },
   clientId: Id<"clients">,
   type: VerificationType,
-  documentKind?: "identity" | "proof_of_address",
+  documentKind?: "identity" | "proof_of_address" | "kra_pin",
 ): Promise<number> {
   const client = await ctx.db.get(clientId);
   return priceCredits(client?.plan ?? "starter", client?.billingCurrency ?? "USD", type, documentKind);

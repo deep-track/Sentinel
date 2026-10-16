@@ -232,6 +232,8 @@ export type Mrz = {
   expiryDate: string | null;
   surname: string;
   givenNames: string;
+  // Optional data (TD1 lines 1 and 2, TD3 personal number), without fillers.
+  optionalData: string;
   checks: { name: string; valid: boolean }[];
 };
 
@@ -302,6 +304,7 @@ export function parseMrz(lines: string[], now = Date.now()): Mrz | null {
       sex: (two[20] === "M" || two[20] === "F" ? two[20] : "X") as Mrz["sex"],
       expiryDate: mrzDate(expiry, "expiry", now),
       ...names(one.slice(5)),
+      optionalData: personal.replace(/</g, ""),
       checks: [
         { name: "document number", valid: checkDigit(number, two[9]) },
         { name: "date of birth", valid: checkDigit(birth, two[19]) },
@@ -327,6 +330,7 @@ export function parseMrz(lines: string[], now = Date.now()): Mrz | null {
       sex: (two[7] === "M" || two[7] === "F" ? two[7] : "X") as Mrz["sex"],
       expiryDate: mrzDate(expiry, "expiry", now),
       ...names(three),
+      optionalData: `${one.slice(15, 30)}${two.slice(18, 29)}`.replace(/</g, ""),
       checks: [
         { name: "document number", valid: checkDigit(number, one[14]) },
         { name: "date of birth", valid: checkDigit(birth, two[6]) },
@@ -413,10 +417,27 @@ export type IdentityFields = {
   issuingAuthority: string | null;
   address: string | null;
   personalNumber: string | null;
+  // Card serial number, where printed separately from the document number
+  // (Kenya's second-generation ID).
+  serialNumber: string | null;
+  // Kenyan national IDs: the Maisha card or the second-generation card.
+  kenyanIdType: "maisha_card" | "second_generation" | null;
   mrzLines: string[];
   hasFacePhoto: boolean;
   hasSignature: boolean;
 };
+
+// Kenya in an MRZ or as read: KEN, or KYA on second-generation ID cards.
+export function isKenyan(country: string | null | undefined): boolean {
+  return /^(KEN|KYA|KE|KENYA)$/i.test((country ?? "").trim());
+}
+
+const digitsOnly = (value: string | null | undefined) => (value ?? "").replace(/[^0-9A-Z]/gi, "").toUpperCase();
+
+// A Kenyan national ID number: digits only, 6 to 10 of them.
+export function isKenyanIdNumber(value: string | null | undefined): boolean {
+  return /^\d{6,10}$/.test(digitsOnly(value));
+}
 
 export const MINIMUM_AGE = 18;
 
@@ -451,13 +472,23 @@ export function identityRuleChecks(
     }
   }
 
+  const kenyanId = fields.documentType === "national_id" && (isKenyan(fields.issuingCountry) || Boolean(fields.kenyanIdType));
+  // Second-generation Kenyan IDs carry no expiry date.
+  const noExpiryExpected = kenyanId && fields.kenyanIdType === "second_generation";
+  if (kenyanId) {
+    const idNumber = fields.kenyanIdType === "maisha_card" && fields.personalNumber ? fields.personalNumber : fields.documentNumber;
+    if (idNumber && !isKenyanIdNumber(idNumber)) {
+      flags.push({ code: "kenya_id_number_format", severity: "high", source: "rules", message: `"${idNumber}" isn't a Kenyan ID number (6 to 10 digits).` });
+    }
+  }
+
   let isExpired: boolean | null = null;
   if (fields.expiryDate && isIsoDate(fields.expiryDate)) {
     isExpired = fields.expiryDate < today;
     if (isExpired) {
       flags.push({ code: "document_expired", severity: "critical", source: "rules", message: `The document expired on ${fields.expiryDate}.` });
     }
-  } else if (fields.documentType !== "other") {
+  } else if (fields.documentType !== "other" && !noExpiryExpected) {
     flags.push({ code: "missing_expiry", severity: "medium", source: "rules", message: "The expiry date could not be read." });
   }
   if (fields.issueDate && isIsoDate(fields.issueDate)) {
@@ -488,7 +519,13 @@ export function identityRuleChecks(
       });
     }
     const mismatches: string[] = [];
-    if (fields.documentNumber && normalizeText(fields.documentNumber).replace(/ /g, "") !== mrz.documentNumber.toLowerCase()) mismatches.push("document number");
+    // A Kenyan ID's MRZ may carry the card serial number as the document
+    // number, with the ID number in the optional data.
+    const numberMatches = (value: string | null) => Boolean(value) && digitsOnly(value) === mrz.documentNumber;
+    const numberAgrees = kenyanId
+      ? numberMatches(fields.documentNumber) || numberMatches(fields.serialNumber) || numberMatches(fields.personalNumber) || (Boolean(fields.documentNumber) && mrz.optionalData.includes(digitsOnly(fields.documentNumber)))
+      : numberMatches(fields.documentNumber);
+    if (fields.documentNumber && !numberAgrees) mismatches.push("document number");
     if (fields.dateOfBirth && mrz.birthDate && fields.dateOfBirth !== mrz.birthDate) mismatches.push("date of birth");
     if (fields.expiryDate && mrz.expiryDate && fields.expiryDate !== mrz.expiryDate) mismatches.push("expiry date");
     if (fields.sex && fields.sex !== "X" && mrz.sex !== "X" && fields.sex !== mrz.sex) mismatches.push("sex");
@@ -511,6 +548,73 @@ export function identityRuleChecks(
   }
 
   return { flags, mrz, age, isAdult: age === null ? null : age >= MINIMUM_AGE, isExpired };
+}
+
+// ── KRA PIN certificate ─────────────────────────────────────────────────────
+
+// A KRA PIN: A (individuals) or P (companies and other non-individuals),
+// nine digits and a letter, e.g. A012345678Z.
+export const KRA_PIN_PATTERN = /^[AP]\d{9}[A-Z]$/;
+
+export function normalizeKraPin(value: string | null | undefined): string {
+  return (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+export type KraPinFields = {
+  pin: string | null;
+  taxpayerName: string | null;
+  taxpayerType: "individual" | "non_individual" | null;
+  email: string | null;
+  certificateDate: string | null;
+  obligations: string[];
+  issuedByKra: boolean;
+};
+
+export function kraPinChecks(
+  fields: KraPinFields,
+  expected: { name?: string; kraPin?: string },
+  now = Date.now(),
+): { flags: FraudFlag[]; checks: Array<{ name: string; status: "passed" | "failed" | "not_applicable"; detail?: string }>; nameMatch: number | null } {
+  const flags: FraudFlag[] = [];
+  const checks: Array<{ name: string; status: "passed" | "failed" | "not_applicable"; detail?: string }> = [];
+  const pin = normalizeKraPin(fields.pin);
+  if (!pin) {
+    flags.push({ code: "kra_pin_unreadable", severity: "medium", source: "rules", message: "The KRA PIN couldn't be read." });
+  } else if (!KRA_PIN_PATTERN.test(pin)) {
+    flags.push({ code: "kra_pin_format", severity: "critical", source: "rules", message: `"${fields.pin}" isn't a valid KRA PIN (a letter A or P, nine digits and a letter).` });
+  }
+  checks.push({ name: "Valid KRA PIN format", status: !pin ? "not_applicable" : KRA_PIN_PATTERN.test(pin) ? "passed" : "failed", detail: pin || undefined });
+
+  // The first letter says who the PIN is for.
+  if (KRA_PIN_PATTERN.test(pin) && fields.taxpayerType) {
+    const consistent = (pin[0] === "A") === (fields.taxpayerType === "individual");
+    if (!consistent) {
+      flags.push({ code: "kra_pin_type_mismatch", severity: "high", source: "rules", message: `A PIN starting with ${pin[0]} is for ${pin[0] === "A" ? "an individual" : "a company or other non-individual"}, but the certificate is for ${fields.taxpayerType === "individual" ? "an individual" : "a non-individual"}.` });
+    }
+    checks.push({ name: "PIN type matches the taxpayer", status: consistent ? "passed" : "failed" });
+  }
+
+  if (!fields.issuedByKra) {
+    flags.push({ code: "not_a_kra_certificate", severity: "critical", source: "vision", message: "The document isn't a KRA PIN certificate." });
+  }
+
+  const expectedPin = normalizeKraPin(expected.kraPin);
+  if (expectedPin && pin) {
+    const same = expectedPin === pin;
+    if (!same) flags.push({ code: "expected_kra_pin_mismatch", severity: "high", source: "rules", message: `The certificate is for PIN ${pin}, not ${expectedPin}.` });
+    checks.push({ name: "PIN matches the declared PIN", status: same ? "passed" : "failed" });
+  }
+
+  const nameMatch = expected.name && fields.taxpayerName ? nameMatchScore(expected.name, fields.taxpayerName) : null;
+  if (nameMatch !== null) {
+    if (nameMatch < 0.67) flags.push({ code: "expected_name_mismatch", severity: "high", source: "rules", message: `The certificate is for "${fields.taxpayerName}", not "${expected.name}".` });
+    checks.push({ name: "Name matches the declared name", status: nameMatch >= 0.67 ? "passed" : "failed" });
+  }
+
+  if (isIsoDate(fields.certificateDate) && Date.parse(`${fields.certificateDate}T00:00:00Z`) > now) {
+    flags.push({ code: "issue_date_in_future", severity: "critical", source: "rules", message: "The certificate date is in the future." });
+  }
+  return { flags, checks, nameMatch };
 }
 
 // ── Proof of address ────────────────────────────────────────────────────────

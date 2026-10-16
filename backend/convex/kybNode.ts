@@ -5,11 +5,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { fileForensics, MEDIA_TYPES } from "./lib/documentChecks";
+import { fileForensics, MEDIA_TYPES, type FraudFlag } from "./lib/documentChecks";
 import { runDocumentPipeline } from "./lib/documentPipeline";
 import type { DocumentImage } from "./lib/documentVision";
 import {
   certificateRules,
+  cr12AgainstRegistry,
+  type BusinessRegistrationFields,
+  type CertificateCheck,
   certificateVerdict,
   decideKyb,
   isAllowedDocumentUrl,
@@ -187,6 +190,15 @@ export const processKyb = internalAction({
         });
         registry = compared.outcome;
         undeclaredShareholders = compared.undeclaredShareholders.slice(0, 10);
+        // A CR12's shareholders against the live register.
+        if (certificateDetail && lookup.status === "found") {
+          const cross = cr12AgainstRegistry(certificateDetail.fields as BusinessRegistrationFields, lookup.record.shareholders.map((holder) => holder.name));
+          if (cross.checks.length) {
+            const flags = [...(certificateDetail.flags as FraudFlag[]), ...cross.flags];
+            certificateDetail = { ...certificateDetail, flags, checks: [...(certificateDetail.checks as CertificateCheck[]), ...cross.checks] };
+            certificate = certificateVerdict(flags);
+          }
+        }
         // Beneficial ownership: follow company shareholders through BRS.
         const declaredPeople = [...declaredDirectors, ...(certificateDetail ? ((certificateDetail.fields as { directors?: string[] })?.directors ?? []) : [])];
         const companies = lookup.status === "found" ? await traceOwnership(lookup, (number) => lookUpBrs(ctx, args.verificationId, number)) : new Map<string, BrsLookup>();

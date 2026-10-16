@@ -93,7 +93,7 @@ export type VerificationKind = "idp" | "kyb" | "aml" | "liveness" | "kyi" | "doc
 //   document (IDP)            identity document, or proof of address
 //   aml                       AML screening; ongoing monitoring of the subject is included
 //   kyi                       retired; old records only, billed like KYC
-export function serviceFor(type: VerificationKind, documentKind?: "identity" | "proof_of_address"): Service {
+export function serviceFor(type: VerificationKind, documentKind?: "identity" | "proof_of_address" | "kra_pin"): Service {
   switch (type) {
     case "idp":
     case "kyi":
@@ -114,7 +114,7 @@ export function priceCredits(
   plan: Plan,
   currency: BillingCurrency,
   type: VerificationKind,
-  documentKind?: "identity" | "proof_of_address",
+  documentKind?: "identity" | "proof_of_address" | "kra_pin",
 ): number {
   return tableFor(currency, plan)[serviceFor(type, documentKind)];
 }

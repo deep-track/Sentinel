@@ -54,9 +54,10 @@ test("the certificate must match the declared business", () => {
 });
 
 test("a CR12 must list the declared directors", () => {
-  const listed = kyb.certificateRules(fields({ documentType: "cr12", directors: ["WANJIRU Jane", "Peter Otieno"] }), declared);
+  const today = new Date().toISOString().slice(0, 10);
+  const listed = kyb.certificateRules(fields({ documentType: "cr12", documentDate: today, directors: ["WANJIRU Jane", "Peter Otieno"] }), declared);
   assert.equal(listed.flags.length, 0);
-  const missing = kyb.certificateRules(fields({ documentType: "cr12", directors: ["Peter Otieno"] }), declared);
+  const missing = kyb.certificateRules(fields({ documentType: "cr12", documentDate: today, directors: ["Peter Otieno"] }), declared);
   assert.equal(missing.flags[0].code, "director_not_on_document");
 });
 

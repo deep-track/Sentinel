@@ -11,7 +11,7 @@ import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { getErrorMessage } from "@/modules/shared/errors";
 import { compressImage, readAsDataUrl, stripDataUrlPrefix } from "@/modules/shared/files";
 
-type DocumentKind = "identity" | "proof_of_address";
+type DocumentKind = "identity" | "proof_of_address" | "kra_pin";
 
 type Row = {
   _id: string;
@@ -79,6 +79,7 @@ export function DocumentVerificationForm({ clientId, canSubmit }: { clientId: st
   const [expectedName, setExpectedName] = useState("");
   const [expectedDateOfBirth, setExpectedDateOfBirth] = useState("");
   const [expectedAddress, setExpectedAddress] = useState("");
+  const [expectedKraPin, setExpectedKraPin] = useState("");
   const [maxAgeDays, setMaxAgeDays] = useState("90");
   const [externalRef, setExternalRef] = useState("");
   const [pending, setPending] = useState(false);
@@ -107,13 +108,16 @@ export function DocumentVerificationForm({ clientId, canSubmit }: { clientId: st
         resized: frontFile.resized || backFile?.resized ? true : undefined,
         ...(kind === "identity"
           ? { expectedDateOfBirth: optional(expectedDateOfBirth) }
-          : { expectedAddress: optional(expectedAddress), maxDocumentAgeDays: Number(maxAgeDays) || undefined }),
+          : kind === "kra_pin"
+            ? { expectedKraPin: optional(expectedKraPin) }
+            : { expectedAddress: optional(expectedAddress), maxDocumentAgeDays: Number(maxAgeDays) || undefined }),
       });
       setFront(null);
       setBack(null);
       setExpectedName("");
       setExpectedDateOfBirth("");
       setExpectedAddress("");
+      setExpectedKraPin("");
       setExternalRef("");
       setFormKey((key) => key + 1);
       setMessage({
@@ -138,6 +142,7 @@ export function DocumentVerificationForm({ clientId, canSubmit }: { clientId: st
               [
                 ["identity", "Identity document", "Passport, national ID, driver's licence, residence permit"],
                 ["proof_of_address", "Proof of address", "Utility bill, bank statement, salary slip and 20+ more"],
+                ["kra_pin", "KRA PIN certificate", "Kenya Revenue Authority PIN certificate, for individuals and companies"],
               ] as const
             ).map(([value, label, hint]) => (
               <button
@@ -167,13 +172,18 @@ export function DocumentVerificationForm({ clientId, canSubmit }: { clientId: st
               </label>
             ) : null}
             <label className="text-sm font-medium">
-              {kind === "identity" ? "Expected name" : "Customer name"}
+              {kind === "identity" ? "Expected name" : kind === "kra_pin" ? "Taxpayer name" : "Customer name"}
               <input value={expectedName} onChange={(e) => setExpectedName(e.target.value)} className={inputClass} placeholder="Optional, to match" maxLength={300} />
             </label>
             {kind === "identity" ? (
               <label className="text-sm font-medium">
                 Expected date of birth
                 <input value={expectedDateOfBirth} onChange={(e) => setExpectedDateOfBirth(e.target.value)} className={inputClass} placeholder="Optional: YYYY-MM-DD" maxLength={10} />
+              </label>
+            ) : kind === "kra_pin" ? (
+              <label className="text-sm font-medium">
+                Declared KRA PIN
+                <input value={expectedKraPin} onChange={(e) => setExpectedKraPin(e.target.value.toUpperCase())} className={inputClass} placeholder="Optional, e.g. A012345678Z" maxLength={11} />
               </label>
             ) : (
               <>
@@ -228,7 +238,7 @@ export function DocumentVerificationForm({ clientId, canSubmit }: { clientId: st
           ) : (
             rows.map((row) => {
               const state = outcome(row);
-              const kindLabel = row.input?.documentKind === "proof_of_address" ? "Proof of address" : "Identity document";
+              const kindLabel = row.input?.documentKind === "proof_of_address" ? "Proof of address" : row.input?.documentKind === "kra_pin" ? "KRA PIN certificate" : "Identity document";
               const flagCount = row.result?.flags?.length ?? 0;
               return (
                 <div key={row._id} className="flex items-center justify-between gap-4 p-4 text-sm">

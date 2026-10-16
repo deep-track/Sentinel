@@ -218,6 +218,10 @@ function AutomatedChecks({ result }: { result: unknown }) {
             <p className="mt-1 text-xs text-slate-500">
               Read as {String(data.certificate.fields.companyName ?? "—")} · no. {String(data.certificate.fields.registrationNumber ?? "—")}
               {data.certificate.fields.incorporationDate ? ` · incorporated ${String(data.certificate.fields.incorporationDate)}` : ""}
+              {data.certificate.fields.documentDate ? ` · dated ${String(data.certificate.fields.documentDate)}` : ""}
+              {Array.isArray(data.certificate.fields.shareholders) && data.certificate.fields.shareholders.length
+                ? ` · shareholders: ${(data.certificate.fields.shareholders as Array<{ name: string; shares: string | null }>).map((holder) => `${holder.name}${holder.shares ? ` (${holder.shares})` : ""}`).join("; ")}`
+                : ""}
             </p>
           ) : (
             <p className="mt-1 text-xs text-slate-500">{data.certificate.reason}</p>

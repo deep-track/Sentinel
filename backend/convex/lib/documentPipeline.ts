@@ -13,16 +13,18 @@ import {
   documentVerdict,
   fileForensics,
   identityRuleChecks,
+  kraPinChecks,
   MEDIA_TYPES,
   nameMatchScore,
   ocrCrossCheck,
   proofOfAddressChecks,
   type FraudFlag,
   type IdentityFields,
+  type KraPinFields,
   type Mrz,
   type PoaFields,
 } from "./documentChecks";
-import { readIdentityDocument, readProofOfAddress, type DocumentImage, type DocumentKind, type VisionResult } from "./documentVision";
+import { readIdentityDocument, readKraPinCertificate, readProofOfAddress, type DocumentImage, type DocumentKind, type VisionResult } from "./documentVision";
 import type { C2paManifestFinding, C2paOutcome } from "./c2paResolution";
 
 export type OcrResult = { provider: "aws_textract"; text: string; averageConfidence: number | null; lineCount: number };
@@ -33,7 +35,7 @@ export type PipelineInput = {
   documentKind: DocumentKind;
   front: Uint8Array;
   back?: Uint8Array;
-  expected: { name?: string; address?: string; dateOfBirth?: string };
+  expected: { name?: string; address?: string; dateOfBirth?: string; kraPin?: string };
   maxDocumentAgeDays?: number;
   // The image was re-encoded before upload, so its original metadata is gone.
   resized?: boolean;
@@ -65,6 +67,7 @@ export type PipelineResult = {
     expectedNameMatch: number | null;
     expectedDateOfBirthMatch: boolean | null;
   };
+  kraPin?: { fields: KraPinFields; nameMatch: number | null };
   proofOfAddress?: {
     fields: PoaFields;
     nameMatch: number | null;
@@ -99,7 +102,7 @@ export function decodeBase64(value: string): Uint8Array {
 const CRITICAL_FIRST: Record<FraudFlag["severity"], number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
 function describe(verdict: PipelineResult["verdict"], flags: FraudFlag[], kind: DocumentKind) {
-  const label = kind === "identity" ? "Identity document" : "Proof of address";
+  const label = kind === "identity" ? "Identity document" : kind === "kra_pin" ? "KRA PIN certificate" : "Proof of address";
   if (verdict === "pass") return `${label} verified: no fraud signals and all checks passed.`;
   const top = [...flags].sort((a, b) => CRITICAL_FIRST[a.severity] - CRITICAL_FIRST[b.severity]).slice(0, 3);
   const lead = verdict === "reject" ? `${label} rejected` : `${label} needs review`;
@@ -127,8 +130,12 @@ export async function runDocumentPipeline(input: PipelineInput, deps: PipelineDe
   }));
 
   // 2. Claude vision, and 3. OCR, in parallel.
-  const visionPromise =
-    input.documentKind === "identity" ? readIdentityDocument(deps.client, images) : readProofOfAddress(deps.client, images);
+  const visionPromise: Promise<VisionResult<unknown>> =
+    input.documentKind === "identity"
+      ? readIdentityDocument(deps.client, images)
+      : input.documentKind === "kra_pin"
+        ? readKraPinCertificate(deps.client, images)
+        : readProofOfAddress(deps.client, images);
   const ocrPromise: Promise<OcrResult | "not_configured" | "unavailable" | "unsupported_file"> = (async () => {
     if (!deps.ocr) return "not_configured";
     const front = forensics[0];
@@ -154,6 +161,7 @@ export async function runDocumentPipeline(input: PipelineInput, deps: PipelineDe
   const checks: PipelineResult["checks"] = [];
   let identity: PipelineResult["identity"];
   let proofOfAddress: PipelineResult["proofOfAddress"];
+  let kraPin: PipelineResult["kraPin"];
   let ocrValues: Record<string, string | null | undefined> = {};
 
   // 4. Rule checks.
@@ -181,6 +189,13 @@ export async function runDocumentPipeline(input: PipelineInput, deps: PipelineDe
     if (expectedNameMatch !== null) checks.push({ name: "Name matches the declared name", status: expectedNameMatch >= 0.67 ? "passed" : "failed" });
     if (expectedDateOfBirthMatch !== null) checks.push({ name: "Date of birth matches", status: expectedDateOfBirthMatch ? "passed" : "failed" });
     ocrValues = { "document number": fields.documentNumber, surname: fields.surname, "date of birth": fields.dateOfBirth, "expiry date": fields.expiryDate };
+  } else if (input.documentKind === "kra_pin") {
+    const fields = vision.fields as KraPinFields;
+    const rules = kraPinChecks(fields, { name: input.expected.name, kraPin: input.expected.kraPin }, now);
+    flags.push(...rules.flags);
+    kraPin = { fields, nameMatch: rules.nameMatch };
+    checks.push({ name: "Issued by the Kenya Revenue Authority", status: fields.issuedByKra ? "passed" : "failed" }, ...rules.checks);
+    ocrValues = { PIN: fields.pin, "taxpayer name": fields.taxpayerName };
   } else {
     const fields = vision.fields as PoaFields;
     const maxDocumentAgeDays = input.maxDocumentAgeDays ?? 90;
@@ -241,6 +256,7 @@ export async function runDocumentPipeline(input: PipelineInput, deps: PipelineDe
     documentKind: input.documentKind,
     identity,
     proofOfAddress,
+    ...(kraPin ? { kraPin } : {}),
     forensics: {
       fileTypes: forensics.map((page) => page.kind),
       software: [...new Set(forensics.flatMap((page) => page.software))],
