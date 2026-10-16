@@ -91,6 +91,19 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
         <ClearedMatches clientId={clientId} />
       </Section>
 
+      <Section
+        title="AI hit review"
+        description="Sentinel's AI compares the customer with each AML hit (date of birth, nationality, ID number, positions, the news story) and recommends clearing the hits, confirming the match or escalating, with its reasons. It only recommends: your reviewers decide, under your four-eyes and clearance rules."
+      >
+        <Toggle
+          checked={draft.aiHitReview}
+          onChange={(aiHitReview) => set({ aiHitReview })}
+          disabled={disabled}
+          label="Review hits with AI when a case opens"
+          detail="ID numbers are compared by Sentinel itself and never sent to the AI. Reviewers can also run it on demand."
+        />
+      </Section>
+
       <Section title="Ongoing monitoring">
         <Toggle
           checked={draft.monitoringDefault}
@@ -186,6 +199,7 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
                 documentFraudAction: draft.documentFraudAction,
                 poaMaxAgeDays: draft.poaMaxAgeDays,
                 rememberClearedMatches: draft.rememberClearedMatches,
+                aiHitReview: draft.aiHitReview,
                 // null (every category) is stored as "not set".
                 ...(draft.adverseMediaCategories ? { adverseMediaCategories: draft.adverseMediaCategories } : {}),
                 ...(draft.acceptedPoaDocuments ? { acceptedPoaDocuments: draft.acceptedPoaDocuments } : {}),

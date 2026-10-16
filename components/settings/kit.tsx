@@ -36,6 +36,7 @@ export type ResolvedSettings = {
     poaMaxAgeDays: number;
     acceptedPoaDocuments: string[] | null;
     rememberClearedMatches: boolean;
+    aiHitReview: boolean;
   };
   notifications: {
     events: Record<string, { enabled: boolean; email: boolean; roles: string[] }>;

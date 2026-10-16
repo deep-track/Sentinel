@@ -695,6 +695,8 @@ export default defineSchema({
     // Client disputes: the result disputed and the one the client expects.
     disputedVerdict: v.optional(v.union(v.literal("pass"), v.literal("reject"))),
     expectedVerdict: v.optional(v.union(v.literal("pass"), v.literal("reject"))),
+    // AI hit review (aiHitReview.ts): status and Claude's recommendation.
+    aiAssessment: v.optional(v.any()),
     // A client dispute the client withdrew (closed without a decision).
     withdrawnAt: v.optional(v.number()),
     withdrawnBy: v.optional(v.string()),

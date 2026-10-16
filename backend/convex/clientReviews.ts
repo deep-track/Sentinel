@@ -7,6 +7,7 @@ import type { ClientRole } from "./lib/rbac";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
 import { displayName, resolveReviewItem } from "./reviewQueue";
 import { notify } from "./notifications";
+import { scheduleHitReview } from "./aiHitReview";
 import { profileNames } from "./userProfiles";
 import {
   CASE_CATEGORY_LABELS,
@@ -184,6 +185,9 @@ export async function queueReview(
     ...(assignee ? { clientAssignedTo: assignee.userId, clientAssignedToName: assignee.name, clientAssignedAt: now } : {}),
     createdAt: now,
   });
+
+  // AI hit review of the AML hits, when the client has it on.
+  await scheduleHitReview(ctx, reviewId, verification, settings.screening.aiHitReview);
 
   const subject = verification ? subjectOf(verification) : "a check";
   const reason = fields.triggerReason.slice(0, 300);
@@ -371,6 +375,8 @@ export const get = query({
       category,
       categoryLabel: CASE_CATEGORY_LABELS[category],
       recommendationNotes: row.recommendation?.notes ?? null,
+      aiAssessment: row.aiAssessment ?? null,
+      aiReviewAvailable: verification?.type === "aml" && ((verification.result as { matches?: unknown[] } | null)?.matches?.length ?? 0) > 0,
       resolutionNotes: row.resolutionNotes ?? null,
       result: verification
         ? {

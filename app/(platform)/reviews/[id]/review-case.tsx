@@ -14,10 +14,13 @@ import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { getErrorMessage } from "@/modules/shared/errors";
 import { CategoryBadge, DueLabel, PriorityBadge, type ReviewSummary } from "../review-parts";
 import { StrPanel } from "@/components/reports/str-dialog";
+import { AiAssessmentPanel, type AiAssessment, type DecisionSuggestion } from "@/components/reviews/ai-assessment";
 
 type CaseDetail = ReviewSummary & {
   clientId?: string;
   recommendationNotes: string | null;
+  aiAssessment: AiAssessment | null;
+  aiReviewAvailable: boolean;
   resolutionNotes: string | null;
   result: { status: string; reason: string | null; confidence: number | null; createdAt: number } | null;
   hits: Array<{ entityName: string; source: string; program: string; matchScore: number; categories: string[]; pepClass: number | null; riskLevel: string }>;
@@ -58,10 +61,13 @@ const HISTORY_LABELS: Record<string, string> = {
   "review.confirm": "Approved",
   "review.keep_verdict": "Rejected",
   "review.escalate": "Escalated to DeepTrack engineering",
+  "review.ai_requested": "Asked for an AI hit review",
+  "review.ai_assessed": "AI hit review completed",
 };
 
 export function ReviewCase({ reviewId }: { reviewId: string }) {
   const data = useAuthedQuery(anyApi.clientReviews.get, { reviewId }) as CaseDetail | null | undefined;
+  const [suggestion, setSuggestion] = useState<DecisionSuggestion | null>(null);
 
   if (data === undefined) return <Skeleton className="h-96 w-full" />;
   if (data === null) {
@@ -143,7 +149,19 @@ export function ReviewCase({ reviewId }: { reviewId: string }) {
         </Card>
       ) : null}
 
-      {closed ? <Outcome data={data} /> : <WorkPanel data={data} reviewId={reviewId} />}
+      <AiAssessmentPanel
+        reviewId={reviewId}
+        assessment={data.aiAssessment}
+        available={data.aiReviewAvailable && !closed}
+        canWork={data.me.canWork}
+        canDecide={!closed && data.me.decision.canAct}
+        onUse={(next) => {
+          setSuggestion(next);
+          toast.success("Recommendation copied into the decision below. Check it, then submit.");
+        }}
+      />
+
+      {closed ? <Outcome data={data} /> : <WorkPanel data={data} reviewId={reviewId} suggestion={suggestion} />}
 
       {data.verification && ["client_admin", "reviewer", "internal_admin"].includes(data.me.role) ? (
         <StrPanel
@@ -200,7 +218,7 @@ function Outcome({ data }: { data: CaseDetail }) {
   );
 }
 
-function WorkPanel({ data, reviewId }: { data: CaseDetail; reviewId: string }) {
+function WorkPanel({ data, reviewId, suggestion }: { data: CaseDetail; reviewId: string; suggestion: DecisionSuggestion | null }) {
   const { me, rules } = data;
   return (
     <Card className="p-6 space-y-5">
@@ -225,7 +243,7 @@ function WorkPanel({ data, reviewId }: { data: CaseDetail; reviewId: string }) {
         </div>
       ) : null}
       {me.canWork ? <Assignment data={data} reviewId={reviewId} /> : null}
-      {me.decision.canAct ? <DecisionForm data={data} reviewId={reviewId} /> : me.canWork ? <p className="text-sm text-muted-foreground">{me.decision.reason}</p> : <p className="text-sm text-muted-foreground">Your role can view this case but not act on it.</p>}
+      {me.decision.canAct ? <DecisionForm key={suggestion?.at ?? 0} data={data} reviewId={reviewId} suggestion={suggestion} /> : me.canWork ? <p className="text-sm text-muted-foreground">{me.decision.reason}</p> : <p className="text-sm text-muted-foreground">Your role can view this case but not act on it.</p>}
       {me.canWork ? <SecondaryActions data={data} reviewId={reviewId} /> : null}
     </Card>
   );
@@ -284,11 +302,11 @@ function Assignment({ data, reviewId }: { data: CaseDetail; reviewId: string }) 
   );
 }
 
-function DecisionForm({ data, reviewId }: { data: CaseDetail; reviewId: string }) {
+function DecisionForm({ data, reviewId, suggestion }: { data: CaseDetail; reviewId: string; suggestion: DecisionSuggestion | null }) {
   const decide = useMutation(anyApi.clientReviews.decide);
-  const [action, setAction] = useState<"approve" | "reject">(data.recommendation?.action ?? "approve");
-  const [reasonCode, setReasonCode] = useState(data.recommendation?.reasonCode ?? "");
-  const [notes, setNotes] = useState("");
+  const [action, setAction] = useState<"approve" | "reject">(suggestion?.action ?? data.recommendation?.action ?? "approve");
+  const [reasonCode, setReasonCode] = useState(suggestion ? "" : data.recommendation?.reasonCode ?? "");
+  const [notes, setNotes] = useState(suggestion?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const reasons = action === "approve" ? data.rules.approveReasons : data.rules.rejectReasons;
   const final = data.me.decision.final;
