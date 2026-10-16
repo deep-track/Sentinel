@@ -114,7 +114,7 @@ test("wiring: register hits are PEP cases for review, never a reject; nothing sc
   const aml = read("backend/convex/aml.ts");
   assert.match(aml, /source: "KE_PEP" as const/);
   assert.match(aml, /categories: \["pep" as const\]/);
-  assert.match(aml, /\(mediaHits\.length > 0 \|\| pepMatches\.length > 0\) && decision\.verdict === "pass" \? "review"/);
+  assert.match(aml, /\(mediaHits\.length > 0 \|\| pepMatches\.length > 0 \|\| riskListMatches\.length > 0\) && decision\.verdict === "pass" \? "review"/);
   assert.match(aml, /clearedKey\("KE_PEP", entry\._id\)/, "cleared-hit memory applies");
   const register = read("backend/convex/pepRegister.ts");
   assert.doesNotMatch(register, /kenyalaw\.org|fetch\(/, "the Gazette is uploaded, never downloaded");

@@ -507,6 +507,7 @@ export default defineSchema({
       v.literal("OPENSANCTIONS"),
       v.literal("ADVERSE_MEDIA"),
       v.literal("KE_PEP"),
+      v.literal("KE_RISK_LIST"),
     ),
     program: v.string(),
     matchScore: v.number(), // 0-100
@@ -996,6 +997,43 @@ kybDirectors: defineTable({
   })
     .index("by_active", ["active"])
     .index("by_full_name", ["fullName"]),
+
+  // Kenyan enforcement, debarment and wanted lists (riskLists.ts), curated
+  // by DeepTrack from official publications.
+  riskListEntries: defineTable({
+    sourceKey: v.union(v.literal("KE_PPRA_DEBARRED"), v.literal("KE_CBK_ENFORCEMENT"), v.literal("KE_CMA_ENFORCEMENT"), v.literal("KE_IRA_ENFORCEMENT"), v.literal("KE_SASRA_ENFORCEMENT"), v.literal("KE_RBA_ENFORCEMENT"), v.literal("KE_EACC"), v.literal("KE_DCI_WANTED"), v.literal("KE_ARA_FORFEITURE"), v.literal("KE_OTHER")),
+    name: v.string(),
+    aliases: v.array(v.string()),
+    entityType: v.union(v.literal("individual"), v.literal("entity")),
+    reason: v.string(),
+    action: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    origin: v.union(v.literal("upload"), v.literal("page"), v.literal("import"), v.literal("manual")),
+    originRef: v.optional(v.string()),
+    active: v.boolean(),
+    addedBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_active", ["active"])
+    .index("by_source_and_active", ["sourceKey", "active"]),
+
+  // Publications read for the risk lists, waiting for approval.
+  riskListImports: defineTable({
+    sourceKey: v.union(v.literal("KE_PPRA_DEBARRED"), v.literal("KE_CBK_ENFORCEMENT"), v.literal("KE_CMA_ENFORCEMENT"), v.literal("KE_IRA_ENFORCEMENT"), v.literal("KE_SASRA_ENFORCEMENT"), v.literal("KE_RBA_ENFORCEMENT"), v.literal("KE_EACC"), v.literal("KE_DCI_WANTED"), v.literal("KE_ARA_FORFEITURE"), v.literal("KE_OTHER")),
+    label: v.string(),
+    url: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("reading"), v.literal("ready"), v.literal("failed"), v.literal("approved")),
+    proposals: v.optional(v.any()),
+    error: v.optional(v.string()),
+    uploadedBy: v.string(),
+    createdAt: v.number(),
+    approvedAt: v.optional(v.number()),
+    approvedCount: v.optional(v.number()),
+  }).index("by_created_at", ["createdAt"]),
 
   // Kenya Gazette issues uploaded to the PEP register and what was found in
   // them, waiting for DeepTrack to approve.
