@@ -275,7 +275,8 @@ export default defineSchema({
   })
     .index("by_client_and_external", ["clientId", "externalId"])
     .index("by_client_customer_time", ["clientId", "customerRef", "occurredAt"])
-    .index("by_client_counterparty", ["clientId", "counterpartyKey"]),
+    .index("by_client_counterparty", ["clientId", "counterpartyKey"])
+    .index("by_client_and_occurred_at", ["clientId", "occurredAt"]),
 
   transactionAlerts: defineTable({
     clientId: v.id("clients"),
@@ -292,7 +293,8 @@ export default defineSchema({
     decisionNotes: v.optional(v.string()),
   })
     .index("by_client_and_status", ["clientId", "status"])
-    .index("by_client_customer_key", ["clientId", "customerRef", "key"]),
+    .index("by_client_customer_key", ["clientId", "customerRef", "key"])
+    .index("by_client_and_created_at", ["clientId", "createdAt"]),
 
   counterpartyScreenings: defineTable({
     clientId: v.id("clients"),
@@ -301,7 +303,9 @@ export default defineSchema({
     verdict: v.union(v.literal("pass"), v.literal("review"), v.literal("reject")),
     reason: v.string(),
     screenedAt: v.number(),
-  }).index("by_client_and_key", ["clientId", "key"]),
+  })
+    .index("by_client_and_key", ["clientId", "key"])
+    .index("by_client_and_screened_at", ["clientId", "screenedAt"]),
 
   // Kenya capture links (capture.ts): the customer completes KYC on their
   // phone. Only the token's SHA-256 is kept.
@@ -838,6 +842,8 @@ export default defineSchema({
     clientId: v.id("clients"),
     verificationId: v.id("verifications"),
     reviewId: v.optional(v.id("reviewQueue")),
+    // Prepared from a transaction monitoring alert (transactions.ts).
+    transactionAlertId: v.optional(v.id("transactionAlerts")),
     reportCode: v.union(v.literal("STR"), v.literal("SAR")),
     status: v.union(v.literal("draft"), v.literal("submitted")),
     entityReference: v.string(),
@@ -1060,6 +1066,12 @@ kybDirectors: defineTable({
     held: v.number(),
     holds: v.object({ openCase: v.number(), monitoring: v.number(), str: v.number(), unfinished: v.number() }),
     relatedRemoved: v.optional(v.number()),
+    // After the checks, transaction monitoring data (transactions occurred
+    // before the cutoff), in this order; `phaseCursor` is the stage's own.
+    phase: v.optional(v.union(v.literal("checks"), v.literal("transactions"), v.literal("alerts"), v.literal("screenings"))),
+    phaseCursor: v.optional(v.number()),
+    estimatedTransactions: v.optional(v.number()),
+    transactions: v.optional(v.object({ removed: v.number(), held: v.number(), alertsTrimmed: v.number(), alertsMinimized: v.number(), screeningsRemoved: v.number() })),
     completedAt: v.optional(v.number()),
   })
     .index("by_client_and_requested_at", ["clientId", "requestedAt"])

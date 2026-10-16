@@ -76,7 +76,16 @@ export function MarkSubmittedButton({ strId }: { strId: string }) {
   );
 }
 
-export function StrPanel({ verificationId, reviewId, defaultReason }: { verificationId: string; reviewId?: string; defaultReason: string }) {
+// The transaction fields of an STR, as the dialog edits them.
+export type StrTransactionDraft = { number: string; date: string; amount: string; description: string; transmodeCode: string; counterpartyName: string; counterpartyAccount: string };
+
+// What the dialog starts with, beyond the reason (e.g. from a transaction
+// monitoring alert: an STR of its largest transaction).
+export type StrPrefill = { reportCode?: "SAR" | "STR"; action?: string; transaction?: Partial<StrTransactionDraft>; transactionAlertId?: string };
+
+const DEFAULT_ACTION = "Customer onboarding declined pending investigation; account placed under enhanced monitoring.";
+
+export function StrPanel({ verificationId, reviewId, defaultReason, prefill }: { verificationId: string; reviewId?: string; defaultReason: string; prefill?: StrPrefill }) {
   const reports = useAuthedQuery(anyApi.strReports.forVerification, { verificationId }) as StrSummary[] | undefined;
   const download = useDownloadStr();
   const [open, setOpen] = useState(false);
@@ -114,19 +123,28 @@ export function StrPanel({ verificationId, reviewId, defaultReason }: { verifica
       <p className="text-xs text-muted-foreground">
         All STRs are on the <Link href="/reports" className="underline">Reports</Link> page.
       </p>
-      {open ? <StrDialog verificationId={verificationId} reviewId={reviewId} defaultReason={defaultReason} onClose={() => setOpen(false)} /> : null}
+      {open ? <StrDialog verificationId={verificationId} reviewId={reviewId} defaultReason={defaultReason} prefill={prefill} onClose={() => setOpen(false)} /> : null}
     </Card>
   );
 }
 
-function StrDialog({ verificationId, reviewId, defaultReason, onClose }: { verificationId: string; reviewId?: string; defaultReason: string; onClose: () => void }) {
+function StrDialog({ verificationId, reviewId, defaultReason, prefill, onClose }: { verificationId: string; reviewId?: string; defaultReason: string; prefill?: StrPrefill; onClose: () => void }) {
   const prepare = useMutation(anyApi.strReports.prepare);
   const download = useDownloadStr();
-  const [reportCode, setReportCode] = useState<"SAR" | "STR">("SAR");
+  const [reportCode, setReportCode] = useState<"SAR" | "STR">(prefill?.reportCode ?? "SAR");
   const [reason, setReason] = useState(defaultReason);
-  const [action, setAction] = useState("Customer onboarding declined pending investigation; account placed under enhanced monitoring.");
+  const [action, setAction] = useState(prefill?.action ?? DEFAULT_ACTION);
   const [indicators, setIndicators] = useState("");
-  const [transaction, setTransaction] = useState({ number: "", date: "", amount: "", description: "", transmodeCode: "", counterpartyName: "", counterpartyAccount: "" });
+  const [transaction, setTransaction] = useState<StrTransactionDraft>({
+    number: "",
+    date: "",
+    amount: "",
+    description: "",
+    transmodeCode: "",
+    counterpartyName: "",
+    counterpartyAccount: "",
+    ...prefill?.transaction,
+  });
   const [busy, setBusy] = useState(false);
   const setT = (key: keyof typeof transaction) => (event: React.ChangeEvent<HTMLInputElement>) => setTransaction((current) => ({ ...current, [key]: event.target.value }));
 
@@ -137,6 +155,7 @@ function StrDialog({ verificationId, reviewId, defaultReason, onClose }: { verif
       const result = (await prepare({
         verificationId,
         ...(reviewId ? { reviewId } : {}),
+        ...(prefill?.transactionAlertId ? { transactionAlertId: prefill.transactionAlertId } : {}),
         reportCode,
         reason,
         action,

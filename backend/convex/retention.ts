@@ -21,12 +21,22 @@ import { holdReason, purgedResult, PURGED_INPUT, retentionCutoff, type HoldReaso
 //      investor profile, registry lookups, webhook payloads and review notes
 //      are removed. Checks with an open case, active monitoring or an STR
 //      are held and counted.
+//   4. then transaction monitoring data: transactions that occurred before
+//      the cutoff are deleted (those on an open alert are held), alerts lose
+//      the deleted transactions (a decided alert left with none keeps a
+//      minimal record: rule, severity, decision, dates), and counterparty
+//      screenings last run before the cutoff are deleted.
 // The audit log and the credit ledger are kept (they hold no customer
 // documents). Files uploaded to UploadThing aren't deleted from there.
 
 const internalApi: any = internal;
 const BATCH = 50;
+const TXN_BATCH = 200;
+const ALERT_BATCH = 50;
+const SCREENING_BATCH = 200;
+const OPEN_ALERT_CAP = 2000;
 const ESTIMATE_CAP = 5000;
+const MINIMAL_ALERT_SUMMARY = "Removed after the retention period.";
 
 function invalid(message: string): never {
   throw new ConvexError({ code: "invalid_argument", message });
@@ -38,8 +48,19 @@ async function pastRetention(ctx: { db: any }, clientId: Id<"clients">, cutoff: 
     .withIndex("by_client_and_created_at", (q: any) => q.eq("clientId", clientId).lt("createdAt", cutoff))
     .take(ESTIMATE_CAP + 1);
   const live = rows.filter((row) => !row.purgedAt);
-  return { count: Math.min(live.length, ESTIMATE_CAP), capped: rows.length > ESTIMATE_CAP };
+  const transactions: Array<Doc<"transactions">> = await ctx.db
+    .query("transactions")
+    .withIndex("by_client_and_occurred_at", (q: any) => q.eq("clientId", clientId).lt("occurredAt", cutoff))
+    .take(ESTIMATE_CAP + 1);
+  return {
+    count: Math.min(live.length, ESTIMATE_CAP),
+    capped: rows.length > ESTIMATE_CAP,
+    transactions: Math.min(transactions.length, ESTIMATE_CAP),
+    transactionsCapped: transactions.length > ESTIMATE_CAP,
+  };
 }
+
+const NO_TRANSACTIONS = { removed: 0, held: 0, alertsTrimmed: 0, alertsMinimized: 0, screeningsRemoved: 0 };
 
 function view(row: Doc<"retentionPurges">) {
   return {
@@ -59,6 +80,8 @@ function view(row: Doc<"retentionPurges">) {
     held: row.held,
     holds: row.holds,
     relatedRemoved: row.relatedRemoved ?? 0,
+    estimatedTransactions: row.estimatedTransactions ?? 0,
+    transactions: row.transactions ?? NO_TRANSACTIONS,
     completedAt: row.completedAt ?? null,
   };
 }
@@ -80,6 +103,8 @@ export const overview = query({
       cutoff,
       pastRetention: past.count,
       pastRetentionCapped: past.capped,
+      pastRetentionTransactions: past.transactions,
+      pastRetentionTransactionsCapped: past.transactionsCapped,
       purges: purges.map(view),
       me: { userId: actor.userId, canRequest: actor.role === "client_admin" || actor.role === "internal_admin" },
     };
@@ -100,7 +125,7 @@ export const request = mutation({
     const now = Date.now();
     const cutoff = retentionCutoff(data.retentionMonths, now);
     const past = await pastRetention(ctx, args.clientId, cutoff);
-    if (past.count === 0) invalid("No checks are past the retention period.");
+    if (past.count === 0 && past.transactions === 0) invalid("No checks or transactions are past the retention period.");
     const purgeId = await ctx.db.insert("retentionPurges", {
       clientId: args.clientId,
       status: "pending_approval",
@@ -108,6 +133,7 @@ export const request = mutation({
       cutoff,
       estimated: past.count,
       estimateCapped: past.capped,
+      estimatedTransactions: past.transactions,
       requestedBy: actor.userId,
       requestedByName: displayName(await ctx.auth.getUserIdentity()),
       requestedAt: now,
@@ -122,7 +148,7 @@ export const request = mutation({
       targetType: "retentionPurge",
       targetId: purgeId,
       clientId: args.clientId,
-      metadata: { cutoff, retentionMonths: data.retentionMonths, estimated: past.count },
+      metadata: { cutoff, retentionMonths: data.retentionMonths, estimated: past.count, estimatedTransactions: past.transactions },
     });
     return { purgeId };
   },
@@ -239,7 +265,107 @@ export async function purgeVerification(ctx: MutationCtx, verification: Doc<"ver
   return removed;
 }
 
-// One batch; schedules itself until done.
+type Phase = "checks" | "transactions" | "alerts" | "screenings";
+type Counts = Pick<Doc<"retentionPurges">, "purged" | "held" | "holds"> & { relatedRemoved: number; transactions: NonNullable<Doc<"retentionPurges">["transactions"]> };
+type Step = { done: true } | { done: false; cursor?: number };
+type StepArgs = { ctx: MutationCtx; purge: Doc<"retentionPurges">; cutoff: number; cursor: number | undefined; counts: Counts; now: number };
+
+// Checks created before the cutoff, then the cleared-hit memory.
+async function checksStep({ ctx, purge, cutoff, cursor, counts, now }: StepArgs): Promise<Step> {
+  const rows = await ctx.db
+    .query("verifications")
+    .withIndex("by_client_and_created_at", (q) =>
+      cursor === undefined ? q.eq("clientId", purge.clientId).lt("createdAt", cutoff) : q.eq("clientId", purge.clientId).gt("createdAt", cursor).lt("createdAt", cutoff),
+    )
+    .take(BATCH);
+  for (const verification of rows) {
+    if (verification.purgedAt) continue;
+    const reason = await holdFor(ctx, verification);
+    if (reason) {
+      counts.held += 1;
+      counts.holds[reason] += 1;
+      continue;
+    }
+    counts.relatedRemoved += await purgeVerification(ctx, verification, purge._id, now);
+    counts.purged += 1;
+  }
+  if (rows.length === BATCH) return { done: false, cursor: rows[rows.length - 1].createdAt };
+
+  // Cleared-hit memory recorded before the cutoff goes too.
+  const cleared = await ctx.db
+    .query("amlClearedMatches")
+    .withIndex("by_client_and_cleared_at", (q) => q.eq("clientId", purge.clientId).lt("clearedAt", cutoff))
+    .take(500);
+  for (const row of cleared) await ctx.db.delete(row._id);
+  counts.relatedRemoved += cleared.length;
+  return { done: true };
+}
+
+// Transactions that occurred before the cutoff, except those on an open
+// alert (held until the alert is decided).
+async function transactionsStep({ ctx, purge, cutoff, cursor, counts }: StepArgs): Promise<Step> {
+  const rows = await ctx.db
+    .query("transactions")
+    .withIndex("by_client_and_occurred_at", (q) =>
+      cursor === undefined ? q.eq("clientId", purge.clientId).lt("occurredAt", cutoff) : q.eq("clientId", purge.clientId).gt("occurredAt", cursor).lt("occurredAt", cutoff),
+    )
+    .take(TXN_BATCH);
+  if (!rows.length) return { done: true };
+  const open = await ctx.db
+    .query("transactionAlerts")
+    .withIndex("by_client_and_status", (q) => q.eq("clientId", purge.clientId).eq("status", "open"))
+    .take(OPEN_ALERT_CAP);
+  const onOpenAlert = new Set<string>(open.flatMap((alert) => alert.transactionIds));
+  for (const row of rows) {
+    if (onOpenAlert.has(row._id)) {
+      counts.transactions.held += 1;
+      continue;
+    }
+    await ctx.db.delete(row._id);
+    counts.transactions.removed += 1;
+  }
+  return rows.length === TXN_BATCH ? { done: false, cursor: rows[rows.length - 1].occurredAt } : { done: true };
+}
+
+// Alerts drop the transactions just deleted. A decided alert left with none
+// keeps a minimal record (rule, severity, decision, who and when).
+async function alertsStep({ ctx, purge, cursor, counts }: StepArgs): Promise<Step> {
+  if (counts.transactions.removed === 0) return { done: true };
+  const rows = await ctx.db
+    .query("transactionAlerts")
+    .withIndex("by_client_and_created_at", (q) => (cursor === undefined ? q.eq("clientId", purge.clientId) : q.eq("clientId", purge.clientId).gt("createdAt", cursor)))
+    .take(ALERT_BATCH);
+  for (const alert of rows) {
+    const present = await Promise.all(alert.transactionIds.map((id) => ctx.db.get(id)));
+    const kept = alert.transactionIds.filter((_, index) => present[index] !== null);
+    if (kept.length === alert.transactionIds.length) continue;
+    counts.transactions.alertsTrimmed += 1;
+    if (kept.length === 0 && alert.status !== "open") {
+      await ctx.db.patch(alert._id, { transactionIds: [], summary: MINIMAL_ALERT_SUMMARY, decisionNotes: undefined });
+      counts.transactions.alertsMinimized += 1;
+    } else {
+      await ctx.db.patch(alert._id, { transactionIds: kept });
+    }
+  }
+  return rows.length === ALERT_BATCH ? { done: false, cursor: rows[rows.length - 1].createdAt } : { done: true };
+}
+
+// Counterparty screenings not run since the cutoff (the name and the list
+// result are personal data).
+async function screeningsStep({ ctx, purge, cutoff, counts }: StepArgs): Promise<Step> {
+  const rows = await ctx.db
+    .query("counterpartyScreenings")
+    .withIndex("by_client_and_screened_at", (q) => q.eq("clientId", purge.clientId).lt("screenedAt", cutoff))
+    .take(SCREENING_BATCH);
+  for (const row of rows) await ctx.db.delete(row._id);
+  counts.transactions.screeningsRemoved += rows.length;
+  return rows.length === SCREENING_BATCH ? { done: false } : { done: true };
+}
+
+const STEPS: Record<Phase, (args: StepArgs) => Promise<Step>> = { checks: checksStep, transactions: transactionsStep, alerts: alertsStep, screenings: screeningsStep };
+const NEXT: Record<Phase, Phase | null> = { checks: "transactions", transactions: "alerts", alerts: "screenings", screenings: null };
+
+// One batch per stage; schedules itself until every stage is done.
 export const runPurge = internalMutation({
   args: { purgeId: v.id("retentionPurges") },
   handler: async (ctx, args) => {
@@ -249,44 +375,30 @@ export const runPurge = internalMutation({
     const { data } = await loadClientSettings(ctx, purge.clientId);
     const now = Date.now();
     const cutoff = Math.min(purge.cutoff, retentionCutoff(data.retentionMonths, now));
-    const rows = await ctx.db
-      .query("verifications")
-      .withIndex("by_client_and_created_at", (q) =>
-        purge.cursor === undefined ? q.eq("clientId", purge.clientId).lt("createdAt", cutoff) : q.eq("clientId", purge.clientId).gt("createdAt", purge.cursor).lt("createdAt", cutoff),
-      )
-      .take(BATCH);
+    const counts: Counts = {
+      purged: purge.purged,
+      held: purge.held,
+      holds: { ...purge.holds },
+      relatedRemoved: purge.relatedRemoved ?? 0,
+      transactions: { ...NO_TRANSACTIONS, ...purge.transactions },
+    };
 
-    let purged = purge.purged;
-    let held = purge.held;
-    let relatedRemoved = purge.relatedRemoved ?? 0;
-    const holds = { ...purge.holds };
-    for (const verification of rows) {
-      if (verification.purgedAt) continue;
-      const reason = await holdFor(ctx, verification);
-      if (reason) {
-        held += 1;
-        holds[reason] += 1;
-        continue;
+    let phase: Phase = purge.phase ?? "checks";
+    let cursor = phase === "checks" ? purge.cursor : purge.phaseCursor;
+    for (;;) {
+      const step = await STEPS[phase]({ ctx, purge, cutoff, cursor, counts, now });
+      if (!step.done) {
+        await ctx.db.patch(purge._id, { phase, ...(phase === "checks" ? { cursor: step.cursor } : { phaseCursor: step.cursor }), ...counts });
+        await ctx.scheduler.runAfter(0, internalApi.retention.runPurge, { purgeId: purge._id });
+        return;
       }
-      relatedRemoved += await purgeVerification(ctx, verification, purge._id, now);
-      purged += 1;
+      const next = NEXT[phase];
+      if (!next) break;
+      phase = next;
+      cursor = undefined;
     }
 
-    if (rows.length === BATCH) {
-      await ctx.db.patch(purge._id, { cursor: rows[rows.length - 1].createdAt, purged, held, holds, relatedRemoved });
-      await ctx.scheduler.runAfter(0, internalApi.retention.runPurge, { purgeId: purge._id });
-      return;
-    }
-
-    // Cleared-hit memory recorded before the cutoff goes too.
-    const cleared = await ctx.db
-      .query("amlClearedMatches")
-      .withIndex("by_client_and_cleared_at", (q) => q.eq("clientId", purge.clientId).lt("clearedAt", cutoff))
-      .take(500);
-    for (const row of cleared) await ctx.db.delete(row._id);
-    relatedRemoved += cleared.length;
-
-    await ctx.db.patch(purge._id, { status: "completed", purged, held, holds, relatedRemoved, completedAt: now });
+    await ctx.db.patch(purge._id, { status: "completed", phase, phaseCursor: undefined, ...counts, completedAt: now });
     await recordAudit(ctx, {
       actorId: "system",
       actorType: "system",
@@ -294,7 +406,7 @@ export const runPurge = internalMutation({
       targetType: "retentionPurge",
       targetId: purge._id,
       clientId: purge.clientId,
-      metadata: { cutoff, purged, held, holds, relatedRemoved },
+      metadata: { cutoff, purged: counts.purged, held: counts.held, holds: counts.holds, relatedRemoved: counts.relatedRemoved, transactions: counts.transactions },
     });
   },
 });

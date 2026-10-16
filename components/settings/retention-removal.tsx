@@ -10,9 +10,9 @@ import { ClientDate } from "@/components/client-date";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { getErrorMessage } from "@/modules/shared/errors";
 
-// Removal of checks past the retention period: one Admin requests it, a
-// second Admin (or DeepTrack) approves, then Sentinel removes the personal
-// data in the background (backend/convex/retention.ts).
+// Removal of checks and transactions past the retention period: one Admin
+// requests it, a second Admin (or DeepTrack) approves, then Sentinel removes
+// the personal data in the background (backend/convex/retention.ts).
 
 type Purge = {
   _id: string;
@@ -31,6 +31,8 @@ type Purge = {
   held: number;
   holds: { openCase: number; monitoring: number; str: number; unfinished: number };
   relatedRemoved: number;
+  estimatedTransactions: number;
+  transactions: { removed: number; held: number; alertsTrimmed: number; alertsMinimized: number; screeningsRemoved: number };
   completedAt: number | null;
 };
 
@@ -39,6 +41,8 @@ type Overview = {
   cutoff: number;
   pastRetention: number;
   pastRetentionCapped: boolean;
+  pastRetentionTransactions: number;
+  pastRetentionTransactionsCapped: boolean;
   purges: Purge[];
   me: { userId: string; canRequest: boolean };
 };
@@ -55,6 +59,19 @@ function holdText(holds: Purge["holds"]) {
   return parts.length ? `Kept: ${parts.join(", ")}.` : "";
 }
 
+function transactionsText(transactions: Purge["transactions"]) {
+  if (!transactions.removed && !transactions.held && !transactions.screeningsRemoved) return "";
+  return [
+    `Removed ${transactions.removed.toLocaleString("en-US")} transaction${transactions.removed === 1 ? "" : "s"}`,
+    transactions.held ? `kept ${transactions.held.toLocaleString("en-US")} on open alerts` : null,
+    transactions.alertsMinimized ? `reduced ${transactions.alertsMinimized.toLocaleString("en-US")} decided alerts to a minimal record` : null,
+    transactions.screeningsRemoved ? `removed ${transactions.screeningsRemoved.toLocaleString("en-US")} counterparty screenings` : null,
+  ]
+    .filter(Boolean)
+    .join(", ")
+    .concat(".");
+}
+
 export function RetentionRemoval({ clientId }: { clientId: string }) {
   const data = useAuthedQuery(anyApi.retention.overview, { clientId }) as Overview | undefined;
   const requestRemoval = useMutation(anyApi.retention.request);
@@ -65,6 +82,7 @@ export function RetentionRemoval({ clientId }: { clientId: string }) {
   if (!data) return null;
   const active = data.purges.find((purge) => purge.status === "pending_approval" || purge.status === "running") ?? null;
   const history = data.purges.filter((purge) => purge !== active);
+  const nothingPast = data.pastRetention === 0 && data.pastRetentionTransactions === 0;
 
   const run = async (key: string, action: () => Promise<unknown>, done: string, fallback: string) => {
     setBusy(key);
@@ -81,12 +99,12 @@ export function RetentionRemoval({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-3 text-sm">
       <p className="text-muted-foreground">
-        {data.pastRetention === 0 ? (
-          <>No checks are past the retention period.</>
+        {nothingPast ? (
+          <>No checks or transactions are past the retention period.</>
         ) : (
           <>
-            {count(data.pastRetention, data.pastRetentionCapped)} check{data.pastRetention === 1 ? " is" : "s are"} older than{" "}
-            <ClientDate value={data.cutoff} format="PP" /> ({data.retentionMonths} months).
+            {count(data.pastRetention, data.pastRetentionCapped)} check{data.pastRetention === 1 ? "" : "s"} and {count(data.pastRetentionTransactions, data.pastRetentionTransactionsCapped)}{" "}
+            transaction{data.pastRetentionTransactions === 1 ? "" : "s"} are older than <ClientDate value={data.cutoff} format="PP" /> ({data.retentionMonths} months).
           </>
         )}
       </p>
@@ -98,8 +116,9 @@ export function RetentionRemoval({ clientId }: { clientId: string }) {
               <p className="font-medium">Removal waiting for approval</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {active.requestedByName} asked on <ClientDate value={active.requestedAt} format="PP" /> to remove {count(active.estimated, active.estimateCapped)} check
-                {active.estimated === 1 ? "" : "s"} created before <ClientDate value={active.cutoff} format="PP" />. Another Admin, or DeepTrack, must approve. Checks with
-                an open case, active monitoring or an STR are kept.
+                {active.estimated === 1 ? "" : "s"} and {count(active.estimatedTransactions)} transaction{active.estimatedTransactions === 1 ? "" : "s"} from before{" "}
+                <ClientDate value={active.cutoff} format="PP" />. Another Admin, or DeepTrack, must approve. Checks with an open case, active monitoring or an STR, and
+                transactions on an open alert, are kept.
               </p>
               {data.me.canRequest ? (
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -132,13 +151,13 @@ export function RetentionRemoval({ clientId }: { clientId: string }) {
             </p>
           )}
         </div>
-      ) : data.me.canRequest && data.pastRetention > 0 ? (
+      ) : data.me.canRequest && !nothingPast ? (
         <Button
           size="sm"
           variant="outline"
           disabled={busy !== null}
           onClick={() => {
-            if (!window.confirm("Ask to remove the checks past the retention period? A second Admin, or DeepTrack, must approve before anything is deleted.")) return;
+            if (!window.confirm("Ask to remove the checks and transactions past the retention period? A second Admin, or DeepTrack, must approve before anything is deleted.")) return;
             void run("request", () => requestRemoval({ clientId }), "Removal requested. Another Admin must approve it.", "Couldn't request the removal.");
           }}
         >
@@ -158,7 +177,7 @@ export function RetentionRemoval({ clientId }: { clientId: string }) {
                       Removed {purge.purged.toLocaleString("en-US")} check{purge.purged === 1 ? "" : "s"}
                     </span>{" "}
                     created before <ClientDate value={purge.cutoff} format="PP" />, on <ClientDate value={purge.completedAt} format="PP" />. Requested by{" "}
-                    {purge.requestedByName}, approved by {purge.approvedByName}. {holdText(purge.holds)}
+                    {purge.requestedByName}, approved by {purge.approvedByName}. {holdText(purge.holds)} {transactionsText(purge.transactions)}
                   </>
                 ) : (
                   <>

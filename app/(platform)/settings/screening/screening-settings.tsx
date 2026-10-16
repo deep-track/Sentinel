@@ -17,9 +17,53 @@ import {
   useSettings,
   type ResolvedSettings,
 } from "@/components/settings/kit";
+import { MONITORING_LIMITS, type MonitoringThresholds } from "@/backend/convex/lib/transactionRules";
 import { ClearedMatches } from "./cleared-matches";
 
 type Screening = ResolvedSettings["screening"];
+
+// Transaction monitoring thresholds, by rule (backend/convex/lib/transactionRules.ts).
+const MONITORING_GROUPS: Array<{ title: string; hint: string; fields: Array<{ key: keyof MonitoringThresholds; label: string }> }> = [
+  {
+    title: "Large cash",
+    hint: "Cash at or above this is a large cash transaction. It can be lowered, not raised above the US$15,000 reporting threshold.",
+    fields: [{ key: "largeCashUsd", label: "Threshold (US$)" }],
+  },
+  {
+    title: "Structuring",
+    hint: "This many cash or M-Pesa transactions, each between the band and the large cash threshold, within the window.",
+    fields: [
+      { key: "structuringPercent", label: "Band from (% of threshold)" },
+      { key: "structuringMinCount", label: "Transactions" },
+      { key: "structuringWindowDays", label: "Within (days)" },
+    ],
+  },
+  {
+    title: "Unusual activity (velocity)",
+    hint: "The last 24 hours at least this many times the customer's usual daily volume (after 30 days of history), and at least the minimum.",
+    fields: [
+      { key: "velocityMultiple", label: "Times usual volume" },
+      { key: "velocityMinUsd", label: "Minimum (US$)" },
+    ],
+  },
+  {
+    title: "Money in and straight out (pass-through)",
+    hint: "Outflows of at least this share of the inflows within the window, when the inflows reach the minimum.",
+    fields: [
+      { key: "passThroughPercent", label: "Out (% of inflows)" },
+      { key: "passThroughHours", label: "Within (hours)" },
+      { key: "passThroughMinUsd", label: "Minimum inflows (US$)" },
+    ],
+  },
+  {
+    title: "Dormant account reactivated",
+    hint: "A transaction of at least the minimum after this many days without any.",
+    fields: [
+      { key: "dormantDays", label: "Dormant for (days)" },
+      { key: "dormantMinUsd", label: "Minimum (US$)" },
+    ],
+  },
+];
 
 // Same tiers as backend/convex/lib/amlCategories.ts PEP_CLASS_LABELS.
 const PEP_CLASSES = [
@@ -159,6 +203,35 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
         </div>
       </Section>
 
+      <Section
+        title="Transaction monitoring"
+        description="Thresholds for the rules that check your customers' transactions. Customers rated high risk are watched more closely: the minimums are halved and the velocity multiple too (at least 2). FATF countries and sanctioned counterparties have no thresholds."
+      >
+        {MONITORING_GROUPS.map((group) => (
+          <div key={group.title} className="space-y-2">
+            <p className="text-sm font-medium text-foreground">{group.title}</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {group.fields.map((field) => (
+                <Field key={field.key} label={field.label} htmlFor={`tm-${field.key}`}>
+                  <input
+                    id={`tm-${field.key}`}
+                    type="number"
+                    min={MONITORING_LIMITS[field.key].min}
+                    max={MONITORING_LIMITS[field.key].max}
+                    step={1}
+                    className={inputClass}
+                    disabled={disabled}
+                    value={draft.transactionMonitoring[field.key]}
+                    onChange={(event) => set({ transactionMonitoring: { ...draft.transactionMonitoring, [field.key]: Number(event.target.value) } })}
+                  />
+                </Field>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{group.hint}</p>
+          </div>
+        ))}
+      </Section>
+
       <Section title="Ongoing monitoring">
         <Toggle
           checked={draft.monitoringDefault}
@@ -259,6 +332,7 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
                 faceMatch: draft.faceMatch,
                 duplicateFaceSearch: draft.duplicateFaceSearch,
                 reviewMonths: draft.reviewMonths,
+                transactionMonitoring: draft.transactionMonitoring,
                 // null (every category) is stored as "not set".
                 ...(draft.adverseMediaCategories ? { adverseMediaCategories: draft.adverseMediaCategories } : {}),
                 ...(draft.acceptedPoaDocuments ? { acceptedPoaDocuments: draft.acceptedPoaDocuments } : {}),

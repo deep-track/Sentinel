@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
+import type { MonitoringThresholds } from "@/backend/convex/lib/transactionRules";
 
 // Shared building blocks for the Settings pages.
 
@@ -41,6 +42,7 @@ export type ResolvedSettings = {
     faceMatch: boolean;
     duplicateFaceSearch: boolean;
     reviewMonths: { high: number; medium: number; low: number };
+    transactionMonitoring: MonitoringThresholds;
   };
   notifications: {
     events: Record<string, { enabled: boolean; email: boolean; roles: string[] }>;
