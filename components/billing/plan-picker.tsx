@@ -5,30 +5,48 @@ import { useRouter } from "next/navigation";
 import { useAction, useMutation } from "convex/react";
 import { anyApi } from "convex/server";
 import { toast } from "sonner";
-import { Check, CreditCard, FileText, Loader2 } from "lucide-react";
+import { Check, CreditCard, FileText, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { getErrorMessage } from "@/modules/shared/errors";
 import { formatMoney } from "@/backend/convex/lib/pricing";
 
-// Choose a plan on the Billing page: pay the annual prepayment on Paystack,
-// or get the invoice to pay by bank transfer / M-Pesa. Once it's paid the
-// organization moves to the plan and gets its credits (billing.ts).
+// Choose a plan on the Billing page. Prices are shown in USD; Kenyan
+// organizations pay the KES equivalent at DeepTrack's current rate.
+// Starter, Growth and Business are bought here (Paystack, or an invoice to
+// pay by bank transfer / M-Pesa); Enterprise goes to the sales team.
 
 type PlanOption = {
   plan: "starter" | "growth" | "business" | "enterprise";
   label: string;
-  price: number;
-  credits: number;
-  bonusPct: number;
-  prices: Array<{ service: string; label: string; credits: number; amount: number }>;
+  priceUsd: number | null;
+  purchasable: boolean;
+  chargeAmount: number | null;
   pendingInvoiceId: string | null;
 };
-type Overview = { currency: "USD" | "KES"; plan: string; paystackEnabled: boolean; canPay: boolean; plans: PlanOption[] };
+type Overview = { currency: "USD" | "KES"; plan: string; paystackEnabled: boolean; canPay: boolean; plans: PlanOption[]; salesContact: string };
 
 const HIGHLIGHT: PlanOption["plan"] = "growth";
-const SHOWN_SERVICES = ["kyc_identity", "aml", "identity_document", "kyb"];
+
+const FEATURES: Record<PlanOption["plan"], { tagline: string; items: string[] }> = {
+  starter: {
+    tagline: "For teams getting started with digital onboarding.",
+    items: ["KYC identity checks (document + liveness)", "AML screening and ongoing monitoring", "Document and proof of address verification", "Business (KYB) verification"],
+  },
+  growth: {
+    tagline: "For growing volumes, at a lower price per check.",
+    items: ["Everything in Starter", "Lower price on every check"],
+  },
+  business: {
+    tagline: "For established institutions with high volumes.",
+    items: ["Everything in Growth", "Lower price again on every check"],
+  },
+  enterprise: {
+    tagline: "For banks and large institutions with custom needs.",
+    items: ["Everything in Business", "Our best price per check", "Custom contract and invoicing terms"],
+  },
+};
 
 export function PlanPicker({ clientId }: { clientId: string }) {
   const data = useAuthedQuery(anyApi.billing.overview, { clientId }) as Overview | null | undefined;
@@ -37,6 +55,7 @@ export function PlanPicker({ clientId }: { clientId: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   if (!data?.plans) return null;
+  const salesHref = `mailto:${data.salesContact}?subject=${encodeURIComponent("Sentinel Enterprise plan")}`;
 
   const pay = async (plan: PlanOption) => {
     setBusy(`pay-${plan.plan}`);
@@ -64,11 +83,14 @@ export function PlanPicker({ clientId }: { clientId: string }) {
     <Card className="p-6">
       <p className="text-sm font-medium">Plans</p>
       <p className="text-xs text-muted-foreground">
-        Annual prepayment, billed in {data.currency}. Bigger plans cost less per check. Your plan changes and the credits are added as soon as the payment is confirmed; unused credits stay on your balance.
+        Billed yearly, in advance. Bigger plans cost less per check.
+        {data.currency === "KES" ? " Prices are in US dollars; you pay the equivalent in Kenya shillings at today's rate." : ""}
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {data.plans.map((option) => {
           const current = data.plan === option.plan;
+          const features = FEATURES[option.plan];
+          const enterprise = option.plan === "enterprise";
           return (
             <div key={option.plan} className={`flex flex-col rounded-xl border p-4 ${option.plan === HIGHLIGHT ? "border-primary shadow-sm" : ""} ${current ? "bg-primary/5" : ""}`}>
               <div className="flex items-center justify-between">
@@ -79,49 +101,69 @@ export function PlanPicker({ clientId }: { clientId: string }) {
                   <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">Popular</span>
                 ) : null}
               </div>
-              <p className="mt-2 text-2xl font-bold">{formatMoney(option.price, data.currency)}</p>
-              <p className="text-xs text-muted-foreground">
-                per year · {option.credits.toLocaleString("en-US")} credits{option.bonusPct ? ` (incl. ${option.bonusPct}% bonus)` : ""}
-              </p>
+              {enterprise ? (
+                <p className="mt-2 text-2xl font-bold">Custom</p>
+              ) : (
+                <p className="mt-2 text-2xl font-bold">
+                  {formatMoney(option.priceUsd, "USD")}
+                  <span className="text-sm font-normal text-muted-foreground"> / year</span>
+                </p>
+              )}
+              {data.currency === "KES" && option.chargeAmount ? <p className="text-xs text-muted-foreground">Paid as {formatMoney(option.chargeAmount, "KES")}</p> : null}
+              <p className="mt-1 text-xs text-muted-foreground">{features.tagline}</p>
               <ul className="mt-3 flex-1 space-y-1 text-xs">
-                {option.prices
-                  .filter((row) => SHOWN_SERVICES.includes(row.service))
-                  .map((row) => (
-                    <li key={row.service} className="flex items-start gap-1.5">
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                      <span>
-                        {row.label}: <span className="font-medium">{formatMoney(row.amount, data.currency)}</span>
-                      </span>
-                    </li>
-                  ))}
+                {features.items.map((item) => (
+                  <li key={item} className="flex items-start gap-1.5">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span>{item}</span>
+                  </li>
+                ))}
               </ul>
-              {data.canPay ? (
-                <div className="mt-4 space-y-2">
-                  {data.paystackEnabled ? (
-                    <Button className="w-full" size="sm" variant={option.plan === HIGHLIGHT ? "default" : "outline"} disabled={busy !== null} onClick={() => void pay(option)}>
-                      {busy === `pay-${option.plan}` ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CreditCard className="mr-1.5 h-4 w-4" />}
-                      {current ? "Renew" : "Choose"} and pay
-                    </Button>
-                  ) : null}
-                  <Button
-                    className="w-full"
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy !== null}
-                    onClick={() => (option.pendingInvoiceId ? router.push(`/billing/invoices/${option.pendingInvoiceId}`) : void invoice(option))}
-                  >
-                    {busy === `invoice-${option.plan}` ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FileText className="mr-1.5 h-4 w-4" />}
-                    {option.pendingInvoiceId ? "Open the unpaid invoice" : "Pay by bank / M-Pesa"}
+              <div className="mt-4 space-y-2">
+                {enterprise ? (
+                  <Button asChild className="w-full" size="sm" variant="outline">
+                    <a href={salesHref}>
+                      <Mail className="mr-1.5 h-4 w-4" /> Speak to us
+                    </a>
                   </Button>
-                </div>
-              ) : null}
+                ) : !data.canPay ? null : !option.purchasable ? (
+                  <Button asChild className="w-full" size="sm" variant="outline">
+                    <a href={`mailto:${data.salesContact}?subject=${encodeURIComponent(`Sentinel ${option.label} plan`)}`}>
+                      <Mail className="mr-1.5 h-4 w-4" /> Ask for a quote
+                    </a>
+                  </Button>
+                ) : (
+                  <>
+                    {data.paystackEnabled ? (
+                      <Button className="w-full" size="sm" variant={option.plan === HIGHLIGHT ? "default" : "outline"} disabled={busy !== null} onClick={() => void pay(option)}>
+                        {busy === `pay-${option.plan}` ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CreditCard className="mr-1.5 h-4 w-4" />}
+                        {current ? "Renew" : "Choose"} and pay
+                      </Button>
+                    ) : null}
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy !== null}
+                      onClick={() => (option.pendingInvoiceId ? router.push(`/billing/invoices/${option.pendingInvoiceId}`) : void invoice(option))}
+                    >
+                      {busy === `invoice-${option.plan}` ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FileText className="mr-1.5 h-4 w-4" />}
+                      {option.pendingInvoiceId ? "Open the unpaid invoice" : "Pay by bank / M-Pesa"}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           );
         })}
       </div>
       {!data.canPay ? <p className="mt-3 text-xs text-muted-foreground">Only Admins can change the plan.</p> : null}
       <p className="mt-3 text-xs text-muted-foreground">
-        Need more volume, a custom contract or invoicing terms? <a href="mailto:sales@deeptrack.io" className="underline">Talk to sales</a>.
+        Questions about plans or a custom contract?{" "}
+        <a href={salesHref} className="underline">
+          Speak to our sales team
+        </a>{" "}
+        ({data.salesContact}).
       </p>
     </Card>
   );

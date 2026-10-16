@@ -8,7 +8,7 @@ import { recordLedgerEntry } from "./lib/credits";
 import { loadClientSettings } from "./lib/clientSettings";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
 import { notify } from "./notifications";
-import { PLAN_BONUS, PLAN_LABELS, PLAN_PREPAY, PLANS, planCredits, priceList, type BillingCurrency, type Plan } from "./lib/pricing";
+import { moneyToCredits, PLAN_LABELS, PLAN_PREPAY, PLANS, planCredits, type BillingCurrency, type Plan } from "./lib/pricing";
 import {
   cleanEmail,
   invoiceNumber,
@@ -191,22 +191,49 @@ type PaidPlan = Exclude<Plan, "trial">;
 const PAID_PLANS: PaidPlan[] = ["starter", "growth", "business", "enterprise"];
 const planValidator = v.union(v.literal("starter"), v.literal("growth"), v.literal("business"), v.literal("enterprise"));
 
-function planLine(plan: PaidPlan, currency: BillingCurrency): { lines: InvoiceLine[]; credits: number } {
-  const price = PLAN_PREPAY[currency][plan];
-  const credits = planCredits(plan, currency);
-  return { lines: [{ description: `Sentinel ${PLAN_LABELS[plan]} plan, annual prepayment (${credits.toLocaleString("en-US")} credits)`, quantity: 1, unitPrice: price, amount: price }], credits };
+// Plans are priced in USD. A client billed in KES pays the USD price at the
+// Back Office USD -> KES rate (whole shillings) and gets the credits that
+// amount buys; with no rate set, a KES plan can't be priced (null).
+// `kesListFallback` (Back Office invoices only) uses the KES list price then.
+export function planQuote(plan: PaidPlan, currency: BillingCurrency, usdToKes: number | null, kesListFallback = false): { amount: number; credits: number; description: string } | null {
+  const usd = PLAN_PREPAY.USD[plan];
+  if (currency === "USD") {
+    return { amount: usd, credits: planCredits(plan, "USD"), description: `Sentinel ${PLAN_LABELS[plan]} plan, annual prepayment` };
+  }
+  if (usdToKes && usdToKes > 0) {
+    const amount = Math.round(usd * usdToKes);
+    return {
+      amount,
+      credits: moneyToCredits(amount, "KES", plan),
+      description: `Sentinel ${PLAN_LABELS[plan]} plan, annual prepayment (US$${usd.toLocaleString("en-US")} at KES ${usdToKes.toLocaleString("en-US")} per US$)`,
+    };
+  }
+  if (!kesListFallback) return null;
+  return { amount: PLAN_PREPAY.KES[plan], credits: planCredits(plan, "KES"), description: `Sentinel ${PLAN_LABELS[plan]} plan, annual prepayment` };
 }
+
+function planLine(quote: { amount: number; credits: number; description: string }): { lines: InvoiceLine[]; credits: number } {
+  return { lines: [{ description: quote.description, quantity: 1, unitPrice: quote.amount, amount: quote.amount }], credits: quote.credits };
+}
+
+// Enterprise is quoted by the sales team, not bought online.
+export const SELF_SERVICE_PLANS: PaidPlan[] = ["starter", "growth", "business"];
+export const SALES_CONTACT = "bryan@deeptrack.io";
 
 // The unpaid invoice for this plan, or a new one.
 async function planInvoice(ctx: MutationCtx, clientId: Id<"clients">, plan: PaidPlan, createdBy: string): Promise<Doc<"invoices">> {
   const client = await ctx.db.get(clientId);
   if (!client) throw new ConvexError({ code: "not_found", message: "Client not found." });
   const currency: BillingCurrency = client.billingCurrency ?? "USD";
+  if (!SELF_SERVICE_PLANS.includes(plan)) invalid(`Enterprise is arranged with our sales team: email ${SALES_CONTACT}.`);
+  const quote = planQuote(plan, currency, (await billingSettingsRow(ctx))?.usdToKes ?? null);
+  if (!quote) invalid(`Plan prices in KES aren't available yet. Email ${SALES_CONTACT} for an invoice.`);
+  // An unpaid invoice for the same plan and price is reused.
   const open = (await ctx.db.query("invoices").withIndex("by_client_and_issued_at", (q) => q.eq("clientId", clientId)).order("desc").take(50)).find(
-    (row) => row.status === "issued" && row.kind === "plan" && row.plan === plan && row.currency === currency,
+    (row) => row.status === "issued" && row.kind === "plan" && row.plan === plan && row.currency === currency && row.subtotal === quote.amount,
   );
   if (open) return open;
-  const { lines, credits } = planLine(plan, currency);
+  const { lines, credits } = planLine(quote);
   const invoice = await issue(ctx, { clientId, kind: "plan", plan, lines, credits, createdBy });
   await recordAudit(ctx, { actorId: createdBy, actorType: "client_user", action: "billing.plan_invoice_requested", targetType: "invoice", targetId: invoice._id, clientId, metadata: { number: invoice.number, plan, total: invoice.total, currency } });
   return invoice;
@@ -231,10 +258,12 @@ export const overview = query({
     const client = await ctx.db.get(args.clientId);
     if (!client) return null;
     const currency: BillingCurrency = client.billingCurrency ?? "USD";
-    const [invoices, billing] = await Promise.all([
+    const [invoices, billing, settings] = await Promise.all([
       ctx.db.query("invoices").withIndex("by_client_and_issued_at", (q) => q.eq("clientId", args.clientId)).order("desc").take(MAX_LISTED),
       clientBillingRow(ctx, args.clientId),
+      billingSettingsRow(ctx),
     ]);
+    const usdToKes = settings?.usdToKes ?? null;
     return {
       currency,
       plan: client.plan,
@@ -243,15 +272,20 @@ export const overview = query({
       limits: TOP_UP_LIMITS[currency],
       presets: TOP_UP_PRESETS[currency],
       invoices: invoices.map(invoiceView),
-      plans: PAID_PLANS.map((plan) => ({
-        plan,
-        label: PLAN_LABELS[plan],
-        price: PLAN_PREPAY[currency][plan],
-        credits: planCredits(plan, currency),
-        bonusPct: Math.round(PLAN_BONUS[currency][plan] * 100),
-        prices: priceList(plan, currency),
-        pendingInvoiceId: invoices.find((row) => row.status === "issued" && row.kind === "plan" && row.plan === plan)?._id ?? null,
-      })),
+      // Shown in USD; `purchasable` is false for Enterprise (sales) and for
+      // KES clients until the USD -> KES rate is set.
+      plans: PAID_PLANS.map((plan) => {
+        const quote = planQuote(plan, currency, usdToKes);
+        return {
+          plan,
+          label: PLAN_LABELS[plan],
+          priceUsd: plan === "enterprise" ? null : PLAN_PREPAY.USD[plan],
+          purchasable: SELF_SERVICE_PLANS.includes(plan) && quote !== null,
+          chargeAmount: SELF_SERVICE_PLANS.includes(plan) ? quote?.amount ?? null : null,
+          pendingInvoiceId: invoices.find((row) => row.status === "issued" && row.kind === "plan" && row.plan === plan)?._id ?? null,
+        };
+      }),
+      salesContact: SALES_CONTACT,
       options: {
         billingEmail: billing?.billingEmail ?? null,
         taxPin: billing?.taxPin ?? null,
@@ -612,7 +646,7 @@ export const issueInvoice = mutation({
     let credits: number;
     if (args.kind === "plan") {
       if (!args.plan) invalid("Choose the plan.");
-      ({ lines, credits } = planLine(args.plan, currency));
+      ({ lines, credits } = planLine(planQuote(args.plan, currency, (await billingSettingsRow(ctx))?.usdToKes ?? null, true)!));
     } else {
       const description = args.description?.trim();
       if (!description || description.length > 200) invalid("Describe the charge in up to 200 characters.");
