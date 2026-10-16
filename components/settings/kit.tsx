@@ -37,6 +37,7 @@ export type ResolvedSettings = {
     acceptedPoaDocuments: string[] | null;
     rememberClearedMatches: boolean;
     aiHitReview: boolean;
+    shareFraudNetwork: boolean;
     reviewMonths: { high: number; medium: number; low: number };
   };
   notifications: {

@@ -13,6 +13,7 @@ import {
 } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 import { queueReview } from "./clientReviews";
+import { checkFraudNetwork } from "./fraudNetwork";
 
 const verificationType = v.union(
   v.literal("idp"),
@@ -414,14 +415,22 @@ export const _complete = internalMutation({
     const row = await ctx.db.get(args.id);
     if (!row) return null;
     const now = Date.now();
+    // Sentinel's fraud network for KYC: the ID number used with another
+    // person, or in a fraud rejection, sends a pass to review.
+    const network = row.type === "idp" && row.status !== "completed" ? await checkFraudNetwork(ctx, row, args.verdict, args.result) : null;
+    const verdict = network?.verdict ?? args.verdict;
+    const result = network?.summary && args.result && typeof args.result === "object" ? { ...args.result, fraudNetwork: network.summary } : args.result;
     await ctx.db.patch(args.id, {
       status: "completed",
-      verdict: args.verdict,
+      verdict,
       confidence: args.confidence,
-      result: args.result,
+      result,
       updatedAt: now,
       completedAt: now,
     });
+    if (network?.note && verdict === "review") {
+      await queueReview(ctx, { verificationId: args.id, clientId: row.clientId, triggerType: "auto_escalation", triggerReason: network.note.slice(0, 1000), priority: "normal" });
+    }
     if (args.chargeReason !== undefined) {
       await chargeVerification(ctx, {
         clientId: row.clientId,
@@ -478,10 +487,12 @@ export const _completeWithReview = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const row = await ctx.db.get(args.id);
+    const network = row?.type === "idp" && row.status !== "completed" ? await checkFraudNetwork(ctx, row, "review", args.result) : null;
     await ctx.db.patch(args.id, {
       status: "completed",
       verdict: "review",
-      result: args.result,
+      result: network?.summary && args.result && typeof args.result === "object" ? { ...args.result, fraudNetwork: network.summary } : args.result,
       updatedAt: now,
       completedAt: now,
     });

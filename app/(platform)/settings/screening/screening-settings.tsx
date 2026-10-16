@@ -105,6 +105,19 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
       </Section>
 
       <Section
+        title="Fraud network"
+        description="Sentinel fingerprints the ID numbers, document numbers, phone numbers and emails in your checks, and flags one that turns up with a different name or date of birth, or in a check rejected for fraud. A strong signal sends a pass to review; it never rejects on its own. Only keyed fingerprints are kept: never the numbers, names or dates themselves."
+      >
+        <Toggle
+          checked={draft.shareFraudNetwork}
+          onChange={(shareFraudNetwork) => set({ shareFraudNetwork })}
+          disabled={disabled}
+          label="Join the Sentinel network"
+          detail="Off: only your own checks are compared. On: your checks are also compared with those of other organizations that joined, and theirs with yours. Nobody is told which organization saw an identifier, or anything about the customer."
+        />
+      </Section>
+
+      <Section
         title="Customer risk rating and periodic review"
         description="Every screened customer is rated low, medium or high risk from their geography (FATF lists), PEP status, hits still standing, type and industry. Monitored customers come up for review on this schedule; high-risk ones need enhanced due diligence."
       >
@@ -222,6 +235,7 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
                 poaMaxAgeDays: draft.poaMaxAgeDays,
                 rememberClearedMatches: draft.rememberClearedMatches,
                 aiHitReview: draft.aiHitReview,
+                shareFraudNetwork: draft.shareFraudNetwork,
                 reviewMonths: draft.reviewMonths,
                 // null (every category) is stored as "not set".
                 ...(draft.adverseMediaCategories ? { adverseMediaCategories: draft.adverseMediaCategories } : {}),

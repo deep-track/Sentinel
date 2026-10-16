@@ -8,6 +8,7 @@ import { MAX_LIST_AGE_MS, SOURCES_REQUIRED_AFTER_FIRST_LOAD, SOURCE_KEYS, type S
 import { summarizeCategories } from "./lib/amlCategories";
 import { setBaselineFromEnrolment } from "./lib/amlMonitoringStore";
 import { queueReview } from "./clientReviews";
+import { checkFraudNetwork } from "./fraudNetwork";
 import { loadClientSettings, monitoringIntervalMs } from "./lib/clientSettings";
 import { noteSuppressed } from "./amlCleared";
 import type { MutationCtx } from "./_generated/server";
@@ -257,10 +258,17 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
   // review rows or charges.
   if (verification.status === "completed") return;
 
+  // Sentinel's fraud network: the ID number used with another person, or
+  // in a fraud rejection, sends a pass to review. Not for monitoring alerts
+  // (the same customer again).
+  const network = args.monitoring ? null : await checkFraudNetwork(ctx, verification, args.verdict, {});
+  const verdict = network?.verdict ?? args.verdict;
+  const reason = network?.note ? `${args.reason} ${network.note}` : args.reason;
+
   const now = Date.now();
   await ctx.db.patch(args.verificationId, {
     status: "completed",
-    verdict: args.verdict,
+    verdict,
     confidence:
       args.confidence ??
       (args.matches[0]?.matchScore === undefined ? 1 : args.matches[0].matchScore / 100),
@@ -268,9 +276,10 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
       provider: "sentinel_watchlists",
       subjectName: args.subjectName,
       reason: args.suppressed?.length
-        ? `${args.reason} ${args.suppressed.length} hit${args.suppressed.length === 1 ? " was" : "s were"} left out: already cleared for this customer.`
-        : args.reason,
+        ? `${reason} ${args.suppressed.length} hit${args.suppressed.length === 1 ? " was" : "s were"} left out: already cleared for this customer.`
+        : reason,
       matches: args.matches,
+      ...(network?.summary ? { fraudNetwork: network.summary } : {}),
       ...(args.suppressed?.length ? { suppressedMatches: args.suppressed } : {}),
       ...(args.monitoring ? { monitoring: args.monitoring } : {}),
       categories: summarizeCategories(
@@ -325,12 +334,12 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
       createdAt: now,
     });
   }
-  if (args.verdict !== "pass") {
+  if (verdict !== "pass") {
     await queueReview(ctx, {
       verificationId: args.verificationId,
       clientId: args.clientId,
       triggerType: "auto_escalation",
-      triggerReason: args.reason,
+      triggerReason: reason,
       priority: args.verdict === "reject" ? "high" : "normal",
       monitoring: Boolean(args.monitoring),
     });
@@ -341,7 +350,7 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
       clientId: args.clientId,
       verificationId: args.verificationId,
       amount: verification.creditsUsed,
-      reason: `AML sanctions screening: ${args.verdict}`,
+      reason: `AML sanctions screening: ${verdict}`,
     });
   }
   await ctx.db.insert("auditLog", {
@@ -353,7 +362,7 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
     clientId: args.clientId,
     metadata: {
       subjectName: args.subjectName,
-      verdict: args.verdict,
+      verdict,
       matchCount: args.matches.length,
       sourceVersions: [...new Set(args.matches.flatMap((match) => (match.versionId ? [match.versionId] : [])))],
       checkedVersions: args.coverage?.checked.map((row) => row.versionId) ?? [],

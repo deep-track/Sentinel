@@ -10,6 +10,8 @@ import { ReportPdfButton } from "@/components/reports/report-pdf-button";
 import { kycReportSpec } from "@/components/reports/kyc-report-spec";
 import { ClientDate } from "@/components/client-date";
 import { DisputeButton } from "@/components/disputes/dispute-button";
+import { FraudNetworkDetail } from "@/components/risk/fraud-network";
+import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
 
 interface KYCDetailPageProps {
   params: Promise<{ id: string }>;
@@ -23,6 +25,7 @@ type StepResults = {
     status: string;
     matches: Array<{ source: string; program: string; matchScore: number; matchedCountry: string | null }>;
   } | { error: string };
+  fraudNetwork?: NetworkSummary;
 };
 
 type VerificationRecord = {
@@ -362,6 +365,12 @@ export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
                       );
                     }}
                   </ReportStep>
+                  {record.result.fraudNetwork ? (
+                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                      <p className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Fraud network</p>
+                      <FraudNetworkDetail summary={record.result.fraudNetwork} />
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>

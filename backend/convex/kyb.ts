@@ -12,6 +12,7 @@ import { subjectKeyFor } from "./lib/amlClearedMatches";
 import type { ScreeningRules } from "./lib/clientSettings";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
 import { queueReview } from "./clientReviews";
+import { checkFraudNetwork } from "./fraudNetwork";
 import { screenSubjects, type ScreeningOutcome } from "./aml";
 import { rateKyb } from "./riskRatings";
 
@@ -230,10 +231,14 @@ export const _completeAutomated = internalMutation({
     const verification = await ctx.db.get(args.verificationId);
     if (!verification || verification.status === "completed" || verification.status === "failed") return;
     const now = Date.now();
+    // Sentinel's fraud network on the directors' ID numbers and emails.
+    const network = await checkFraudNetwork(ctx, verification, args.verdict, args.result);
+    const verdict = network.verdict;
+    const reason = network.note ? `${args.reason} ${network.note}` : args.reason;
     await ctx.db.patch(verification._id, {
       status: "completed",
-      verdict: args.verdict,
-      result: { source: "kyb", automated: true, reason: args.reason, ...args.result },
+      verdict,
+      result: { source: "kyb", automated: true, reason, ...args.result, ...(network.summary ? { fraudNetwork: network.summary } : {}) },
       updatedAt: now,
       completedAt: now,
     });
@@ -265,12 +270,12 @@ export const _completeAutomated = internalMutation({
       verification._id,
       args.parties.flatMap((party) => party.hits.map((hit) => ({ source: hit.source, categories: hit.categories ?? [], pepClass: hit.pepClass ?? null, riskLevel: hit.riskLevel }))),
     );
-    if (args.verdict !== "pass") {
+    if (verdict !== "pass") {
       await queueReview(ctx, {
         verificationId: verification._id,
         clientId: verification.clientId,
         triggerType: "auto_escalation",
-        triggerReason: args.reason.slice(0, 1000),
+        triggerReason: reason.slice(0, 1000),
         priority: args.verdict === "reject" ? "high" : "normal",
       });
     }
@@ -281,7 +286,7 @@ export const _completeAutomated = internalMutation({
         clientId: verification.clientId,
         verificationId: verification._id,
         amount: verification.creditsUsed,
-        reason: `KYB business verification: ${args.verdict}`,
+        reason: `KYB business verification: ${verdict}`,
       });
     }
     await recordAudit(ctx, {
@@ -291,7 +296,7 @@ export const _completeAutomated = internalMutation({
       targetType: "verification",
       targetId: verification._id,
       clientId: verification.clientId,
-      metadata: { verdict: args.verdict, complete: args.complete, parties: args.parties.length, hits: args.parties.reduce((sum, party) => sum + party.hits.length, 0) },
+      metadata: { verdict, complete: args.complete, parties: args.parties.length, hits: args.parties.reduce((sum, party) => sum + party.hits.length, 0) },
     });
     await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, { verificationId: verification._id });
   },

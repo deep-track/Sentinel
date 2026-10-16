@@ -11,6 +11,7 @@ import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./audi
 import { DEFAULT_POA_MAX_AGE_DAYS } from "./lib/documentChecks";
 import { withoutMedia } from "./verifications";
 import { queueReview } from "./clientReviews";
+import { checkFraudNetwork } from "./fraudNetwork";
 import { applyDocumentRules, loadClientSettings } from "./lib/clientSettings";
 
 // IDP — Intelligent Document Processing. Verifies an identity document
@@ -247,8 +248,12 @@ export const _complete = internalMutation({
     // they don't accept can't pass.
     const settings = await loadClientSettings(ctx, verification.clientId);
     const ruled = applyDocumentRules(args.verdict, args.result ?? {}, settings.screening);
-    const verdict = ruled.verdict;
-    const reason = ruled.notes.length ? `${args.reason} ${ruled.notes.join(" ")}` : args.reason;
+    // Sentinel's fraud network: the document number used with another
+    // person, or in a fraud rejection, sends a pass to review.
+    const network = await checkFraudNetwork(ctx, verification, ruled.verdict, args.result ?? {});
+    const verdict = network.verdict;
+    const notes = [...ruled.notes, ...(network.note ? [network.note] : [])];
+    const reason = notes.length ? `${args.reason} ${notes.join(" ")}` : args.reason;
     await ctx.db.patch(args.verificationId, {
       status: "completed",
       verdict,
@@ -259,6 +264,7 @@ export const _complete = internalMutation({
         riskScore: args.riskScore,
         ...(verdict !== args.verdict ? { pipelineVerdict: args.verdict } : {}),
         ...(ruled.notes.length ? { clientRules: ruled.notes } : {}),
+        ...(network.summary ? { fraudNetwork: network.summary } : {}),
       },
       updatedAt: now,
       completedAt: now,

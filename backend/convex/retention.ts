@@ -192,10 +192,10 @@ async function holdFor(ctx: MutationCtx, verification: Doc<"verifications">): Pr
 // Removes one check's personal data and returns how many related rows went.
 export async function purgeVerification(ctx: MutationCtx, verification: Doc<"verifications">, purgeId: Id<"retentionPurges">, now: number): Promise<number> {
   let removed = 0;
-  const byVerification = (table: "flaggedEntities" | "kybRegistryLookups" | "kyiRecords" | "webhookDeliveries") =>
+  const byVerification = (table: "flaggedEntities" | "fraudSignals" | "kybRegistryLookups" | "kyiRecords" | "webhookDeliveries") =>
     ctx.db.query(table).withIndex("by_verification", (q: any) => q.eq("verificationId", verification._id)).take(500);
 
-  for (const table of ["flaggedEntities", "kybRegistryLookups", "kyiRecords", "webhookDeliveries"] as const) {
+  for (const table of ["flaggedEntities", "fraudSignals", "kybRegistryLookups", "kyiRecords", "webhookDeliveries"] as const) {
     for (const row of await byVerification(table)) {
       await ctx.db.delete(row._id);
       removed += 1;
