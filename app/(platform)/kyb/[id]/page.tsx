@@ -9,6 +9,7 @@ import { type KYBStatus, KYBStatusBadge } from "@/modules/kyb/kyb-status-badge";
 import { DisputeButton } from "@/components/disputes/dispute-button";
 import { ReportPdfButton } from "@/components/reports/report-pdf-button";
 import { kybReportSpec } from "@/components/reports/kyb-report-spec";
+import { RiskRatingDetail, type RatingView } from "@/components/risk/risk-rating";
 
 interface KYBDetailPageProps {
   params: Promise<{ id: string }>;
@@ -142,6 +143,7 @@ type KybResult = {
     };
   };
   parties?: Array<{ name: string; role: string; verdict: string; complete: boolean; reason: string; hits: number; suppressed: number }>;
+  riskRating?: RatingView;
 };
 
 const VERDICT_STYLE: Record<string, string> = {
@@ -192,6 +194,12 @@ function AutomatedChecks({ result }: { result: unknown }) {
         <h2 className="text-base font-semibold text-slate-900 dark:text-white">Automated checks</h2>
         {data.reason ? <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{data.reason}</p> : null}
       </div>
+      {data.riskRating ? (
+        <div>
+          <p className="mb-1 text-sm font-medium">Customer risk rating</p>
+          <RiskRatingDetail rating={data.riskRating} />
+        </div>
+      ) : null}
       {data.certificate ? (
         <div>
           <p className="text-sm font-medium">

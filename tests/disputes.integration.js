@@ -68,7 +68,7 @@ test("DeepTrack decides disputes: client teams can't, and aren't assigned or ale
   const queue = read("backend/convex/reviewQueue.ts");
   assert.match(queue, /reviewRow\.triggerType === "client_dispute"[\s\S]{0,200}event: "dispute_resolved"/);
   const settings = read("backend/convex/lib/clientSettings.ts");
-  assert.match(settings, /"dispute_resolved",\r?\n\] as const/);
+  assert.match(settings, /"dispute_resolved",\r?\n/);
   assert.match(settings, /dispute_resolved: \{ enabled: true, email: true/);
   const item = read("app/internal-ops/review-queue/[reviewId]/review-item.tsx");
   assert.match(item, /item\.triggerType === "client_dispute" \? DISPUTE_ACTIONS : ACTIONS/);

@@ -22,6 +22,7 @@ import {
   type Report,
 } from "@/components/reports/aml-report-content";
 import { downloadAmlReportPdf } from "@/components/reports/aml-report-pdf";
+import { RiskRatingDetail } from "@/components/risk/risk-rating";
 
 function verdictLabel(report: Report["verification"]) {
   if (report.status === "failed") return { label: "Screening failed", tone: "border-red-300 bg-red-50 text-red-700" };
@@ -351,6 +352,12 @@ export function AmlReport({ verificationId }: { verificationId: string }) {
           })}
         </div>
       </Section>
+
+      {result.riskRating ? (
+        <Section title="Customer risk rating" hint="From geography, PEP status, hits still standing, customer type and industry. Sets how often the customer is reviewed.">
+          <RiskRatingDetail rating={result.riskRating} />
+        </Section>
+      ) : null}
 
       <Section title="Subject screened">
         <Row label="Name">{input.subjectName ?? "—"}</Row>

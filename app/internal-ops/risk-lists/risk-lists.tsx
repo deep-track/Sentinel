@@ -10,6 +10,7 @@ import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { getErrorMessage } from "@/modules/shared/errors";
 import { Badge, Panel, PanelHeader, SentinelCanvas, TopBar } from "@/components/sentinel/ui";
 import { RISK_LIST_SOURCES, type RiskListKey } from "@/backend/convex/lib/riskLists";
+import { CountryRisk } from "./country-risk";
 
 // Back Office: Kenyan risk lists. Read a publication (upload, or one page
 // on the authority's site), approve what it lists, import a CSV, or add by
@@ -55,6 +56,7 @@ export function RiskLists({ canWrite }: { canWrite: boolean }) {
         </span>
       </TopBar>
       <div className="flex flex-1 flex-col gap-3.5 px-5 py-4">
+        <CountryRisk canWrite={canWrite} />
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {(data?.sources ?? []).map((source) => (
             <button key={source.key} type="button" onClick={() => setFilter(filter === source.key ? "" : source.key)} className={`rounded border px-3 py-2 text-left text-[11px] ${filter === source.key ? "border-sentinel-blue" : "border-sentinel-line"}`}>

@@ -104,6 +104,28 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
         />
       </Section>
 
+      <Section
+        title="Customer risk rating and periodic review"
+        description="Every screened customer is rated low, medium or high risk from their geography (FATF lists), PEP status, hits still standing, type and industry. Monitored customers come up for review on this schedule; high-risk ones need enhanced due diligence."
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          {(["high", "medium", "low"] as const).map((level) => (
+            <Field key={level} label={`${level.charAt(0).toUpperCase()}${level.slice(1)} risk: review every (months)`} htmlFor={`review-${level}`}>
+              <input
+                id={`review-${level}`}
+                type="number"
+                min={1}
+                max={level === "low" ? 120 : 60}
+                className={inputClass}
+                disabled={disabled}
+                value={draft.reviewMonths[level]}
+                onChange={(event) => set({ reviewMonths: { ...draft.reviewMonths, [level]: Number(event.target.value) } })}
+              />
+            </Field>
+          ))}
+        </div>
+      </Section>
+
       <Section title="Ongoing monitoring">
         <Toggle
           checked={draft.monitoringDefault}
@@ -200,6 +222,7 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
                 poaMaxAgeDays: draft.poaMaxAgeDays,
                 rememberClearedMatches: draft.rememberClearedMatches,
                 aiHitReview: draft.aiHitReview,
+                reviewMonths: draft.reviewMonths,
                 // null (every category) is stored as "not set".
                 ...(draft.adverseMediaCategories ? { adverseMediaCategories: draft.adverseMediaCategories } : {}),
                 ...(draft.acceptedPoaDocuments ? { acceptedPoaDocuments: draft.acceptedPoaDocuments } : {}),

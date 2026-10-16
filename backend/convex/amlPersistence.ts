@@ -12,6 +12,7 @@ import { loadClientSettings, monitoringIntervalMs } from "./lib/clientSettings";
 import { noteSuppressed } from "./amlCleared";
 import type { MutationCtx } from "./_generated/server";
 import type { Infer } from "convex/values";
+import { rateAmlScreening } from "./riskRatings";
 
 const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS"));
 const openSanctionsStatusValidator = v.union(
@@ -294,6 +295,8 @@ export async function completeScreening(ctx: MutationCtx, args: CompleteScreenin
     updatedAt: now,
     completedAt: now,
   });
+  // Customer risk rating, and the monitored customer's next review.
+  await rateAmlScreening(ctx, args.verificationId);
   if (args.suppressed?.length) {
     await noteSuppressed(ctx, args.clientId, args.subjectKey ?? null, args.suppressed.map((hit) => `${hit.source}:${hit.sourceRecordId}`));
   }

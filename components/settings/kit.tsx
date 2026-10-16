@@ -37,6 +37,7 @@ export type ResolvedSettings = {
     acceptedPoaDocuments: string[] | null;
     rememberClearedMatches: boolean;
     aiHitReview: boolean;
+    reviewMonths: { high: number; medium: number; low: number };
   };
   notifications: {
     events: Record<string, { enabled: boolean; email: boolean; roles: string[] }>;

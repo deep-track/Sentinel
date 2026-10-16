@@ -20,6 +20,7 @@ type KybResult = {
     ownership?: Ownership;
   };
   parties?: Array<{ name: string; role: string; verdict: string; complete: boolean; reason: string; hits: number; suppressed: number }>;
+  riskRating?: { score: number; level: string; factors: Array<{ factor: string; points: number; detail: string }>; reviewMonths: number | null };
 };
 type Ownership = {
   thresholdPct: number;
@@ -160,6 +161,23 @@ export function kybReportSpec(record: KybRecord, directors: KybDirector[], count
       widths: [0.27, 0.17, 0.16, 0.4],
       toneColumn: 2,
       tones: data.parties.map((party) => (party.complete ? checkTone(party.verdict) : "amber")),
+    });
+  }
+  if (data.riskRating) {
+    const rating = data.riskRating;
+    sections.push({
+      heading: "Customer risk rating",
+      hint: "From geography, hits still standing, industry, onboarding channel and ownership.",
+      blocks: [
+        {
+          kind: "rows",
+          rows: [
+            ["Rating", `${rating.level.charAt(0).toUpperCase()}${rating.level.slice(1)} (score ${rating.score} / 100)`],
+            ["Periodic review", rating.reviewMonths === null ? "Exit or don't onboard (confirmed sanctions match)" : `Every ${rating.reviewMonths} months`],
+            ...rating.factors.map((factor) => [`${factor.factor} (+${factor.points})`, factor.detail] as [string, string]),
+          ],
+        },
+      ],
     });
   }
   if (checks.length) sections.push({ heading: "Automated checks", blocks: checks });

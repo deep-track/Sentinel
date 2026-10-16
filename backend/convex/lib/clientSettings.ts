@@ -135,6 +135,8 @@ export const screeningSettingsValidator = v.object({
   rememberClearedMatches: v.optional(v.boolean()),
   // Claude reviews each AML hit and recommends a decision (aiHitReview.ts).
   aiHitReview: v.optional(v.boolean()),
+  // Periodic review of monitored customers, in months, by risk rating.
+  reviewMonths: v.optional(v.object({ high: v.optional(v.number()), medium: v.optional(v.number()), low: v.optional(v.number()) })),
 });
 
 export const NOTIFICATION_EVENTS = [
@@ -149,6 +151,7 @@ export const NOTIFICATION_EVENTS = [
   "low_credit",
   "webhook_failing",
   "dispute_resolved",
+  "periodic_review_due",
 ] as const;
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
@@ -164,6 +167,7 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEvent, { label: strin
   low_credit: { label: "Low credits", detail: "The credit balance fell below the warning level." },
   webhook_failing: { label: "Webhook paused", detail: "A webhook endpoint kept failing and was paused." },
   dispute_resolved: { label: "Dispute decided", detail: "DeepTrack decided a result your team disputed." },
+  periodic_review_due: { label: "Periodic reviews due", detail: "Monitored customers reached their review date under their risk rating." },
 };
 
 // Events sent to the people named by the event itself, not to roles.
@@ -189,6 +193,7 @@ export const notificationSettingsValidator = v.object({
       low_credit: v.optional(eventSettings),
       webhook_failing: v.optional(eventSettings),
       dispute_resolved: v.optional(eventSettings),
+      periodic_review_due: v.optional(eventSettings),
     }),
   ),
   // Warn when the balance falls to this many credits. Unset = the plan's
@@ -293,6 +298,7 @@ export type ResolvedSettings = {
     acceptedPoaDocuments: string[] | null; // null = every recognised type
     rememberClearedMatches: boolean;
     aiHitReview: boolean;
+    reviewMonths: { high: number; medium: number; low: number };
   };
   notifications: {
     events: Record<NotificationEvent, { enabled: boolean; email: boolean; roles: ClientRole[] }>;
@@ -352,6 +358,7 @@ export const DEFAULTS: ResolvedSettings = {
     acceptedPoaDocuments: null,
     rememberClearedMatches: true,
     aiHitReview: true,
+    reviewMonths: { high: 12, medium: 24, low: 36 },
   },
   notifications: {
     events: {
@@ -366,6 +373,7 @@ export const DEFAULTS: ResolvedSettings = {
       low_credit: { enabled: true, email: true, roles: ["client_admin"] },
       webhook_failing: { enabled: true, email: true, roles: ["client_admin", "developer"] },
       dispute_resolved: { enabled: true, email: true, roles: ["client_admin", "reviewer", "compliance_analyst"] },
+      periodic_review_due: { enabled: true, email: true, roles: ["client_admin", "reviewer", "compliance_analyst"] },
     },
     lowCreditBalance: null,
   },
@@ -401,6 +409,7 @@ export function resolveSettings(row: Partial<Pick<Doc<"clientSettings">, "review
     screening: {
       ...DEFAULTS.screening,
       ...definedOnly(screening),
+      reviewMonths: { ...DEFAULTS.screening.reviewMonths, ...definedOnly(screening.reviewMonths ?? {}) },
     } as ResolvedSettings["screening"],
     notifications: { events, lowCreditBalance: notifications.lowCreditBalance ?? null },
     security: { ...DEFAULTS.security, ...definedOnly(security) } as ResolvedSettings["security"],
@@ -461,6 +470,10 @@ export function validateReviewSettings(input: ReviewSettingsInput): ReviewSettin
 export function validateScreeningSettings(input: ScreeningSettingsInput, known: { adverseMedia: readonly string[]; poaDocuments: readonly string[] }): ScreeningSettingsInput {
   wholeNumber(input.matchThreshold, "The match threshold", MIN_MATCH_THRESHOLD, MAX_MATCH_THRESHOLD);
   wholeNumber(input.poaMaxAgeDays, "The proof of address age limit (days)", 1, MAX_POA_AGE_DAYS);
+  wholeNumber(input.reviewMonths?.high, "The review period for high-risk customers (months)", 1, 60);
+  wholeNumber(input.reviewMonths?.medium, "The review period for medium-risk customers (months)", 1, 60);
+  wholeNumber(input.reviewMonths?.low, "The review period for low-risk customers (months)", 1, 120);
+  if (input.reviewMonths?.high && input.reviewMonths?.medium && input.reviewMonths.high > input.reviewMonths.medium) invalid("High-risk customers must be reviewed at least as often as medium-risk ones.");
   const adverseMediaCategories = input.adverseMediaCategories ? [...new Set(input.adverseMediaCategories)] : undefined;
   if (adverseMediaCategories) {
     if (adverseMediaCategories.length === 0) invalid("Choose at least one adverse media category, or screen all of them.");

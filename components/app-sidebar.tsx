@@ -24,6 +24,7 @@ import {
 	Building2,
 	ClipboardCheck,
 	Flag,
+	Gauge,
 	CreditCard,
 	FileBarChart,
 	Fingerprint,
@@ -53,6 +54,7 @@ const getMainItems = () => [
 	{ title: "Liveness", url: "/liveness", icon: Fingerprint },
 	{ title: "Reviews", url: "/reviews", icon: ClipboardCheck },
 	{ title: "Disputes", url: "/disputes", icon: Flag },
+	{ title: "Customer risk", url: "/customers", icon: Gauge },
 ];
 
 const developerItems = [
