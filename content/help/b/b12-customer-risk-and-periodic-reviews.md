@@ -94,7 +94,7 @@ Every customer starts at 10 points. Factors add to that, up to a maximum of 100.
 | Onboarded remotely (KYB) | +5 |
 | KYB ownership: owners not traced / two or more company layers / foreign company shareholders | +20 / +10 / +10 |
 
-The countries come from the screening's **Country**, **Nationality** and **Country of incorporation**. Enter them as two-letter codes such as KE or UG, so Sentinel recognises them. Sentinel uses the FATF lists from its 19 June 2026 statement, and DeepTrack's review team updates them after each FATF plenary (February, June and October).
+The countries come from the screening's **Country**, **Nationality** and **Country of incorporation**. Enter them as two-letter codes such as KE or UG, so Sentinel recognises them. Sentinel uses the latest FATF lists, and DeepTrack's review team updates them after each FATF plenary (February, June and October).
 
 Kenya is on the FATF increased-monitoring list. If your organization is billed in Kenya shillings, Sentinel treats Kenya as your home country, so a Kenyan customer gets no geography points.
 
