@@ -25,6 +25,7 @@ import {
 	ClipboardCheck,
 	Flag,
 	Gauge,
+	HelpCircle,
 	ArrowLeftRight,
 	CreditCard,
 	FileBarChart,
@@ -68,6 +69,7 @@ const accountItems = [
 	{ title: "Reports", url: "/reports", icon: FileBarChart },
 	{ title: "Billing & Credits", url: "/billing", icon: CreditCard },
 	{ title: "Settings", url: "/settings", icon: Settings },
+	{ title: "Help", url: "/help", icon: HelpCircle },
 ];
 
 type Props = {
