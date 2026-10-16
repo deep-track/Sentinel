@@ -35,6 +35,8 @@ const CONFIG: Array<{ key: string; label: string; purpose: string; required: boo
   { key: "WATCHLIST_UK_SANCTIONS_URL", label: "UK watchlist URL override", purpose: "AML screening (built-in default)", required: false },
   { key: "METAMAP_CLIENT_ID", label: "MetaMap client ID", purpose: "Kenya BRS company registry lookup (KYB)", required: false },
   { key: "METAMAP_CLIENT_SECRET", label: "MetaMap client secret", purpose: "Kenya BRS company registry lookup (KYB)", required: false },
+  { key: "KRA_GAVA_CONSUMER_KEY", label: "KRA GavaConnect consumer key", purpose: "KRA PIN checks (KRA PIN certificates, KYB)", required: false },
+  { key: "KRA_GAVA_CONSUMER_SECRET", label: "KRA GavaConnect consumer secret", purpose: "KRA PIN checks (KRA PIN certificates, KYB)", required: false },
   { key: "DEEPTRACK_LIVE_BASE_URL", label: "DeepTrack Live URL", purpose: "Selfie and video liveness", required: true },
   { key: "DEEPTRACK_LIVE_API_KEY", label: "DeepTrack Live API key", purpose: "Selfie and video liveness", required: true },
   { key: "SENTINEL_INTERNAL_API_BASE_URL", label: "Scanning service URL", purpose: "Document scan, IPRS", required: true },

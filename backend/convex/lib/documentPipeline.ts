@@ -26,6 +26,7 @@ import {
 } from "./documentChecks";
 import { readIdentityDocument, readKraPinCertificate, readProofOfAddress, type DocumentImage, type DocumentKind, type VisionResult } from "./documentVision";
 import type { C2paManifestFinding, C2paOutcome } from "./c2paResolution";
+import { checkablePin, compareKraRecord, type KraComparison, type KraPinLookup } from "./kraGava";
 
 export type OcrResult = { provider: "aws_textract"; text: string; averageConfidence: number | null; lineCount: number };
 
@@ -49,6 +50,8 @@ export type PipelineDeps = {
   client: Anthropic;
   ocr: OcrProvider | null;
   contentCredentials?: ContentCredentialsLookup | null;
+  // KRA's PIN checker (lib/kraGava.ts), for KRA PIN certificates.
+  kra?: KraPinLookup | null;
   onError?: (stage: string, error: unknown) => void;
 };
 
@@ -67,7 +70,12 @@ export type PipelineResult = {
     expectedNameMatch: number | null;
     expectedDateOfBirthMatch: boolean | null;
   };
-  kraPin?: { fields: KraPinFields; nameMatch: number | null };
+  kraPin?: {
+    fields: KraPinFields;
+    nameMatch: number | null;
+    // The PIN's record at KRA, when the KRA check is set up.
+    registry?: KraComparison & { name: string | null; pinStatus: string | null; taxpayerType: string | null };
+  };
   proofOfAddress?: {
     fields: PoaFields;
     nameMatch: number | null;
@@ -195,6 +203,22 @@ export async function runDocumentPipeline(input: PipelineInput, deps: PipelineDe
     flags.push(...rules.flags);
     kraPin = { fields, nameMatch: rules.nameMatch };
     checks.push({ name: "Issued by the Kenya Revenue Authority", status: fields.issuedByKra ? "passed" : "failed" }, ...rules.checks);
+    // The PIN against KRA's own records.
+    const pin = checkablePin(fields.pin);
+    if (pin && deps.kra) {
+      const lookup = await deps.kra(pin);
+      const compared = compareKraRecord(lookup, fields.taxpayerName);
+      kraPin.registry = {
+        ...compared,
+        name: lookup.status === "found" ? lookup.name : null,
+        pinStatus: lookup.status === "found" ? lookup.pinStatus : null,
+        taxpayerType: lookup.status === "found" ? lookup.taxpayerType : null,
+      };
+      if (compared.outcome === "not_registered") flags.push({ code: "kra_pin_not_registered", severity: "high", source: "rules", message: "KRA has no record of the PIN on this certificate." });
+      if (compared.outcome === "name_mismatch") flags.push({ code: "kra_record_name_mismatch", severity: "high", source: "rules", message: compared.message });
+      if (compared.outcome === "inactive") flags.push({ code: "kra_pin_inactive", severity: "medium", source: "rules", message: compared.message });
+      checks.push({ name: "PIN confirmed by KRA", status: compared.outcome === "verified" ? "passed" : compared.outcome === "unavailable" ? "not_applicable" : "failed", detail: compared.message });
+    }
     ocrValues = { PIN: fields.pin, "taxpayer name": fields.taxpayerName };
   } else {
     const fields = vision.fields as PoaFields;

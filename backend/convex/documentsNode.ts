@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { DetectDocumentTextCommand, TextractClient } from "@aws-sdk/client-textract";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { kraConfigFromEnv, kraPinLookup } from "./lib/kraGava";
 import { decodeBase64, DocumentPipelineError, runDocumentPipeline, type OcrProvider } from "./lib/documentPipeline";
 import { DocumentVisionError } from "./lib/documentVision";
 import { c2paConfigFromEnv, lookupContentCredentials } from "./lib/c2paResolution";
@@ -95,6 +96,10 @@ export const processDocument = internalAction({
         {
           client: new Anthropic({ apiKey }),
           ocr: textractOcr(),
+          kra: (() => {
+            const config = kraConfigFromEnv(process.env);
+            return config ? kraPinLookup(config) : null;
+          })(),
           contentCredentials: (() => {
             const config = c2paConfigFromEnv(process.env);
             return config

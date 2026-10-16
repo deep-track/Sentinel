@@ -35,6 +35,7 @@ export type DocumentReportData = {
       kraPin?: {
         fields: { pin: string | null; taxpayerName: string | null; taxpayerType: "individual" | "non_individual" | null; email: string | null; certificateDate: string | null; obligations: string[]; issuedByKra: boolean };
         nameMatch: number | null;
+        registry?: { outcome: string; message: string; name: string | null; pinStatus: string | null; taxpayerType: string | null };
       };
       proofOfAddress?: {
         fields: { documentType: string; issuerName: string | null; holderName: string | null; address: string | null; issueDate: string | null; accountReference: string | null };
@@ -197,6 +198,7 @@ export function documentReportSpec(report: DocumentReportData): ReportSpec {
             ["Tax obligations", kra.fields.obligations.length ? kra.fields.obligations.join("; ") : "-"],
             ["Declared name", input.expectedName ?? "Not provided"],
             ["Name match", percent(kra.nameMatch)],
+            ["KRA records", kra.registry ? kra.registry.message : "Not checked with KRA"],
           ],
         },
       ],
