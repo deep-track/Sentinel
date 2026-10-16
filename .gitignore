@@ -51,3 +51,7 @@ next-env.d.ts
 
 
 .env.local
+
+# Training video pipeline: outputs and the saved sign-in
+tools/videos/out/
+tools/videos/.auth/
