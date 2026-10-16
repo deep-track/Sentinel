@@ -36,4 +36,7 @@ crons.cron("notify periodic reviews due", "30 5 * * *", (internal as any).riskRa
 // Back Office client health: drop logged API errors older than 30 days.
 crons.interval("purge old API error logs", { hours: 1 }, internal.backOfficeClients.purgeApiErrors, {});
 
+// Kenya capture links past their 72 hours (capture.ts).
+crons.interval("expire capture links", { hours: 1 }, (internal as any).capture.expireStale, {});
+
 export default crons;

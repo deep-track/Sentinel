@@ -251,6 +251,37 @@ export default defineSchema({
     .index("by_client_and_type_and_created_at", ["clientId", "type", "createdAt"])
     .index("by_type_and_created_at", ["type", "createdAt"]),
 
+  // Kenya capture links (capture.ts): the customer completes KYC on their
+  // phone. Only the token's SHA-256 is kept.
+  captureSessions: defineTable({
+    clientId: v.id("clients"),
+    tokenHash: v.string(),
+    status: v.union(v.literal("pending"), v.literal("opened"), v.literal("submitted"), v.literal("expired"), v.literal("cancelled")),
+    method: v.union(v.literal("sms"), v.literal("whatsapp"), v.literal("link")),
+    contact: v.optional(v.string()),
+    language: v.union(v.literal("en"), v.literal("sw")),
+    prefill: v.object({
+      firstName: v.optional(v.string()),
+      lastName: v.optional(v.string()),
+      idNumber: v.optional(v.string()),
+      dateOfBirth: v.optional(v.string()),
+      gender: v.optional(v.string()),
+    }),
+    externalRef: v.optional(v.string()),
+    deliveryStatus: v.union(v.literal("not_sent"), v.literal("pending"), v.literal("sent"), v.literal("failed")),
+    providerMessageId: v.optional(v.string()),
+    deliveryFailure: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    openedAt: v.optional(v.number()),
+    submittedAt: v.optional(v.number()),
+    verificationId: v.optional(v.id("verifications")),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_status_and_expires", ["status", "expiresAt"]),
+
   livenessRequests: defineTable({
     clientId: v.id("clients"),
     contact: v.string(),

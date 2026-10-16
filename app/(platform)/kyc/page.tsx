@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { anyApi } from "convex/server";
-import { CheckCircle, Clock3, FileCheck, ShieldAlert, XCircle } from "lucide-react";
+import { CheckCircle, Clock3, FileCheck, ShieldAlert, Smartphone, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import type { KYCRecord, KYCStatus } from "@/backend/lib/kyc-types";
@@ -163,6 +163,9 @@ export default async function KYCPage() {
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Track submissions, review outcomes, and invite users.</p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button asChild variant="outline">
+              <Link href="/kyc/capture"><Smartphone className="mr-2 h-4 w-4" /> Send capture link</Link>
+            </Button>
             <Button asChild className="bg-violet-600 hover:bg-violet-700 text-white">
               <Link href="/kyc/new"><FileCheck className="mr-2 h-4 w-4" /> New Verification</Link>
             </Button>
