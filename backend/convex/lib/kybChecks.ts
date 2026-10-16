@@ -155,7 +155,7 @@ export function certificateRules(
   return { flags, checks, nameMatch };
 }
 
-export type PartyOutcome = { name: string; role: "business" | "director" | "ubo"; verdict: "pass" | "review" | "reject"; complete: boolean; reason: string };
+export type PartyOutcome = { name: string; role: "business" | "director" | "ubo" | "shareholder"; verdict: "pass" | "review" | "reject"; complete: boolean; reason: string };
 export type ComponentOutcome = { verdict: "pass" | "review" | "reject" | "unavailable"; reason: string };
 
 // The overall KYB verdict. Any rejection (a strong sanctions match, a forged
@@ -185,7 +185,7 @@ export function decideKyb(params: { certificate: ComponentOutcome; proofOfAddres
   for (const party of parties) {
     if (party.verdict === "pass" && party.complete) continue;
     raise(party.verdict === "reject" ? "reject" : "review");
-    issues.push(`${party.role === "business" ? "The business" : party.name} (${party.role === "business" ? "AML" : `${party.role}, AML`}): ${party.complete ? party.reason : "screening incomplete"}`);
+    issues.push(`${party.role === "business" ? "The business" : party.name} (${party.role === "business" ? "AML" : `${party.role === "ubo" ? "beneficial owner" : party.role}, AML`}): ${party.complete ? party.reason : "screening incomplete"}`);
   }
   const complete =
     certificate.verdict !== "unavailable" && proofOfAddress.verdict !== "unavailable" && registry?.verdict !== "unavailable" && parties.every((party) => party.complete);

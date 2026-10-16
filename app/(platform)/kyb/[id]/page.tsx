@@ -134,6 +134,12 @@ type KybResult = {
     checks?: Check[];
     record?: { companyName?: string | null; registrationNumber?: string | null; registrationDate?: string | null; kraPin?: string | null; shareholders?: Array<{ name: string; shares?: string | null }> };
     lateResponse?: { receivedAt: number; status: string; record?: { companyName?: string | null; active?: boolean | null } };
+    ownership?: {
+      thresholdPct: number;
+      nodes: Array<{ name: string; kind: "person" | "company"; depth: number; directPct: number | null; effectivePct: number | null; note: string | null }>;
+      beneficialOwners: string[];
+      untraced: string[];
+    };
   };
   parties?: Array<{ name: string; role: string; verdict: string; complete: boolean; reason: string; hits: number; suppressed: number }>;
 };
@@ -236,6 +242,26 @@ function AutomatedChecks({ result }: { result: unknown }) {
             </p>
           ) : null}
           <ChecksList checks={data.registry.checks} />
+          {data.registry.ownership?.nodes.length ? (
+            <div className="mt-3">
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                Ownership · beneficial owners hold {data.registry.ownership.thresholdPct}% or more
+              </p>
+              <ul className="mt-1 space-y-1 text-sm">
+                {data.registry.ownership.nodes.map((node, index) => (
+                  <li key={`${node.name}-${index}`} style={{ paddingLeft: `${(node.depth - 1) * 1.25}rem` }}>
+                    {node.depth > 1 ? <span className="text-slate-400">└ </span> : null}
+                    <span className="font-medium">{node.name}</span>{" "}
+                    <span className="text-xs text-slate-500">
+                      {node.kind === "company" ? "company" : "person"} · holds {node.directPct ?? "?"}% · {node.effectivePct ?? "?"}% of the business
+                    </span>
+                    {data.registry!.ownership!.beneficialOwners.includes(node.name) ? <span className="ml-1 text-xs font-medium text-amber-700">Beneficial owner</span> : null}
+                    {node.note ? <span className="block text-xs text-amber-600">{node.note}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {data.parties?.length ? (
@@ -245,7 +271,7 @@ function AutomatedChecks({ result }: { result: unknown }) {
             {data.parties.map((party) => (
               <li key={`${party.role}-${party.name}`} className="flex flex-wrap items-start justify-between gap-2 py-2">
                 <span>
-                  <span className="font-medium">{party.name}</span> <span className="text-xs text-slate-500">({party.role === "ubo" ? "beneficial owner" : party.role})</span>
+                  <span className="font-medium">{party.name}</span> <span className="text-xs text-slate-500">({party.role === "ubo" ? "beneficial owner" : party.role === "shareholder" ? "company shareholder" : party.role})</span>
                   {party.verdict !== "pass" ? <span className="block text-xs text-slate-500">{party.reason.slice(0, 300)}</span> : null}
                 </span>
                 <span className={`text-xs font-medium ${VERDICT_STYLE[party.verdict]}`}>
