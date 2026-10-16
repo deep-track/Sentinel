@@ -1,0 +1,166 @@
+{
+  "video": "v04-capture-links",
+  "title": "Capture links",
+  "chapter": "b3",
+  "course": "Analyst training",
+  "order": 4,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "A capture link lets a customer do their own KYC check on their phone. In this video, you'll send a link in English or Kiswahili, and follow it until the check comes back.",
+      "show": [
+        {
+          "card": "Capture links",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click Identity (KYC) in the menu, then Send capture link. The Capture links page opens. Each link works once, for 72 hours, and needs no app or account.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Identity (KYC)"
+        },
+        {
+          "click": "case:Send capture link"
+        }
+      ]
+    },
+    {
+      "id": "method",
+      "say": "First, choose how to send it: WhatsApp, SMS, or Copy link, if you'd rather paste it into your own chat or email.",
+      "show": [
+        {
+          "click": "button:WhatsApp"
+        },
+        {
+          "highlight": "button:SMS"
+        },
+        {
+          "highlight": "button:Copy link"
+        }
+      ]
+    },
+    {
+      "id": "language",
+      "say": "Then choose the language of the message and the customer's page: English or Kiswahili. The customer can switch language on the page at any time.",
+      "show": [
+        {
+          "click": "button:Kiswahili"
+        }
+      ]
+    },
+    {
+      "id": "number",
+      "say": "For WhatsApp or SMS, type the customer's mobile number in international format, starting with plus two five four.",
+      "show": [
+        {
+          "type": "field:Customer's mobile number",
+          "text": "+254712345678"
+        }
+      ]
+    },
+    {
+      "id": "details",
+      "say": "You can also fill in the customer's details, such as their name, ID number and date of birth. The customer isn't asked again for anything you fill in. Only the first name shows on their page. Add your own reference too, such as your customer number.",
+      "show": [
+        {
+          "highlight": "text:Customer details (optional)"
+        },
+        {
+          "select": "field:Gender",
+          "option": "Female"
+        }
+      ]
+    },
+    {
+      "id": "send",
+      "say": "Then click Send link, or Create link if you chose Copy link. A copied link is shown only once, so paste it straight away.",
+      "show": [
+        {
+          "highlight": "button:Send link"
+        }
+      ]
+    },
+    {
+      "id": "customer",
+      "say": "On their phone, the customer agrees to the consent text, chooses their document, photographs the front and back, and takes a selfie. Then they tap Submit. It takes about three minutes.",
+      "show": [
+        {
+          "card": "Verify your identity",
+          "subtitle": "Thibitisha utambulisho wako · consent → document → photos → details → Submit"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "say": "Your links are listed under the form. Here are Joseph's link in English and Halima's in Kiswahili. Each row shows the name, your reference, how it was sent, the language and when.",
+      "show": [
+        {
+          "scroll": "case:Joseph"
+        },
+        {
+          "highlight": "case:Joseph"
+        },
+        {
+          "highlight": "case:Halima"
+        }
+      ]
+    },
+    {
+      "id": "status",
+      "say": "The badge shows how far the customer got: Sent, Opened or Submitted. Once they submit, the row links to their KYC check. A link that isn't used in 72 hours shows Expired. To stop a link early, click Cancel on its row.",
+      "show": [
+        {
+          "highlight": "button:Cancel"
+        }
+      ]
+    },
+    {
+      "id": "liveness",
+      "say": "Remember, a capture link takes a still selfie. It can't prove the person was present, so a clean check from a link still ends in Needs Review. To confirm presence, also send a liveness link.",
+      "show": [
+        {
+          "card": "A capture link can't prove liveness",
+          "subtitle": "Send a liveness link too (B4 Remote liveness)"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's capture links. To learn more, open chapter B3 in Help, Capture links.",
+      "show": [
+        {
+          "card": "Help → B3 Capture links",
+          "subtitle": "sentinel.deeptrack.io/help/b3"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Send capture link is a link styled as a button on /kyc, so it is targeted with case:, not button:.",
+    "The first name, last name, ID number and reference inputs have placeholders but no labels, so field: can't type into them; only Gender (aria-label) is selected.",
+    "The demo links for Joseph and Halima were created as Copy link with status Sent and expire 72 hours after seeding. If they have expired, they show Expired and have no Cancel button, so the 'status' highlight is skipped; reseed or accept the narration as general.",
+    "button:SMS assumes no other button on the page contains 'SMS' before it (the WhatsApp/SMS/Copy link toggles come first).",
+    "Clicking WhatsApp and Kiswahili only changes local form state; nothing is sent."
+  ]
+}

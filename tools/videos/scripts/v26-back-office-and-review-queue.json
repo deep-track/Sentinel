@@ -1,0 +1,180 @@
+{
+  "video": "v26-back-office-and-review-queue",
+  "title": "The Back Office and the review queue",
+  "chapter": "d1",
+  "course": "Back Office",
+  "order": 26,
+  "internal": true,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "The Sentinel Back Office is DeepTrack's own console. It shows every client at once, and clients never see it. In this video, you'll read the Overview, then work the shared review queue.",
+      "show": [
+        {
+          "card": "The Back Office and the review queue",
+          "subtitle": "Sentinel by DeepTrack · Back Office"
+        }
+      ]
+    },
+    {
+      "id": "banner",
+      "say": "Open the Back Office from the client app sidebar, or go straight to slash internal ops. Check the amber strip and the banner: Internal, not client visible. They tell you you're in the Back Office, not a client's portal. Never share these screens with a client.",
+      "show": [
+        {
+          "goto": "/internal-ops/overview"
+        },
+        {
+          "highlight": "text:Internal — not client visible"
+        }
+      ]
+    },
+    {
+      "id": "menu",
+      "say": "The menu has four groups: Back office, Clients, Reviews, and Risk and compliance. A blue dot marks the page you're on. Your role shows at the bottom.",
+      "show": [
+        {
+          "highlight": "sidebar:Overview"
+        },
+        {
+          "highlight": "sidebar:Review queue"
+        }
+      ]
+    },
+    {
+      "id": "tiles",
+      "say": "The Overview updates on its own. Read the five tiles: active clients, scans today, credits consumed, items in the review queue, and open alerts. A red status at the top right means at least one critical alert. Act on it now.",
+      "show": [
+        {
+          "zoom": "heading:Overview"
+        },
+        {
+          "highlight": "text:Active clients"
+        },
+        {
+          "highlight": "text:In review queue"
+        },
+        {
+          "highlight": "text:Credits consumed"
+        }
+      ]
+    },
+    {
+      "id": "panels",
+      "say": "Client accounts lists your clients with plan, usage, balance and status. Watch for a red balance or a usage bar near its threshold. System alerts lists critical alerts first, such as a watchlist that hasn't loaded.",
+      "show": [
+        {
+          "highlight": "card:Client accounts"
+        },
+        {
+          "highlight": "card:System alerts"
+        }
+      ]
+    },
+    {
+      "id": "queue",
+      "say": "Every check that can't be decided automatically, and every result a client disputes, lands in one review queue shared by all clients. Under Reviews, click Review queue.",
+      "show": [
+        {
+          "highlight": "card:Review queue"
+        },
+        {
+          "click": "sidebar:Review queue"
+        }
+      ]
+    },
+    {
+      "id": "queue-list",
+      "say": "Read the tiles: pending, escalated, high priority, and the oldest open item. The Open tab lists client disputes first, then auto-escalations, then internal flags. Click Review on a row to open it.",
+      "show": [
+        {
+          "highlight": "text:Oldest open item"
+        },
+        {
+          "highlight": "card:Open items"
+        }
+      ]
+    },
+    {
+      "id": "case",
+      "say": "The case page shows the client, the trigger and the reason. For a dispute, it shows the client's own words. For AML checks, read Watchlist coverage and Watchlist matches before you decide.",
+      "show": [
+        {
+          "card": "Read the case",
+          "subtitle": "Review item · Verification result · Watchlist coverage · Watchlist matches"
+        }
+      ]
+    },
+    {
+      "id": "decide",
+      "say": "To decide, write your notes for the audit trail. On a dispute, the first five hundred characters go to the client. Enter your certainty, from eighty to one hundred percent. Below eighty, escalate and say what evidence is missing. Your decision is final.",
+      "show": [
+        {
+          "card": "Decide the item",
+          "subtitle": "Notes (audit trail) · Certainty % 80–100 · Final: pass, Final: reject or Escalate"
+        }
+      ]
+    },
+    {
+      "id": "review-ops",
+      "say": "Now click Review operations. DeepTrack's deadlines are four hours for high priority, twenty-four for normal and seventy-two for low. Clear everything past deadline each day, and decide every dispute within four hours.",
+      "show": [
+        {
+          "click": "sidebar:Review operations"
+        },
+        {
+          "zoom": "heading:Review operations"
+        },
+        {
+          "highlight": "text:Past deadline"
+        }
+      ]
+    },
+    {
+      "id": "workload",
+      "say": "In Open items, click Assign to me to take an item. Then check why items are held. A rise in service outages means a provider problem, not a risky customer. Overturn rate shows how often reviewers correct the automation.",
+      "show": [
+        {
+          "highlight": "card:Open items"
+        },
+        {
+          "scroll": "card:Why items are held"
+        },
+        {
+          "highlight": "card:Overturn rate by type"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's the Back Office at a glance, and the review queue. To learn more, open chapters D1 and D2 in the Runbook.",
+      "show": [
+        {
+          "card": "Runbook → D1 The Back Office at a glance · D2 Review queue and disputes",
+          "subtitle": "sentinel.deeptrack.io/internal-ops/help/d1"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "No case page is opened: the queue's Review links have the accessible name 'Review', which would also match the sidebar links 'Review queue' and 'Review operations', and there is no safe way to target Demo Bank Ltd's James Mutua dispute (rows show client name and reference, not the customer name). The case and decision scenes use title cards instead. If a stable route for the Demo Bank dispute is known, replace with a goto to /internal-ops/review-queue/<id> and highlight card:Review item, card:Watchlist matches and card:Resolve (never click Final: pass, Final: reject, Confirm, Keep verdict or Escalate).",
+    "The Open / Resolved switch is role=tab, not button, so button:Resolved would not match; it is not clicked.",
+    "The Overview, Review queue and Review operations pages show other clients' names in their tables. Only full-panel highlights are used there; zooms are limited to page headings.",
+    "The Back Office nav label for the manual is 'Runbook', not 'Help'; the outro card says Runbook. Route confirmed as /internal-ops/help/[chapter].",
+    "text:Internal — not client visible relies on the banner's rounded-md wrapper in app/internal-ops/layout.tsx."
+  ]
+}

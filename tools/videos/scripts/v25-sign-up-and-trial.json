@@ -1,0 +1,151 @@
+{
+  "video": "v25-sign-up-and-trial",
+  "title": "Sign up and start your free trial",
+  "chapter": "a1",
+  "course": "Get started",
+  "order": 25,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "You can try Sentinel without talking to anyone first. In this video, you'll sign up, set your password and start your free trial.",
+      "show": [
+        {
+          "card": "Sign up and start your free trial",
+          "subtitle": "Sentinel by DeepTrack · Get started"
+        }
+      ]
+    },
+    {
+      "id": "page",
+      "say": "Go to the sign-up page, headed Start your free Sentinel trial. A trial gives you 14 days and free credits to try every product. No card is needed.",
+      "show": [
+        {
+          "goto": "/signup"
+        },
+        {
+          "highlight": "card:Start your free Sentinel trial"
+        }
+      ]
+    },
+    {
+      "id": "name",
+      "say": "Type your full name.",
+      "show": [
+        {
+          "type": "field:Full name",
+          "text": "Wanjiku Kamau"
+        }
+      ]
+    },
+    {
+      "id": "email",
+      "say": "Then your work email. Personal mailboxes, such as Gmail or Yahoo, can't start a trial. Sentinel knows your organization by your email domain, and each organization gets one trial.",
+      "show": [
+        {
+          "type": "field:Work email",
+          "text": "wanjiku.kamau@yoursacco.co.ke"
+        }
+      ]
+    },
+    {
+      "id": "organization",
+      "say": "Type the name of your bank, SACCO, microfinance or fintech. It becomes your legal name in Settings, and you can change it there later.",
+      "show": [
+        {
+          "type": "field:Organization",
+          "text": "Yetu Sacco Society Ltd"
+        }
+      ]
+    },
+    {
+      "id": "country",
+      "say": "Kenya is selected for you. Your country sets your billing currency: Kenya shillings for Kenyan organizations, and US dollars for everyone else.",
+      "show": [
+        {
+          "zoom": "field:Country"
+        }
+      ]
+    },
+    {
+      "id": "submit",
+      "say": "Then click Start free trial. The form changes to Check your inbox, and DeepTrack emails you an invitation.",
+      "show": [
+        {
+          "highlight": "button:Start free trial"
+        }
+      ]
+    },
+    {
+      "id": "password",
+      "say": "Open the email, follow the link and set your password. You land on a page headed Access is being prepared. That's normal: your workspace doesn't exist yet.",
+      "show": [
+        {
+          "card": "Set your password",
+          "subtitle": "Open the invitation email → set your password → Access is being prepared"
+        }
+      ]
+    },
+    {
+      "id": "start",
+      "say": "In the box headed Start your free 14-day trial, check your organization and country. You can't change the currency yourself later. Add a phone number if you like, accept the terms, and click Start free trial. You become your workspace's Admin.",
+      "show": [
+        {
+          "card": "Start your free 14-day trial",
+          "subtitle": "Check Organization and Country → accept the terms → Start free trial"
+        }
+      ]
+    },
+    {
+      "id": "banner",
+      "say": "A banner on every page shows the days and credits you have left. A Kenyan organization gets 25 credits, about 25 checks. Use them to complete your profile, invite your team and run a few real checks.",
+      "show": [
+        {
+          "card": "During the trial",
+          "subtitle": "Free trial: 9 days and 18 credits left"
+        }
+      ]
+    },
+    {
+      "id": "end",
+      "say": "After 14 days, new checks pause, but your results and settings are kept. To carry on, click Top up to continue, and pay on the Billing and Credits page.",
+      "show": [
+        {
+          "card": "When the trial ends",
+          "subtitle": "Top up to continue → Billing & Credits"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's your free trial, from sign-up to your first day. To learn more, open chapter A1 in Help, Signing up and your free trial.",
+      "show": [
+        {
+          "card": "Help → A1 Signing up and your free trial",
+          "subtitle": "sentinel.deeptrack.io/help/a1"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The form is filled in but Start free trial is only highlighted, never clicked. Don't add Enter or a click on it.",
+    "record.mjs records with the signed-in session. /signup is a public route in middleware.ts, so it should still open, but check the first take.",
+    "The sign-up example uses the Help chapter's example person (Wanjiku Kamau, wanjiku.kamau@yoursacco.co.ke) and a made-up SACCO, 'Yetu Sacco Society Ltd'. Change it if you'd prefer a Demo name.",
+    "The password, access page, trial banner and trial-end steps are title cards: they need a new account or trial state that the Demo Bank session can't show.",
+    "Narration says 'about 25 free checks' to match the page text; that is the Kenyan amount. Outside Kenya the trial is 1,000 credits."
+  ]
+}

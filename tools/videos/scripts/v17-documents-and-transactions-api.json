@@ -1,0 +1,169 @@
+{
+  "video": "v17-documents-and-transactions-api",
+  "title": "Documents and transactions API",
+  "chapter": "c3",
+  "course": "Developer quick start",
+  "order": 17,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "In this video, you'll check a single document over the API, then feed your customers' transactions into transaction monitoring.",
+      "show": [
+        {
+          "card": "Documents and transactions API",
+          "subtitle": "Sentinel by DeepTrack · Developer quick start"
+        }
+      ]
+    },
+    {
+      "id": "doc-card",
+      "say": "The Documents API checks one document on its own, with no selfie. Choose the kind: an identity document, a proof of address, or a KRA PIN certificate. Your key needs the Run IDP document checks scope.",
+      "show": [
+        {
+          "card": "POST /v1/verify/document",
+          "subtitle": "documentKind: identity · proof_of_address · kra_pin"
+        }
+      ]
+    },
+    {
+      "id": "file",
+      "say": "Send a JPEG, PNG, WebP or PDF, base64-encoded, up to about 730 kilobytes. Send the original file where you can. Re-saving it removes the hidden data that reveals edited or AI-made files.",
+      "show": [
+        {
+          "goto": "/help/c3"
+        },
+        {
+          "scroll": "case:Prepare the file"
+        },
+        {
+          "highlight": "case:Prepare the file"
+        }
+      ]
+    },
+    {
+      "id": "identity",
+      "say": "For an ID card, send the front and the back, because the back carries the MRZ. Add what the customer told you, such as their name and date of birth, and Sentinel checks the document against it.",
+      "show": [
+        {
+          "scroll": "case:\"documentKind\": \"identity\""
+        },
+        {
+          "highlight": "case:\"documentKind\": \"identity\""
+        }
+      ]
+    },
+    {
+      "id": "address",
+      "say": "A proof of address or KRA PIN certificate uses the same call, with one file. Add the expected address and a maximum age, or the expected KRA PIN.",
+      "show": [
+        {
+          "scroll": "case:\"documentKind\": \"proof_of_address\""
+        },
+        {
+          "highlight": "case:\"documentKind\": \"proof_of_address\""
+        }
+      ]
+    },
+    {
+      "id": "doc-verdicts",
+      "say": "A pass means no fraud signals. Review means a high or medium finding, like a name mismatch or an old bill. Reject means a critical finding, like an expired document. Anything that doesn't pass opens a case for your team.",
+      "show": [
+        {
+          "scroll": "case:At least one critical finding"
+        },
+        {
+          "highlight": "case:At least one critical finding"
+        }
+      ]
+    },
+    {
+      "id": "tx-card",
+      "say": "Now transactions. Send up to 500 in one batch, from your core banking system, wallet or M-Pesa integration. This needs the Manage AML monitoring scope, and it uses no credits.",
+      "show": [
+        {
+          "card": "POST /v1/transactions",
+          "subtitle": "Up to 500 per batch · scope: Manage AML monitoring"
+        }
+      ]
+    },
+    {
+      "id": "tx-fields",
+      "say": "Give each transaction an externalId that never changes, such as the M-Pesa receipt number. For customerRef, use the reference of the customer's KYC or AML check where you can, so stricter rules apply to high-risk customers.",
+      "show": [
+        {
+          "goto": "/help/c5"
+        },
+        {
+          "scroll": "case:\"externalId\": \"SJK4H7QX2P\""
+        },
+        {
+          "highlight": "case:\"externalId\": \"SJK4H7QX2P\""
+        }
+      ]
+    },
+    {
+      "id": "tx-response",
+      "say": "The response counts what was accepted and what was a duplicate, and lists every rejected row with its position and the error. A 202 can still contain rejected rows, so always check them.",
+      "show": [
+        {
+          "scroll": "case:\"accepted\": 498"
+        },
+        {
+          "highlight": "case:\"accepted\": 498"
+        }
+      ]
+    },
+    {
+      "id": "retry",
+      "say": "Resending is safe. A transaction already stored is counted as a duplicate, never stored twice. On a timeout or a 429, wait, then send the same batch again. With a test key, rows are checked but nothing is stored.",
+      "show": [
+        {
+          "card": "Safe to resend",
+          "subtitle": "Same externalId → counted as a duplicate, never stored twice"
+        }
+      ]
+    },
+    {
+      "id": "alerts",
+      "say": "When a rule is met, an alert appears on the Transactions page, usually within a minute. Your compliance team works it there.",
+      "show": [
+        {
+          "click": "sidebar:Transactions"
+        },
+        {
+          "highlight": "case:or the API at POST /v1/transactions"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's documents and transactions over the API. To learn more, open chapters C3 and C5 in Help.",
+      "show": [
+        {
+          "card": "Help → C3 Documents API · C5 Transactions API",
+          "subtitle": "sentinel.deeptrack.io/help/c3 · sentinel.deeptrack.io/help/c5"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Help targets use case:<text> (getByText fallback) because card:<heading> would ring the whole Help article. Each text's first match was checked against the Markdown source, not the rendered page.",
+    "Scene 'alerts' highlights the description line under 'Transaction monitoring' on /transactions; whether Demo Bank Ltd has any transaction alerts to show was not checked.",
+    "Help chapters C3 and C5 are both covered; 'chapter' is set to c3."
+  ]
+}

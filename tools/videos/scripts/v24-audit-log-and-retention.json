@@ -1,0 +1,145 @@
+{
+  "video": "v24-audit-log-and-retention",
+  "title": "The audit log and data retention",
+  "chapter": "a10",
+  "course": "Get started",
+  "order": 24,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "When an examiner asks who made a decision, or who changed a rule, you need a record you can trust. In this video, you'll use the audit log, and set how long Sentinel keeps customer records.",
+      "show": [
+        {
+          "card": "The audit log and data retention",
+          "subtitle": "Sentinel by DeepTrack · Get started"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click Settings, then the Audit and data tab. The audit log is your organization's permanent record of who did what, and when.",
+      "show": [
+        {
+          "goto": "/settings"
+        },
+        {
+          "click": "sidebar:Audit & data"
+        }
+      ]
+    },
+    {
+      "id": "log",
+      "say": "Entries are newest first. Each row shows when, who, what happened in plain English, and key details, such as the reason for a decision. Sentinel means the system did it. API, followed by a key name, means one of your API keys. Nobody can edit or delete an entry.",
+      "show": [
+        {
+          "highlight": "card:Audit log"
+        }
+      ]
+    },
+    {
+      "id": "filter",
+      "say": "Use the Filter list to show one kind of entry: Team, Review decisions, Settings, or Checks. Here are just the review decisions.",
+      "show": [
+        {
+          "select": "field:Filter",
+          "option": "Review decisions"
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "say": "To export the log for an examiner, choose Everything, and click Load more until you reach the start of the period. Then click CSV. Times in the file are in UTC, three hours behind Kenya time.",
+      "show": [
+        {
+          "select": "field:Filter",
+          "option": "Everything"
+        },
+        {
+          "highlight": "button:CSV"
+        }
+      ]
+    },
+    {
+      "id": "auditor",
+      "say": "Need to give an examiner their own access? Invite them with the Viewer or Auditor role. They can read the log, cases and reports, but can't change anything. Deactivate them when the visit ends.",
+      "show": [
+        {
+          "card": "Give an examiner access",
+          "subtitle": "Settings → Team → invite as Viewer / Auditor"
+        }
+      ]
+    },
+    {
+      "id": "retention",
+      "say": "Below the log, Admins see Data retention. Kenyan law says you must keep due diligence records for at least seven years, but no longer than you need them. Set Keep records for, in months. The default, 84 months, is the shortest allowed.",
+      "show": [
+        {
+          "scroll": "card:Data retention"
+        },
+        {
+          "zoom": "field:Keep records for (months)"
+        }
+      ]
+    },
+    {
+      "id": "removal",
+      "say": "Sentinel never deletes records on its own. When records pass the period, this section shows how many. One Admin clicks Request removal, and a second Admin approves it. So nobody can delete customer data alone.",
+      "show": [
+        {
+          "highlight": "card:Data retention"
+        }
+      ]
+    },
+    {
+      "id": "kept",
+      "say": "A removal deletes personal data, but keeps a minimal record of each check, and the whole audit log. Records with an open case, active monitoring or an STR are held back for now.",
+      "show": [
+        {
+          "card": "Two people, every removal",
+          "subtitle": "Request removal → a second Admin approves → Removal history"
+        }
+      ]
+    },
+    {
+      "id": "requests",
+      "say": "When a customer asks to see their data, open their checks and download the reports. To correct it, run a new check. Checks inside the retention period are kept, because the law requires it.",
+      "show": [
+        {
+          "card": "Customer data requests",
+          "subtitle": "See: download the reports · Correct: run a new check · Delete: after the retention period"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's the audit log and data retention. To learn more, open chapters A10 and A11 in Help.",
+      "show": [
+        {
+          "card": "Help → A10 The audit log · A11 Data retention",
+          "subtitle": "sentinel.deeptrack.io/help/a10 · sentinel.deeptrack.io/help/a11"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Changing the Filter list only changes the view; it saves nothing. The CSV button is highlighted, not clicked, because it downloads a file.",
+    "The Load more button only appears when there are more than 100 entries, so it is mentioned but not targeted.",
+    "field:Filter uses a substring label match; it should only match the audit log's Filter list. If anything else on the page has 'Filter' in its label, the wrong control could be picked.",
+    "Request removal only appears when records are past the period; Demo Bank likely has none, so the removal flow is shown as a title card. Nothing is clicked."
+  ]
+}

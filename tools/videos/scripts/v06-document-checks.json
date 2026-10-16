@@ -1,0 +1,188 @@
+{
+  "video": "v06-document-checks",
+  "title": "Document checks",
+  "chapter": "b5",
+  "course": "Analyst training",
+  "order": 6,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "The Documents page checks a single document on its own, without a selfie. In this video, you'll submit a document, then read real reports, including an AI-generated ID.",
+      "show": [
+        {
+          "card": "Document checks",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "kinds",
+      "say": "Click Documents (IDP) in the menu. Sentinel checks three kinds of document: an identity document, a proof of address, or a KRA PIN certificate.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Documents (IDP)"
+        },
+        {
+          "highlight": "case:Identity document"
+        }
+      ]
+    },
+    {
+      "id": "upload",
+      "say": "For an identity document, upload the front, and add the back for ID cards and licences. The back of a Kenyan ID carries the machine-readable zone, so always add it. Upload the original file where you can, because resizing removes the hidden data that reveals AI tools.",
+      "show": [
+        {
+          "highlight": "field:Front of the document"
+        },
+        {
+          "highlight": "field:Back of the document"
+        }
+      ]
+    },
+    {
+      "id": "match",
+      "say": "Then fill in what the document should match. For a KRA PIN certificate, that's the taxpayer name and the declared PIN. Every field is optional. Click Verify document, and results usually take under a minute.",
+      "show": [
+        {
+          "click": "case:KRA PIN certificate"
+        },
+        {
+          "type": "field:Declared KRA PIN",
+          "text": "A012345678Z"
+        },
+        {
+          "highlight": "button:Verify document"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "say": "Your checks are under Recent documents. Sentinel tells the two Kenyan ID cards apart. Peter Njoroge Kamau has the older second-generation card, which has no expiry date. Amina Hassan Omar has a Maisha card, issued from 2023, which does expire. Both passed.",
+      "show": [
+        {
+          "scroll": "text:Recent documents"
+        },
+        {
+          "highlight": "case:Peter Njoroge Kamau"
+        },
+        {
+          "highlight": "case:Amina Hassan Omar"
+        }
+      ]
+    },
+    {
+      "id": "ai-id",
+      "say": "Now open Daniel Ouma's ID. It was rejected. The red banner says an AI-generated document is suspected: the background pattern melts into the photo, and the small print is garbled.",
+      "show": [
+        {
+          "click": "case:Rejected · View report"
+        },
+        {
+          "highlight": "text:AI-generated document suspected"
+        },
+        {
+          "zoom": "text:AI-generated document suspected"
+        }
+      ]
+    },
+    {
+      "id": "shield",
+      "say": "The deepfake shield answers three questions. Is the document AI-generated? Has it been edited? And has the holder photo been replaced?",
+      "show": [
+        {
+          "highlight": "text:Deepfake shield · DeepTrack Live"
+        }
+      ]
+    },
+    {
+      "id": "findings",
+      "say": "Each finding has a severity and a source. Critical findings reject the document. High and medium findings send it to review. Don't accept this one. Ask for the original document.",
+      "show": [
+        {
+          "scroll": "card:Fraud and authenticity findings"
+        },
+        {
+          "zoom": "card:Fraud and authenticity findings"
+        }
+      ]
+    },
+    {
+      "id": "kra",
+      "say": "Next, a KRA PIN certificate. Sentinel checks the PIN format, and where it can, looks the PIN up in KRA's own records. For Wanjiku Mwangi, KRA confirmed the PIN. For Daniel Ouma, KRA has no record of it, so his certificate needs review.",
+      "show": [
+        {
+          "goto": "/idp"
+        },
+        {
+          "click": "case:Needs review · View report"
+        },
+        {
+          "scroll": "card:KRA PIN certificate"
+        },
+        {
+          "zoom": "card:KRA PIN certificate"
+        }
+      ]
+    },
+    {
+      "id": "keep",
+      "say": "To keep a copy, click Download report PDF, or Evidence JSON for the raw result. Sentinel doesn't keep the document image, so keep your own original.",
+      "show": [
+        {
+          "scroll": "button:Download report (PDF)"
+        },
+        {
+          "highlight": "button:Download report (PDF)"
+        },
+        {
+          "highlight": "button:Evidence (JSON)"
+        }
+      ]
+    },
+    {
+      "id": "verdicts",
+      "say": "Remember the four verdicts: Verified, Needs review, Rejected, or Could not be verified, when the file can't be read. A finding is a lead, not proof, so compare with the original before you act.",
+      "show": [
+        {
+          "card": "Verified · Needs review · Rejected · Could not be verified",
+          "subtitle": "Needs review and Rejected both open a case on Reviews"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's document checks. To learn more, open chapter B5 in Help, Document checks.",
+      "show": [
+        {
+          "card": "Help → B5 Document checks",
+          "subtitle": "sentinel.deeptrack.io/help/b5"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The Recent documents rows have no link on the name; only the outcome link ('Verified · View report' etc.) opens a report. Peter Njoroge Kamau's and Amina Hassan Omar's reports can't be opened by name, so they are only highlighted in the list.",
+    "case:Rejected · View report assumes Daniel Ouma's AI-generated ID is the only rejected document in Demo Bank Ltd.",
+    "case:Needs review · View report assumes the first 'Needs review' row (newest first) is Daniel Ouma's KRA PIN certificate, the last document the seed created.",
+    "The document-type options are role=radio, not buttons, so case:KRA PIN certificate clicks the option's label text. It only changes the form; nothing is submitted.",
+    "The list shows names as read from the document, in capitals (e.g. PETER NJOROGE KAMAU); getByText is case-insensitive, so case:Peter Njoroge Kamau should still match."
+  ]
+}

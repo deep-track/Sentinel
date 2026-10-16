@@ -1,0 +1,161 @@
+{
+  "video": "v23-review-rules-and-notifications",
+  "title": "Review rules and notifications",
+  "chapter": "a8",
+  "course": "Get started",
+  "order": 23,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "When a check can't be decided automatically, Sentinel opens a review case. In this video, you'll set how your team works those cases, and who gets alerted.",
+      "show": [
+        {
+          "card": "Review rules and notifications",
+          "subtitle": "Sentinel by DeepTrack · Get started"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click Settings, then the Review workflow tab. The defaults follow common practice for Kenyan banks and SACCOs, so you can start without changing anything.",
+      "show": [
+        {
+          "goto": "/settings"
+        },
+        {
+          "click": "sidebar:Review workflow"
+        }
+      ]
+    },
+    {
+      "id": "clearance",
+      "say": "Under Who can decide what, choose the lowest role that can make the final decision on each kind of case. By default, a sanctions hit needs an Admin, and a PEP needs a Reviewer. Anyone below can still investigate and recommend.",
+      "show": [
+        {
+          "highlight": "card:Who can decide what"
+        },
+        {
+          "zoom": "field:Who can clear Sanctions hit"
+        }
+      ]
+    },
+    {
+      "id": "four-eyes",
+      "say": "Four-eyes approval lists the cases that always need two people: one recommends, and a second approves. Leave Maker-checker on, so the person who ran a check can't make the final decision on it.",
+      "show": [
+        {
+          "scroll": "card:Four-eyes approval"
+        },
+        {
+          "zoom": "field:Maker-checker"
+        }
+      ]
+    },
+    {
+      "id": "assignment",
+      "say": "Under Assignment, Manual means cases wait in the unassigned queue for people to take. Automatic shares new cases evenly, to whoever has the fewest open cases.",
+      "show": [
+        {
+          "scroll": "card:Assignment"
+        },
+        {
+          "highlight": "card:Assignment"
+        }
+      ]
+    },
+    {
+      "id": "deadlines",
+      "say": "Review deadlines set how many hours your team has to decide: 24 for high priority, and 72 for normal and low. A case that misses its deadline becomes high priority, and your team is alerted.",
+      "show": [
+        {
+          "scroll": "card:Review deadlines"
+        },
+        {
+          "zoom": "field:High priority"
+        }
+      ]
+    },
+    {
+      "id": "reasons",
+      "say": "Reason codes are the reasons people choose when they approve or reject. Write them so a CBK or FRC examiner understands them without asking. Then click Save changes.",
+      "show": [
+        {
+          "scroll": "card:Reason codes"
+        },
+        {
+          "highlight": "card:Reason codes"
+        }
+      ]
+    },
+    {
+      "id": "notifications",
+      "say": "Now open the Notifications tab. Sentinel alerts your team when something needs attention: in the bell at the top of every page, and by email if you choose.",
+      "show": [
+        {
+          "goto": "/settings/notifications"
+        },
+        {
+          "highlight": "card:Alerts"
+        }
+      ]
+    },
+    {
+      "id": "alerts",
+      "say": "Each row is one alert. Tick On to send it, and Email to send it by email as well. Under Who gets it, tick the roles that should receive it. Two alerts, Case assigned and Awaiting approval, go to named people instead.",
+      "show": [
+        {
+          "zoom": "field:Sanctions hit on"
+        },
+        {
+          "highlight": "field:Sanctions hit by email"
+        },
+        {
+          "highlight": "case:People who can approve it"
+        }
+      ]
+    },
+    {
+      "id": "low-credit",
+      "say": "Finally, set the low-credit warning. Keep your plan's level, or untick it and enter your own. Click Save changes, and your settings apply to the next alerts.",
+      "show": [
+        {
+          "scroll": "card:Low-credit warning"
+        },
+        {
+          "zoom": "field:Use your plan's warning level"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's how your team reviews cases and hears about them. To learn more, open chapters A8 and A9 in Help.",
+      "show": [
+        {
+          "card": "Help → A8 Review rules · A9 Notifications",
+          "subtitle": "sentinel.deeptrack.io/help/a8 · sentinel.deeptrack.io/help/a9"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The notifications step uses goto /settings/notifications rather than clicking the 'Notifications' tab, because the bell links to /notifications and might match the same link name first.",
+    "field:High priority uses Playwright's substring label match. On the Review workflow page only the deadline field has that label, so it should resolve correctly.",
+    "case:People who can approve it targets the text in the Awaiting approval row (getByText). It is only highlighted.",
+    "Defaults in the narration (Admin for sanctions, Reviewer for PEP, 24/72/72 hours) assume Demo Bank still uses the standard rules."
+  ]
+}

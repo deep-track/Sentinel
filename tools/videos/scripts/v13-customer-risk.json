@@ -1,0 +1,164 @@
+{
+  "video": "v13-customer-risk",
+  "title": "Customer risk and periodic reviews",
+  "chapter": "b12",
+  "course": "Analyst training",
+  "order": 13,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Sentinel rates every customer it screens as low, medium, high or prohibited risk. The rating sets how often you review them. In this video, you'll read a rating, find the customers due for review, and record a review.",
+      "show": [
+        {
+          "card": "Customer risk and periodic reviews",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "page",
+      "say": "Click Customer risk in the menu on the left. It lists every customer under ongoing monitoring. The tiles at the top count them at each level, plus those not rated yet.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Customer risk"
+        },
+        {
+          "highlight": "case:high risk"
+        }
+      ]
+    },
+    {
+      "id": "due",
+      "say": "The list header says how many are due. Tick Due only to hide the rest. Customers due for review come first, then by risk level, then by the nearest date.",
+      "show": [
+        {
+          "highlight": "case:due for periodic review"
+        },
+        {
+          "click": "field:Due only"
+        }
+      ]
+    },
+    {
+      "id": "row",
+      "say": "Here is Daniel Kipruto Langat, a Kenyan PEP. His row shows his top risk factors, his rating, and Review due in red, with the date. His periodic review is overdue.",
+      "show": [
+        {
+          "highlight": "case:Review due"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click his name to open his screening report.",
+      "show": [
+        {
+          "click": "case:Daniel Kipruto Langat"
+        }
+      ]
+    },
+    {
+      "id": "rating",
+      "say": "Scroll to Customer risk rating. The badge reads High risk, 65, with how often to review him: every 12 months. Each factor shows its points. Everyone starts at 10. He gets 35 for a Class 2 PEP, and 20 for real estate, a higher-risk industry.",
+      "show": [
+        {
+          "scroll": "card:Customer risk rating"
+        },
+        {
+          "zoom": "card:Customer risk rating"
+        }
+      ]
+    },
+    {
+      "id": "hits",
+      "say": "Only hits still standing count. If a reviewer clears a hit, the rating is worked out again without it. You can't change a rating by hand.",
+      "show": [
+        {
+          "highlight": "card:Findings"
+        }
+      ]
+    },
+    {
+      "id": "levels",
+      "say": "Low risk is below 30 points, reviewed every 36 months. Medium is 30 to 59, every 24 months. High is 60 or more, any PEP hit, or a FATF call-for-action country. That means a review every 12 months, with enhanced due diligence.",
+      "show": [
+        {
+          "card": "Low · Medium · High · Prohibited",
+          "subtitle": "Review every 36 · 24 · 12 months · Prohibited: exit or don't onboard"
+        }
+      ]
+    },
+    {
+      "id": "prohibited",
+      "say": "Prohibited means a confirmed sanctions match, like Viktor Petrovich Orlov. There's no review date. Don't onboard, or exit the relationship.",
+      "show": [
+        {
+          "goto": "/aml-check"
+        },
+        {
+          "click": "case:Match · View report"
+        },
+        {
+          "scroll": "card:Customer risk rating"
+        }
+      ]
+    },
+    {
+      "id": "mark-reviewed",
+      "say": "When you've done the review, go back to Customer risk and click Mark reviewed on the row. Describe what the review covered, such as refreshed documents and source of funds, then confirm. Sentinel sets the next review date from today, and re-screens the customer straight away.",
+      "show": [
+        {
+          "goto": "/customers"
+        },
+        {
+          "highlight": "button:Mark reviewed"
+        }
+      ]
+    },
+    {
+      "id": "notifications",
+      "say": "Every morning, Sentinel tells your Admins, Reviewers and Analysts which customers have just become due. An Admin can change the review periods in Settings, under Screening rules.",
+      "show": [
+        {
+          "card": "Periodic reviews",
+          "subtitle": "Settings → Screening rules → Customer risk rating and periodic review"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's customer risk and periodic reviews. To learn more, open chapter B12 in Help.",
+      "show": [
+        {
+          "card": "Help → B12 Customer risk and periodic reviews",
+          "subtitle": "sentinel.deeptrack.io/help/b12"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "'case:high risk', 'case:due for periodic review' and 'case:Review due' use the page.getByText fallback. The tile label is rendered as `${level} risk` (CSS uppercase), so 'high risk' should hit the first tile before any badge.",
+    "The Customer risk list name is a link to /aml-check/<enrolled screening>, so case:Daniel Kipruto Langat opens his AML report.",
+    "'case:Match · View report' assumes Viktor Petrovich Orlov is the only AML screening with a reject verdict ('Match' label) in Demo Bank Ltd. The AML list shows names as plain text, so the name itself can't be clicked.",
+    "Not verified that Orlov's stored result has a riskRating (the seed calls amlPersistence.complete without one explicitly). If it doesn't, the Customer risk rating section won't render; swap that step for 'highlight': 'card:Risk summary'.",
+    "Mark reviewed is highlighted only (it opens a prompt and records a review)."
+  ]
+}

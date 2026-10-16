@@ -1,0 +1,184 @@
+{
+  "video": "v15-api-keys-and-test-mode",
+  "title": "API keys and test mode",
+  "chapter": "c1",
+  "course": "Developer quick start",
+  "order": 15,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "The Sentinel API lets your own systems run checks without anyone opening the dashboard. In this video, you'll create a test key, learn what test mode does, and send your first AML screening.",
+      "show": [
+        {
+          "card": "API keys and test mode",
+          "subtitle": "Sentinel by DeepTrack · Developer quick start"
+        }
+      ]
+    },
+    {
+      "id": "page",
+      "say": "Click API Keys in the menu on the left, under Developer. Keys are shown by their prefix only. Admins and Developers can create, rotate and revoke them. Everyone else can only look.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:API Keys"
+        },
+        {
+          "highlight": "case:Keys are shown by prefix only"
+        }
+      ]
+    },
+    {
+      "id": "new-key",
+      "say": "Click New key. Give it a name that describes the integration, such as Core banking onboarding.",
+      "show": [
+        {
+          "click": "button:New key"
+        },
+        {
+          "type": "field:Name",
+          "text": "Core banking onboarding"
+        }
+      ]
+    },
+    {
+      "id": "environment",
+      "say": "Next, choose the environment. Test gives sandbox results, with no charges. Live runs real checks, and they're billed. New keys start on Test, and you can't change it later, so create one key of each.",
+      "show": [
+        {
+          "highlight": "button:Sandbox results, no charges."
+        },
+        {
+          "highlight": "button:Real checks, billed."
+        }
+      ]
+    },
+    {
+      "id": "scopes",
+      "say": "Scopes decide what the key can call. Untick Everything to choose only what this integration needs. For a first call, Run AML screenings and Read check results are enough.",
+      "show": [
+        {
+          "click": "field:Everything"
+        },
+        {
+          "highlight": "field:Run AML screenings"
+        },
+        {
+          "highlight": "field:Read check results"
+        }
+      ]
+    },
+    {
+      "id": "create",
+      "say": "Then you'd click Create key. Sentinel shows the full key once, and stores only a hash, so copy it straight into your secrets manager. We'll cancel here.",
+      "show": [
+        {
+          "highlight": "button:Create key"
+        },
+        {
+          "click": "button:Cancel"
+        }
+      ]
+    },
+    {
+      "id": "bearer",
+      "say": "Keep the key out of your code. Read it from an environment variable, and send it on every request as a bearer token, with a JSON content type.",
+      "show": [
+        {
+          "card": "Authorization: Bearer $SENTINEL_API_KEY",
+          "subtitle": "Content-Type: application/json · every path starts with /v1/"
+        }
+      ]
+    },
+    {
+      "id": "first-call",
+      "say": "Your first call is an AML screening. Post to slash v1 slash verify slash aml. Only the subject's name and entity type are required. The Help chapter has the same call in curl, Node and Python.",
+      "show": [
+        {
+          "goto": "/help/c1"
+        },
+        {
+          "scroll": "case:needs the Run AML screenings scope"
+        },
+        {
+          "highlight": "case:{\"subjectName\": \"Wanjiku Mwangi\""
+        }
+      ]
+    },
+    {
+      "id": "test-mode",
+      "say": "With a test key, the check is finished at once: completed, pass, and sandbox true. No lists are screened, nothing is charged, and the names you send are not stored. With a live key, the status is queued. Keep the id to fetch the result.",
+      "show": [
+        {
+          "scroll": "case:\"sandbox\": true, \"monitoringId\": null"
+        },
+        {
+          "highlight": "case:KYC, AML and document checks"
+        }
+      ]
+    },
+    {
+      "id": "rotate",
+      "say": "To replace a key, click Rotate. You get a new key straight away, and the old one keeps working for 24 hours while you deploy. To stop a key at once, click Revoke.",
+      "show": [
+        {
+          "goto": "/api-keys"
+        },
+        {
+          "highlight": "button:Rotate"
+        },
+        {
+          "highlight": "button:Revoke"
+        }
+      ]
+    },
+    {
+      "id": "limits",
+      "say": "Each key has a per-minute limit set by your plan. Business allows 500 requests a minute. If you hit a limit, you get a 429 with a Retry-After header. A 401 means the key is wrong or revoked, and a 403 usually means a missing scope.",
+      "show": [
+        {
+          "goto": "/help/c1"
+        },
+        {
+          "scroll": "case:Requests per minute, per key"
+        },
+        {
+          "highlight": "case:Requests per minute, per key"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's your first key and your first call. To learn more, open chapter C1 in Help, Quick start.",
+      "show": [
+        {
+          "card": "Help → C1 Quick start",
+          "subtitle": "sentinel.deeptrack.io/help/c1"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Help pages: card:<heading> would ring the whole article (the prose wrapper's class contains 'rounded'), so Help targets use case:<text>, which falls back to getByText; each text was picked so its first match on the page is the intended element.",
+    "Scene 'new-key' opens the New API key dialog and types a name, then 'create' clicks Cancel. Nothing is created. The 'scopes' scene unticks Everything inside the unsaved dialog only.",
+    "Scene 'rotate' highlights Rotate and Revoke; these only exist if Demo Bank Ltd already has an active key and the signed-in user is an Admin or Developer. If not, those steps are skipped with a warning.",
+    "case:Keys are shown by prefix only targets the API keys card subtitle on /api-keys (card:API keys would match the page h1 first)."
+  ]
+}

@@ -3,6 +3,7 @@
   "title": "Decide a review case",
   "chapter": "b11",
   "course": "Analyst training",
+  "order": 10,
   "language": "en",
   "voices": {
     "default": {

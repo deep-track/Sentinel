@@ -1,0 +1,186 @@
+{
+  "video": "v03-kyc-check",
+  "title": "KYC identity checks",
+  "chapter": "b2",
+  "course": "Analyst training",
+  "order": 3,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "A KYC check confirms that a customer is who they say they are. In this video, you'll start a check from the dashboard, then read what each step found.",
+      "show": [
+        {
+          "card": "KYC identity checks",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "say": "Click Identity (KYC) in the menu. The KYC Verifications page opens. The cards at the top count your 50 most recent checks by status. Search by name or reference, or filter by status, then click a row to open its report.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Identity (KYC)"
+        },
+        {
+          "highlight": "text:Total"
+        },
+        {
+          "highlight": "case:Wanjiku Mwangi"
+        }
+      ]
+    },
+    {
+      "id": "new",
+      "say": "To run a new check, click New Verification. First comes Document Capture. Choose Passport, National ID or Driver's License, and upload the front and back of the ID.",
+      "show": [
+        {
+          "click": "case:New Verification"
+        },
+        {
+          "highlight": "case:Document Capture"
+        },
+        {
+          "highlight": "case:National ID"
+        }
+      ]
+    },
+    {
+      "id": "steps",
+      "say": "Next, upload a clear, front-facing selfie. Then type the customer's details exactly as they appear on the ID. Tick the consent box, and click Submit Verification. The result usually comes back within a few minutes.",
+      "show": [
+        {
+          "card": "Selfie Capture → Review & Submit",
+          "subtitle": "First name · Last name · ID / document number · Date of birth · Gender"
+        }
+      ]
+    },
+    {
+      "id": "liveness",
+      "say": "One thing to know. A check from New Verification has no liveness capture, because a still selfie can't prove the person was present. So even when every other step passes, it ends in Needs Review.",
+      "show": [
+        {
+          "card": "Liveness: Not collected in this flow",
+          "subtitle": "Send a liveness link to confirm presence (B4)"
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "say": "Let's read a report. Open Wanjiku Mwangi. At the top you see her name, the reference and the Approved badge, with buttons to download the PDF or dispute the result.",
+      "show": [
+        {
+          "goto": "/kyc"
+        },
+        {
+          "click": "case:Wanjiku Mwangi"
+        },
+        {
+          "highlight": "button:Download report (PDF)"
+        },
+        {
+          "highlight": "button:Dispute this result"
+        }
+      ]
+    },
+    {
+      "id": "shield",
+      "say": "The deepfake shield gives one headline for every deepfake and forgery signal. It checks that the selfie is a real face, that liveness shows no deepfake, and that the ID is not forged.",
+      "show": [
+        {
+          "highlight": "text:Deepfake shield · DeepTrack Live"
+        },
+        {
+          "zoom": "text:Deepfake shield · DeepTrack Live"
+        }
+      ]
+    },
+    {
+      "id": "document",
+      "say": "The Verification Report has one box per step. Document Authenticity passes when the forgery score is 25% or less, with no flags.",
+      "show": [
+        {
+          "scroll": "card:Verification Report"
+        },
+        {
+          "zoom": "card:Document Authenticity"
+        }
+      ]
+    },
+    {
+      "id": "iprs-aml",
+      "say": "IPRS must come back as MATCH. A partial match or a timeout goes to review, and an invalid or revoked ID declines. On AML, a sanctions hit declines, while a PEP or adverse media goes to review.",
+      "show": [
+        {
+          "highlight": "card:Identity Registry"
+        },
+        {
+          "highlight": "card:AML / Sanctions Screening"
+        }
+      ]
+    },
+    {
+      "id": "face",
+      "say": "Now open Brenda Atieno. Her face match says No match, and her face was also found on another customer, Grace Achieng, under a different identity. That holds the check for your team to decide.",
+      "show": [
+        {
+          "goto": "/kyc"
+        },
+        {
+          "click": "case:Brenda Atieno"
+        },
+        {
+          "scroll": "text:Face match"
+        },
+        {
+          "zoom": "text:Face match"
+        }
+      ]
+    },
+    {
+      "id": "decide",
+      "say": "To see why a check is held, click View review status. You decide it in Reviews. If you think a pass or a decline is wrong, use Dispute this result instead.",
+      "show": [
+        {
+          "highlight": "case:View review status"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's a KYC check from start to finish. To learn more, open chapter B2 in Help, KYC identity checks.",
+      "show": [
+        {
+          "card": "Help → B2 KYC identity checks",
+          "subtitle": "sentinel.deeptrack.io/help/b2"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "New Verification is a link styled as a button, so it is targeted with case:New Verification (link by name), not button:.",
+    "The wizard can't move past Document Capture without uploading files, so the Selfie and Review & Submit steps are shown as title cards.",
+    "case:Document Capture points at the step heading text itself; card: can't be used because the heading has no rounded container.",
+    "case:National ID clicks nothing; it is only highlighted (the option is a radio button, not a role=button).",
+    "text:Total assumes the 'Total' stat card label is the first 'Total' text on the KYC page.",
+    "Dispute this result shows only on checks that finished with pass/reject within 90 days and have no open case; Wanjiku Mwangi should qualify."
+  ]
+}
