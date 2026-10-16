@@ -105,6 +105,26 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
       </Section>
 
       <Section
+        title="Face match"
+        description="In KYC checks, Amazon Rekognition compares the selfie (or the liveness photo) with the photo on the ID. A clear match changes nothing; an unclear one, a mismatch or a missing face holds the check for review. Face results never reject on their own."
+      >
+        <Toggle
+          checked={draft.faceMatch}
+          onChange={(faceMatch) => set({ faceMatch })}
+          disabled={disabled}
+          label="Compare the selfie with the ID photo"
+          detail="Nothing is kept: the images are compared and discarded."
+        />
+        <Toggle
+          checked={draft.duplicateFaceSearch}
+          onChange={(duplicateFaceSearch) => set({ duplicateFaceSearch })}
+          disabled={disabled || !draft.faceMatch}
+          label="Search for the same face among your customers"
+          detail="Catches one person onboarding under several identities. Sentinel keeps a face template (not the photo) for each KYC check in a collection only your organization's checks use, deleted with the check under your retention period. Face templates are biometric data: make sure your privacy notice and consent cover this before turning it on."
+        />
+      </Section>
+
+      <Section
         title="Fraud network"
         description="Sentinel fingerprints the ID numbers, document numbers, phone numbers and emails in your checks, and flags one that turns up with a different name or date of birth, or in a check rejected for fraud. A strong signal sends a pass to review; it never rejects on its own. Only keyed fingerprints are kept: never the numbers, names or dates themselves."
       >
@@ -236,6 +256,8 @@ export function ScreeningSettings({ clientId }: { clientId: string }) {
                 rememberClearedMatches: draft.rememberClearedMatches,
                 aiHitReview: draft.aiHitReview,
                 shareFraudNetwork: draft.shareFraudNetwork,
+                faceMatch: draft.faceMatch,
+                duplicateFaceSearch: draft.duplicateFaceSearch,
                 reviewMonths: draft.reviewMonths,
                 // null (every category) is stored as "not set".
                 ...(draft.adverseMediaCategories ? { adverseMediaCategories: draft.adverseMediaCategories } : {}),

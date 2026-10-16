@@ -15,6 +15,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@auth0/nextjs-auth0": "^4.6.0",
+    "@aws-sdk/client-rekognition": "^3.1151.0",
     "@aws-sdk/client-textract": "^3.1151.0",
     "@convex-dev/rate-limiter": "^0.3.2",
     "@hookform/resolvers": "^4.1.0",

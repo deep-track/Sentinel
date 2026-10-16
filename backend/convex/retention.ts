@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { purgeFaces } from "./faceRecords";
 import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
@@ -211,6 +212,7 @@ export async function purgeVerification(ctx: MutationCtx, verification: Doc<"ver
       removed += 1;
     }
   }
+  removed += await purgeFaces(ctx, verification._id);
   // Review cases stay for the statistics, without their free text.
   for (const row of await ctx.db.query("reviewQueue").withIndex("by_verification", (q) => q.eq("verificationId", verification._id)).take(50)) {
     await ctx.db.patch(row._id, {

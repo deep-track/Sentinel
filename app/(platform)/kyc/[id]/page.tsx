@@ -11,6 +11,14 @@ import { kycReportSpec } from "@/components/reports/kyc-report-spec";
 import { ClientDate } from "@/components/client-date";
 import { DisputeButton } from "@/components/disputes/dispute-button";
 import { FraudNetworkDetail } from "@/components/risk/fraud-network";
+import { describeFaceMatch } from "@/backend/convex/lib/faceMatch";
+
+const FACE_TONE = {
+  green: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  amber: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  red: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  neutral: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+} as const;
 import type { NetworkSummary } from "@/backend/convex/lib/fraudNetwork";
 
 interface KYCDetailPageProps {
@@ -25,6 +33,7 @@ type StepResults = {
     status: string;
     matches: Array<{ source: string; program: string; matchScore: number; matchedCountry: string | null }>;
   } | { error: string };
+  faceMatch?: Record<string, unknown>;
   fraudNetwork?: NetworkSummary;
 };
 
@@ -365,6 +374,19 @@ export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
                       );
                     }}
                   </ReportStep>
+                  {(() => {
+                    const face = describeFaceMatch(record.result.faceMatch);
+                    if (!face) return null;
+                    return (
+                      <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                        <div className="mb-1 flex items-center gap-2">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">Face match</p>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${FACE_TONE[face.tone]}`}>{face.result}</span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300">{face.detail}</p>
+                      </div>
+                    );
+                  })()}
                   {record.result.fraudNetwork ? (
                     <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
                       <p className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">Fraud network</p>
