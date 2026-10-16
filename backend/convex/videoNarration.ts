@@ -51,6 +51,34 @@ export const voices = internalAction({
   },
 });
 
+// ElevenLabs' shared Voice Library (community voices), e.g. Kenyan
+// accents. Each comes with a free preview clip. A library voice must be
+// added to the account (Voice Library → Add) before it can narrate.
+export const libraryVoices = internalAction({
+  args: { search: v.optional(v.string()), accent: v.optional(v.string()), language: v.optional(v.string()), gender: v.optional(v.string()) },
+  handler: async (_ctx, args) => {
+    const query = new URLSearchParams({ page_size: "30" });
+    if (args.search) query.set("search", args.search);
+    if (args.accent) query.set("accent", args.accent);
+    if (args.language) query.set("language", args.language);
+    if (args.gender) query.set("gender", args.gender);
+    const body = (await call(`/v1/shared-voices?${query}`, { method: "GET" })) as { voices?: Array<Record<string, unknown>> };
+    return (body.voices ?? []).map((voice) => ({
+      voiceId: voice.voice_id,
+      publicOwnerId: voice.public_owner_id,
+      name: voice.name,
+      accent: voice.accent ?? null,
+      gender: voice.gender ?? null,
+      age: voice.age ?? null,
+      language: voice.language ?? null,
+      useCase: voice.use_case ?? null,
+      description: typeof voice.description === "string" ? voice.description.slice(0, 200) : null,
+      previewUrl: voice.preview_url ?? null,
+      clonedByCount: voice.cloned_by_count ?? null,
+    }));
+  },
+});
+
 type Alignment = { characters: string[]; character_start_times_seconds: number[]; character_end_times_seconds: number[] };
 
 // Captions as cues of a few words each, from ElevenLabs' character timings.
