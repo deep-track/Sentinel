@@ -11,6 +11,7 @@ import type { DocumentImage } from "./lib/documentVision";
 import {
   certificateRules,
   cr12AgainstRegistry,
+  normalizeCompanyName,
   type BusinessRegistrationFields,
   type CertificateCheck,
   certificateVerdict,
@@ -20,6 +21,7 @@ import {
   type ComponentOutcome,
   type PartyOutcome,
 } from "./lib/kybChecks";
+import { checkablePin, compareKraRecord, kraConfigFromEnv, kraPinLookup } from "./lib/kraGava";
 import { compareBrs, isKenya, metamapConfigured, readBrsResponse, requestBrs, type BrsLookup, type BrsShareholder } from "./lib/kenyaBrs";
 import { buildOwnership, traceOwnership, undeclaredOwners, UBO_THRESHOLD_PCT, type OwnershipNode } from "./lib/ownership";
 import { textractOcr } from "./documentsNode";
@@ -204,6 +206,14 @@ export const processKyb = internalAction({
         const companies = lookup.status === "found" ? await traceOwnership(lookup, (number) => lookUpBrs(ctx, args.verificationId, number)) : new Map<string, BrsLookup>();
         const tree = buildOwnership(lookup, companies);
         const missingOwners = undeclaredOwners(tree, declaredPeople);
+        // The business's KRA PIN from the register, against KRA's records.
+        const kraConfig = kraConfigFromEnv(process.env);
+        const registeredPin = lookup.status === "found" ? checkablePin(lookup.record.kraPin) : null;
+        const kraCheck = kraConfig && registeredPin ? compareKraRecord(await kraPinLookup(kraConfig)(registeredPin), input.businessName, normalizeCompanyName) : null;
+        if (kraCheck && (kraCheck.outcome === "not_registered" || kraCheck.outcome === "name_mismatch" || kraCheck.outcome === "inactive")) {
+          const note = `KRA PIN ${registeredPin}: ${kraCheck.message}`;
+          registry = registry.verdict === "pass" ? { verdict: "review", reason: note } : registry.verdict === "review" ? { ...registry, reason: `${registry.reason} ${note}` } : registry;
+        }
         const ownershipIssues = [
           missingOwners.length ? `beneficial owners (${UBO_THRESHOLD_PCT}% or more) not declared: ${missingOwners.slice(0, 5).map((owner) => `${owner.name}${owner.effectivePct !== null ? ` (${owner.effectivePct}%)` : ""}`).join(", ")}` : null,
           tree.untraced.length ? `ownership can't be traced through ${tree.untraced.slice(0, 3).map((node) => node.name).join(", ")}` : null,
@@ -219,7 +229,11 @@ export const processKyb = internalAction({
           provider: "metamap_brs",
           verdict: registry.verdict,
           reason: registry.reason,
-          checks: compared.checks,
+          checks: [
+            ...compared.checks,
+            ...(kraCheck ? [{ name: "KRA PIN confirmed by KRA", status: kraCheck.outcome === "verified" ? "passed" : kraCheck.outcome === "unavailable" ? "not_applicable" : "failed", detail: kraCheck.message }] : []),
+          ],
+          ...(kraCheck ? { kra: { pin: registeredPin, ...kraCheck } } : {}),
           ...(lookup.status === "found" ? { record: lookup.record } : {}),
           ownership: { thresholdPct: UBO_THRESHOLD_PCT, nodes: tree.nodes, beneficialOwners: tree.beneficialOwners.map((owner) => owner.name), untraced: tree.untraced.map((node) => node.name), sharesKnown: tree.sharesKnown, lookups: companies.size },
         };

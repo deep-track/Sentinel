@@ -47,6 +47,7 @@ type Result = {
   kraPin?: {
     fields: { pin: string | null; taxpayerName: string | null; taxpayerType: "individual" | "non_individual" | null; email: string | null; certificateDate: string | null; obligations: string[]; issuedByKra: boolean };
     nameMatch: number | null;
+    registry?: { outcome: string; message: string; name: string | null; pinStatus: string | null; taxpayerType: string | null };
   };
   proofOfAddress?: {
     fields: { documentType: string; issuerName: string | null; holderName: string | null; address: string | null; issueDate: string | null; accountReference: string | null };
@@ -386,6 +387,7 @@ export function DocumentReport({ verificationId }: { verificationId: string }) {
           <Row label="Tax obligations">{kra.fields.obligations.length ? kra.fields.obligations.join("; ") : value(null)}</Row>
           <Row label="Declared name">{input.expectedName ?? "Not provided"}</Row>
           <Row label="Name match">{percent(kra.nameMatch)}</Row>
+          <Row label="KRA records">{kra.registry ? kra.registry.message : "Not checked with KRA"}</Row>
         </Section>
       ) : null}
 
