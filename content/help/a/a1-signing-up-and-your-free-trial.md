@@ -132,7 +132,7 @@ Sentinel accepts three sign-up requests per email address a day. Check your inbo
 
 ### Is there a limit on API use during the trial?
 
-Yes. A trial workspace can make 30 API requests a minute. That is enough to test an integration but not to run production volumes.
+Yes. Each API key on a trial can make 10 requests a minute, and the whole workspace up to 30 a minute across its keys. That is enough to test an integration but not to run production volumes.
 
 ## Related chapters
 
