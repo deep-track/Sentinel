@@ -38,7 +38,7 @@ The **Viewer / Auditor** role is meant for internal auditors and external examin
    - **Details**: key facts, such as the email invited, the new role, the reason and notes for a decision, or the check reference.
 3. Click **Load more** at the bottom to see older entries.
 
-![Audit log for Demo Bank Ltd, showing case decisions and a settings change](/help/shots/a10-audit-log.png "TODO")
+![Audit log for Demo Bank Ltd, showing case decisions and a settings change](/help/shots/a10-audit-log.png)
 
 ### Filter the log
 

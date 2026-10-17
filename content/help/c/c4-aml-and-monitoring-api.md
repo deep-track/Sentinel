@@ -270,7 +270,7 @@ print(res.status_code, res.json())
 
 Calling it again for a subject that is already stopped also returns 200. The subject then disappears from the **Monitored subjects** panel on the **AML Screening** page.
 
-![Monitored subjects panel listing subjects enrolled through the API](/help/shots/c4-monitored-subjects.png "TODO")
+![Monitored subjects panel listing subjects enrolled through the API](/help/shots/c4-monitored-subjects.png)
 
 ## What each result means
 

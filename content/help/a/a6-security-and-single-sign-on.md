@@ -88,7 +88,7 @@ Leave the box empty to allow any address. Existing members at other domains keep
 3. To apply the same list to API requests, turn on **Apply to API requests too**. Add your servers' outbound addresses first.
 4. Click **Save changes**.
 
-![IP allowlist with the head office range and Apply to API requests too turned on](/help/shots/a6-ip-allowlist.png "TODO")
+![IP allowlist with the head office range and Apply to API requests too turned on](/help/shots/a6-ip-allowlist.png)
 
 Leave the list empty to allow any network.
 

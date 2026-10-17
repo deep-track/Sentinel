@@ -78,7 +78,7 @@ Grace Chebet Langat,Spouse,family_associate,,Nakuru,,,,"Spouse of Daniel Kipruto
 
 The file can be up to 5 MB. Only the first 20,000 data rows are read; split a larger file. The skipped-line details aren't shown on screen, so count the rows you expected against "Imported N". The file name is kept as the entry's source.
 
-![Import CSV panel with the column list](/help/shots/d4-import-csv.png "TODO")
+![Import CSV panel with the column list](/help/shots/d4-import-csv.png)
 
 ### Add one person
 

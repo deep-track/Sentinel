@@ -35,7 +35,7 @@ The person who starts the trial becomes the workspace's **Admin**. Everyone in t
    - **Country**. Kenya is selected for you.
 3. Click **Start free trial**.
 
-![Sign-up form filled in for a Kenyan SACCO](/help/shots/a1-signup.png "TODO")
+![Sign-up form filled in for a Kenyan SACCO](/help/shots/a1-signup.png)
 
 4. The form changes to **Check your inbox**. DeepTrack sends an invitation email to the address you entered.
 

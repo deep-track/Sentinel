@@ -227,7 +227,7 @@ for entry in res.json()["data"]:
 
 People without API access see the same ledger, with each line's money value and a link to the check, under **Billing & Credits** in the sidebar.
 
-![Billing & Credits page for Demo Bank Ltd with the credit ledger](/help/shots/c6-billing-ledger.png "TODO")
+![Billing & Credits page for Demo Bank Ltd with the credit ledger](/help/shots/c6-billing-ledger.png)
 
 ## What each result means
 

@@ -35,7 +35,7 @@ You can also let the customer do the photos on their own phone. See [B3 Capture 
 2. The cards at the top count **Total**, **Approved**, **Pending + Processing**, **Needs Review** and **Declined** for the 50 most recent checks.
 3. Search by name or reference, or filter by status. Click **View** on a row to open its report.
 
-![KYC Verifications page for Demo Bank Ltd](/help/shots/b2-kyc-list.png "TODO")
+![KYC Verifications page for Demo Bank Ltd](/help/shots/b2-kyc-list.png)
 
 ### Run a new check
 
@@ -58,7 +58,7 @@ The report opens with the customer's name, reference and status badge. It also h
 2. **Verification Report**: one box per step, described below.
 3. **Fraud network**, when the ID number has been seen with another person. See [B10 Fraud signals explained](/help/b10).
 
-![Report for Wanjiku Mwangi with every step passed](/help/shots/b2-report-pass.png "TODO")
+![Report for Wanjiku Mwangi with every step passed](/help/shots/b2-report-pass.png)
 
 ## What each result means
 
@@ -90,7 +90,7 @@ Some things to know when you read the steps:
 - If a provider was down, the box says so, for example "The verification provider timed out before responding." The check goes to review, never straight to **Declined**.
 - **Duplicate face** means the same face is on another of your customers under a different identity. Your Admin turns this search on in Settings → **Screening rules** → **Search for the same face among your customers**. It is off by default.
 
-![Report for Brenda Atieno: face match No match, same face as another customer](/help/shots/b2-report-mismatch.png "TODO")
+![Report for Brenda Atieno: face match No match, same face as another customer](/help/shots/b2-report-mismatch.png)
 
 ## Common questions
 

@@ -39,7 +39,7 @@ You read the evidence, then approve the case (the flag was wrong, so the check p
 3. To see one kind of check, choose from the **Queue** list: **KYC**, **AML**, **Documents (IDP)**, **KYB** or **Liveness**.
 4. Overdue cases come first, then high priority, then the nearest due date. Click the customer's name to open the case.
 
-![Reviews queue on All open, with the Daniel Kipruto Langat PEP case and the Viktor Petrovich Orlov sanctions case](/help/shots/b11-queue.png "TODO")
+![Reviews queue on All open, with the Daniel Kipruto Langat PEP case and the Viktor Petrovich Orlov sanctions case](/help/shots/b11-queue.png)
 
 ### Take the case
 
@@ -63,7 +63,7 @@ On an AML case with hits, Sentinel's AI compares the customer with each hit (dat
 2. Read the recommendation, the confidence and the summary. Under each hit you see **Different person**, **Same person** or **Unclear**, with the reasons. Lines that start "To settle it:" tell you what extra information would decide that hit.
 3. If you agree, click **Use this recommendation in my decision**. This fills in the decision and notes below. You still choose the reason, and nothing is submitted until you click the button.
 
-![AI hit review on the Daniel Kipruto Langat PEP case](/help/shots/b11-ai-review.png "TODO")
+![AI hit review on the Daniel Kipruto Langat PEP case](/help/shots/b11-ai-review.png)
 
 The AI only recommends. You make the decision. ID numbers are compared by Sentinel itself and are never sent to the AI.
 
@@ -76,7 +76,7 @@ The AI only recommends. You make the decision. ID numbers are compared by Sentin
    - **Approve case** or **Reject case** when your decision is final.
    - **Send recommendation** when the case needs a second person. The form tells you this with "This case needs a second person, so your decision is sent to someone with clearance to approve."
 
-![Decision form on a PEP case, showing Your recommendation and the Send recommendation button](/help/shots/b11-decision.png "TODO")
+![Decision form on a PEP case, showing Your recommendation and the Send recommendation button](/help/shots/b11-decision.png)
 
 ### Approve or send back a recommendation (four-eyes)
 

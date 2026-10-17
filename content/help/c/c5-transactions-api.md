@@ -199,7 +199,7 @@ def send_all(all_transactions):
 2. Fix each rejected row using its `error` and send those rows again. The `index` is the row's position in the array you sent, starting at 0.
 3. Open **Transactions** in Sentinel. New alerts usually appear within a minute.
 
-![Transactions page with alerts raised from API transactions](/help/shots/c5-alerts-from-api.png "TODO")
+![Transactions page with alerts raised from API transactions](/help/shots/c5-alerts-from-api.png)
 
 ### Try it with a test key
 

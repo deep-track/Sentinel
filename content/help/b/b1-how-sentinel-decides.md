@@ -26,7 +26,7 @@ Sentinel is built to fail closed. A check only passes when every step comes back
 3. Read the reason under the title, or the step-by-step results lower down. Each step shows what it found and the threshold it was judged against.
 4. If the check is held, follow the link to the case. On a KYC check, click **View review status →**. On an AML report, click **Open the case to decide it →**. Your team decides the case on the **Reviews** page.
 
-![KYC report for Brenda Atieno with the Needs Review badge](/help/shots/b1-review-verdict.png "TODO")
+![KYC report for Brenda Atieno with the Needs Review badge](/help/shots/b1-review-verdict.png)
 
 ### How a KYC check reaches its verdict
 

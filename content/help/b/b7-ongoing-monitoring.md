@@ -47,7 +47,7 @@ An Admin can turn on **Monitor every new AML screening by default** in **Setting
 
 In Demo Bank Ltd, Daniel Kipruto Langat (customer reference CUST-PEP-01) is monitored, with one current hit and no alerts.
 
-![Monitored subjects panel with Daniel Kipruto Langat](/help/shots/b7-monitored-subjects.png "TODO")
+![Monitored subjects panel with Daniel Kipruto Langat](/help/shots/b7-monitored-subjects.png)
 
 ### Work a monitoring alert
 

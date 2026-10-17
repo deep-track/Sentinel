@@ -35,7 +35,7 @@ For API keys, test mode and errors, see [C1 Quick start](/help/c1). To fetch a r
 9. Click **Add endpoint**.
 10. The **Signing secret** dialog shows the secret once. Copy it into your secrets manager, tick **I've stored this secret.** and click **Done**.
 
-![Add endpoint dialog with events, products and Checks from](/help/shots/c7-add-endpoint.png "TODO")
+![Add endpoint dialog with events, products and Checks from](/help/shots/c7-add-endpoint.png)
 
 ### Check the signature
 

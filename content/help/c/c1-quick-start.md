@@ -32,7 +32,7 @@ Every request goes to your Sentinel API host, written in this manual as `https:/
 6. Click **Create key**.
 7. The **Your new API key** box shows the full key once. Copy it into your secrets manager, tick **I've copied and stored this key.**, then click **Done**. Sentinel stores only a hash of the key, so nobody can show it to you again.
 
-![New API key dialog with a test key and two scopes chosen](/help/shots/c1-new-key.png "TODO")
+![New API key dialog with a test key and two scopes chosen](/help/shots/c1-new-key.png)
 
 Keys look like `gt_test_` or `gt_live_`, followed by two blocks of letters and digits. The table shows each key by its prefix, its scopes, when it was created and last used, and its status.
 

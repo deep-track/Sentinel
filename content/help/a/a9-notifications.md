@@ -33,7 +33,7 @@ As Admin, you decide in **Settings** → **Notifications**:
    - Under **Who gets it**, tick the roles that should get it: **Admin**, **Reviewer**, **Analyst**, **Developer** or **Viewer / Auditor**.
 3. Click **Save changes**.
 
-![Alerts table in Settings, Notifications for Demo Bank Ltd](/help/shots/a9-alerts-table.png "TODO")
+![Alerts table in Settings, Notifications for Demo Bank Ltd](/help/shots/a9-alerts-table.png)
 
 Two alerts go to named people, not to roles. You can turn them on or off and choose email, but you can't pick roles:
 
@@ -75,7 +75,7 @@ The **Low credits** alert goes out once when the balance falls to that level. It
 3. Click an alert to open what it is about, such as the case, **Customer risk** or **Billing & Credits**. This marks it read.
 4. Click **Mark all read** to clear the count.
 
-![Notifications page with unread case alerts](/help/shots/a9-inbox.png "TODO")
+![Notifications page with unread case alerts](/help/shots/a9-inbox.png)
 
 If you belong to more than one organization, the page shows alerts from all of them, with the organization's name under each one.
 

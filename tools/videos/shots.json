@@ -1,0 +1,687 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "shots": [
+    {
+      "name": "a1-signup",
+      "route": "/signup",
+      "steps": [
+        {
+          "type": "field:Full name",
+          "text": "Wanjiku Kamau"
+        },
+        {
+          "type": "field:Work email",
+          "text": "wanjiku.kamau@yetusacco.co.ke"
+        },
+        {
+          "type": "field:Organization",
+          "text": "Yetu Sacco Society Ltd"
+        }
+      ]
+    },
+    {
+      "name": "a2-billing",
+      "route": "/billing"
+    },
+    {
+      "name": "a2-plans",
+      "route": "/billing",
+      "crop": "text:Billed yearly, in advance",
+      "maxHeight": 880
+    },
+    {
+      "name": "a3-overview",
+      "route": "/dashboard"
+    },
+    {
+      "name": "a3-portal",
+      "route": "/portal"
+    },
+    {
+      "name": "a3-portal-recent",
+      "route": "/portal",
+      "steps": [
+        {
+          "select": "field:Filter by verdict",
+          "option": "Review"
+        }
+      ],
+      "crop": "card:Recent verifications"
+    },
+    {
+      "name": "a4-organization",
+      "route": "/settings/organization"
+    },
+    {
+      "name": "a4-details",
+      "route": "/settings/organization",
+      "crop": "card:Organization details"
+    },
+    {
+      "name": "a5-invite",
+      "route": "/settings/team"
+    },
+    {
+      "name": "a5-switcher",
+      "route": "/dashboard",
+      "steps": [
+        {
+          "click": "button:Demo Bank Ltd"
+        }
+      ],
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 320
+      }
+    },
+    {
+      "name": "a6-ip-allowlist",
+      "route": "/settings/security",
+      "steps": [
+        {
+          "type": "css:textarea >> nth=-1",
+          "text": "196.201.214.0/24"
+        },
+        {
+          "check": "field:Apply to API requests too"
+        }
+      ],
+      "hideText": [
+        "You are connecting from"
+      ],
+      "crop": "card:IP allowlist"
+    },
+    {
+      "name": "a7-aml-matching",
+      "route": "/settings/screening"
+    },
+    {
+      "name": "a7-face-fraud",
+      "route": "/settings/screening",
+      "steps": [
+        {
+          "scroll": "card:Face match"
+        }
+      ]
+    },
+    {
+      "name": "a7-documents",
+      "route": "/settings/screening",
+      "crop": "card:Documents (IDP)"
+    },
+    {
+      "name": "a8-review-workflow",
+      "route": "/settings/review"
+    },
+    {
+      "name": "a8-reason-codes",
+      "route": "/settings/review",
+      "crop": "card:Reason codes"
+    },
+    {
+      "name": "a9-alerts-table",
+      "route": "/settings/notifications",
+      "crop": "card:Alerts"
+    },
+    {
+      "name": "a9-inbox",
+      "route": "/notifications",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 560
+      }
+    },
+    {
+      "name": "a10-audit-log",
+      "route": "/settings/audit"
+    },
+    {
+      "name": "a11-retention",
+      "route": "/settings/audit",
+      "crop": "card:Data retention"
+    },
+    {
+      "name": "a12-monthly-report",
+      "route": "/reports",
+      "steps": [
+        {
+          "select": "field:Month",
+          "option": "October 2026"
+        }
+      ]
+    },
+    {
+      "name": "a12-reviews-section",
+      "route": "/reports",
+      "steps": [
+        {
+          "select": "field:Month",
+          "option": "October 2026"
+        }
+      ],
+      "crop": "card:Reviews"
+    },
+    {
+      "name": "a12-credit-history",
+      "route": "/billing",
+      "wait": 4500,
+      "crop": "text:Every credit added, charged"
+    },
+    {
+      "name": "b1-review-verdict",
+      "route": "/kyc",
+      "steps": [
+        {
+          "click": "case:Brenda Atieno"
+        }
+      ]
+    },
+    {
+      "name": "b2-kyc-list",
+      "route": "/kyc"
+    },
+    {
+      "name": "b2-report-pass",
+      "route": "/kyc",
+      "steps": [
+        {
+          "click": "case:Wanjiku Mwangi"
+        }
+      ]
+    },
+    {
+      "name": "b2-report-mismatch",
+      "route": "/kyc",
+      "steps": [
+        {
+          "click": "case:Brenda Atieno"
+        },
+        {
+          "scroll": "text:Face match"
+        }
+      ]
+    },
+    {
+      "name": "b3-capture-form",
+      "route": "/kyc/capture",
+      "steps": [
+        {
+          "click": "button:WhatsApp"
+        },
+        {
+          "click": "button:Kiswahili"
+        }
+      ]
+    },
+    {
+      "name": "b3-capture-list",
+      "route": "/kyc/capture",
+      "steps": [
+        {
+          "scroll": "case:Halima · CUST-CAP-SW",
+          "offset": 300
+        }
+      ]
+    },
+    {
+      "name": "b4-liveness-form",
+      "route": "/liveness"
+    },
+    {
+      "name": "b5-idp-form",
+      "route": "/idp"
+    },
+    {
+      "name": "b5-report-maisha",
+      "route": "/idp/kh74tb6dzeg0kbmq3s5mrr5fts8gc2g8"
+    },
+    {
+      "name": "b5-report-kra",
+      "route": "/idp/kh7cjc18rt8s7xfhrefsdmcfrx8gcm9f"
+    },
+    {
+      "name": "b5-report-ai",
+      "route": "/idp/kh79n12pgcq592ztw8sb5f044s8gdtt9"
+    },
+    {
+      "name": "b6-form",
+      "route": "/aml-check",
+      "steps": [
+        {
+          "type": "field:Subject name",
+          "text": "Grace Achieng"
+        },
+        {
+          "type": "field:Date of birth",
+          "text": "1995-09-02"
+        },
+        {
+          "type": "field:Nationality",
+          "text": "KE"
+        }
+      ]
+    },
+    {
+      "name": "b6-report-pep",
+      "route": "/aml-check/kh70w4nxt6rzjc3ag6s2tgyb398gder5"
+    },
+    {
+      "name": "b6-report-sanctions",
+      "route": "/aml-check/kh7dvt6wvnbwcaz0q9eeg2kyah8gdgc5"
+    },
+    {
+      "name": "b7-monitored-subjects",
+      "route": "/aml-check",
+      "crop": "text:Monitored subjects"
+    },
+    {
+      "name": "b8-result",
+      "route": "/kyb/kh7f7tt5gwf4a9hnzhntmn18xd8gc8fa"
+    },
+    {
+      "name": "b8-ownership",
+      "route": "/kyb/kh7f7tt5gwf4a9hnzhntmn18xd8gc8fa",
+      "steps": [
+        {
+          "scroll": "case:Ownership · beneficial owners hold",
+          "offset": 130
+        }
+      ]
+    },
+    {
+      "name": "b9-kyc-report",
+      "route": "/kyc",
+      "steps": [
+        {
+          "click": "case:Wanjiku Mwangi"
+        }
+      ],
+      "clip": {
+        "x": 440,
+        "y": 80,
+        "width": 836,
+        "height": 630
+      }
+    },
+    {
+      "name": "b9-document-report",
+      "route": "/idp/kh79n12pgcq592ztw8sb5f044s8gdtt9",
+      "clip": {
+        "x": 380,
+        "y": 90,
+        "width": 936,
+        "height": 560
+      }
+    },
+    {
+      "name": "b9-aml-risk-rating",
+      "route": "/aml-check/kh70w4nxt6rzjc3ag6s2tgyb398gder5",
+      "steps": [
+        {
+          "scroll": "card:Customer risk rating"
+        }
+      ]
+    },
+    {
+      "name": "b10-duplicate-face",
+      "route": "/kyc",
+      "steps": [
+        {
+          "click": "case:Brenda Atieno"
+        }
+      ],
+      "crop": "text:Same face under a different identity"
+    },
+    {
+      "name": "b10-settings",
+      "route": "/settings/screening",
+      "steps": [
+        {
+          "scroll": "card:Face match"
+        }
+      ]
+    },
+    {
+      "name": "b10-fake-selfie",
+      "route": "/kyc/kh7f6pbn5ac3mpfc3m59fzr3pd8gddqs"
+    },
+    {
+      "name": "b11-queue",
+      "route": "/reviews",
+      "steps": [
+        {
+          "click": "button:All open"
+        }
+      ]
+    },
+    {
+      "name": "b11-ai-review",
+      "route": "/reviews/kd76152wwy58wjx60xzyrpx6as8gcj8v",
+      "crop": "card:AI hit review",
+      "maxHeight": 880
+    },
+    {
+      "name": "b11-decision",
+      "route": "/reviews/kd76152wwy58wjx60xzyrpx6as8gcj8v",
+      "crop": "form:decision",
+      "maxHeight": 880
+    },
+    {
+      "name": "b12-rating-detail",
+      "route": "/aml-check/kh70w4nxt6rzjc3ag6s2tgyb398gder5",
+      "crop": "card:Customer risk rating"
+    },
+    {
+      "name": "b12-customer-risk",
+      "route": "/customers"
+    },
+    {
+      "name": "b13-alerts-list",
+      "route": "/transactions"
+    },
+    {
+      "name": "b13-alert-page",
+      "route": "/transactions",
+      "steps": [
+        {
+          "click": "case:Counterparty on a sanctions or watch list"
+        }
+      ]
+    },
+    {
+      "name": "b13-escalated",
+      "route": "/transactions",
+      "steps": [
+        {
+          "click": "button:Escalated"
+        },
+        {
+          "click": "case:Possible structuring"
+        }
+      ]
+    },
+    {
+      "name": "b14-panel",
+      "route": "/transactions",
+      "steps": [
+        {
+          "click": "button:Escalated"
+        },
+        {
+          "click": "case:Possible structuring"
+        }
+      ],
+      "crop": "card:Suspicious transaction report"
+    },
+    {
+      "name": "b14-dialog",
+      "route": "/transactions",
+      "steps": [
+        {
+          "click": "button:Escalated"
+        },
+        {
+          "click": "case:Possible structuring"
+        },
+        {
+          "click": "button:Prepare STR",
+          "allow": true
+        }
+      ],
+      "crop": "dialog:"
+    },
+    {
+      "name": "b14-register",
+      "route": "/reports",
+      "crop": "text:Reports prepared for the Financial Reporting Centre"
+    },
+    {
+      "name": "b15-disputed-banner",
+      "route": "/kyc/kh7f6pbn5ac3mpfc3m59fzr3pd8gddqs",
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 560
+      }
+    },
+    {
+      "name": "b15-disputes-page",
+      "route": "/disputes"
+    },
+    {
+      "name": "c1-new-key",
+      "route": "/api-keys",
+      "steps": [
+        {
+          "click": "button:New key"
+        },
+        {
+          "type": "field:Name",
+          "text": "Core banking onboarding"
+        },
+        {
+          "click": "field:Everything",
+          "dialog": true
+        },
+        {
+          "uncheck": "field:Run KYC identity checks",
+          "dialog": true
+        },
+        {
+          "uncheck": "field:Run IDP document checks",
+          "dialog": true
+        },
+        {
+          "uncheck": "field:Manage AML monitoring",
+          "dialog": true
+        },
+        {
+          "uncheck": "field:Read credits and usage",
+          "dialog": true
+        },
+        {
+          "check": "field:Run AML screenings",
+          "dialog": true
+        },
+        {
+          "check": "field:Read check results",
+          "dialog": true
+        }
+      ],
+      "crop": "dialog:"
+    },
+    {
+      "name": "c3-report",
+      "route": "/idp/kh74tb6dzeg0kbmq3s5mrr5fts8gc2g8"
+    },
+    {
+      "name": "c4-monitored-subjects",
+      "route": "/aml-check",
+      "crop": "text:Monitored subjects"
+    },
+    {
+      "name": "c5-alerts-from-api",
+      "route": "/transactions"
+    },
+    {
+      "name": "c6-billing-ledger",
+      "route": "/billing",
+      "steps": [
+        {
+          "click": "css:h1"
+        },
+        {
+          "key": "End"
+        },
+        {
+          "wait": 800
+        }
+      ],
+      "wait": 4500
+    },
+    {
+      "name": "c7-add-endpoint",
+      "route": "/webhooks",
+      "steps": [
+        {
+          "click": "button:Add endpoint"
+        }
+      ],
+      "crop": "dialog:"
+    },
+    {
+      "name": "d1-sidebar",
+      "route": "/internal-ops/overview",
+      "internal": true,
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 212,
+        "height": 900
+      }
+    },
+    {
+      "name": "d1-switcher",
+      "route": "/dashboard",
+      "internal": true,
+      "steps": [
+        {
+          "click": "button:Demo Bank Ltd"
+        }
+      ],
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 320
+      }
+    },
+    {
+      "name": "d2-queue",
+      "route": "/internal-ops/review-queue",
+      "internal": true
+    },
+    {
+      "name": "d2-dispute-resolve",
+      "route": "/internal-ops/review-queue/kd7d6cce0e6xjt4aw8pgnheqp98gd531",
+      "internal": true,
+      "crop": "card:Resolve"
+    },
+    {
+      "name": "d2-review-ops",
+      "route": "/internal-ops/review-ops",
+      "internal": true,
+      "steps": [
+        {
+          "scroll": "card:Reviewer workload",
+          "offset": 0
+        }
+      ]
+    },
+    {
+      "name": "d3-client-accounts",
+      "route": "/internal-ops/clients",
+      "internal": true,
+      "steps": [
+        {
+          "click": "button:Demo Bank Ltd"
+        }
+      ]
+    },
+    {
+      "name": "d3-invoices",
+      "route": "/internal-ops/billing",
+      "internal": true,
+      "crop": "card:Unpaid invoices",
+      "maxHeight": 130
+    },
+    {
+      "name": "d3-billing",
+      "route": "/internal-ops/billing",
+      "internal": true
+    },
+    {
+      "name": "d3-client-health",
+      "route": "/internal-ops/client-health",
+      "internal": true,
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 395
+      }
+    },
+    {
+      "name": "d4-import-csv",
+      "route": "/internal-ops/pep-register",
+      "internal": true,
+      "crop": "card:Import CSV"
+    },
+    {
+      "name": "d5-tiles",
+      "route": "/internal-ops/risk-lists",
+      "internal": true
+    },
+    {
+      "name": "d5-fatf",
+      "route": "/internal-ops/risk-lists",
+      "internal": true,
+      "crop": "card:Country risk (FATF)"
+    },
+    {
+      "name": "d7-screening-monitor",
+      "route": "/internal-ops/monitoring",
+      "internal": true
+    },
+    {
+      "name": "d7-quality",
+      "route": "/internal-ops/quality",
+      "internal": true
+    }
+  ],
+  "skipped": {
+    "a1-start-trial": "Shown only to a new sign-up before their organization exists.",
+    "a1-trial-banner": "Demo Bank Ltd is on the Business plan, not a trial.",
+    "a2-invoice": "Demo Bank Ltd has no invoices; issuing one would save.",
+    "a4-logo": "Demo Bank Ltd has no logo; uploading one would save.",
+    "a5-members": "Needs a deactivated Analyst; Demo Bank Ltd has only Bryan.",
+    "a6-sso-setup": "Set up single sign-on saves a connection.",
+    "a6-sso-connected": "Demo Bank Ltd has no single sign-on connection.",
+    "a11-pending": "Needs a requested removal; requesting one saves.",
+    "a11-history": "Needs a completed removal.",
+    "b2-new-submit": "The KYC wizard needs ID and selfie uploads to reach Review & Submit.",
+    "b3-customer-intro": "The customer's phone page; opening a capture link uses it.",
+    "b4-sent-requests": "No liveness requests sent; sending one sends a text.",
+    "b8-wizard-people": "The KYB wizard needs document uploads before UBO & Directors.",
+    "b11-four-eyes": "Needs a recommendation sent by a team member.",
+    "b13-upload-summary": "Needs a transactions upload.",
+    "b15-dispute-dialog": "James Mutua is already disputed, so the Dispute this result button isn't shown.",
+    "c1-keys-table": "Demo Bank Ltd has no API keys; creating one saves.",
+    "c2-key-scope": "Demo Bank Ltd has no API keys; creating one saves.",
+    "c3-key-scope": "Demo Bank Ltd has no API keys; creating one saves.",
+    "c4-api-key-scopes": "Demo Bank Ltd has no API keys; creating one saves.",
+    "c2-webhook-log": "Demo Bank Ltd has no webhook endpoints or deliveries.",
+    "c7-endpoints": "Demo Bank Ltd has no webhook endpoints; adding one saves.",
+    "c7-delivery": "Demo Bank Ltd has no webhook deliveries.",
+    "d4-gazette-reading": "Needs a Gazette issue uploaded and read.",
+    "d4-gazette-approve": "Needs a Gazette issue uploaded and read.",
+    "d5-approve": "Needs a publication uploaded and read.",
+    "d6-requests": "No open data subject request; logging one saves.",
+    "d6-removal-pending": "Needs a requested removal; requesting one saves.",
+    "a7-cleared-hits": "No cleared hits yet; they appear only after a reviewer approves an AML case.",
+    "a10-export": "The log has fewer entries than a page, so there is no Load more button.",
+    "b7-alert-report": "No ongoing monitoring alert has been raised for Demo Bank Ltd (Alerts raised: 0).",
+    "d1-overview": "Client accounts on the Overview lists only active clients (Deeptrack), not Demo Bank Ltd, and the review queue panel shows DeepTrack's own test items, not the James Mutua dispute.",
+    "d4-entries": "The Kenyan PEP register has no entries yet, so a search shows an empty table.",
+    "d6-risk": "No fake face caught for Demo Bank Ltd (Fake faces caught: 0), and Hits by client lists only Deeptrack.",
+    "d7-services": "Two of the three services show Down (their URLs aren't configured), not all three up."
+  }
+}

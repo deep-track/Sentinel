@@ -31,7 +31,7 @@ Use it when:
 3. Under **Send via**, choose **SMS** or **WhatsApp**.
 4. Click **Send verification link**.
 
-![Liveness page with the Send a liveness verification link form](/help/shots/b4-liveness-form.png "TODO")
+![Liveness page with the Send a liveness verification link form](/help/shots/b4-liveness-form.png)
 
 You see "Liveness link queued for delivery." The customer gets this message: "Complete your Deeptrack liveness verification:" followed by the link. The message is in English only.
 

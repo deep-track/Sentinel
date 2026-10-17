@@ -26,7 +26,7 @@ A new organization starts with Sentinel's standard rules, so nothing changes unt
 3. At the bottom, the bar shows "You have unsaved changes." Click **Save changes**, or **Discard** to go back to the saved rules.
 4. If a value is out of range, Sentinel refuses the save and names the field, for example "The match threshold must be a whole number from 70 to 95."
 
-![Screening rules page with the AML matching section](/help/shots/a7-aml-matching.png "TODO")
+![Screening rules page with the AML matching section](/help/shots/a7-aml-matching.png)
 
 ### AML matching
 
@@ -77,7 +77,7 @@ When duplicate search is on, Sentinel keeps a face template (not the photo) for 
 
 Either way, Sentinel keeps only keyed fingerprints, never the numbers, names or dates themselves. Nobody is told which organization saw an identifier. A strong signal sends a pass to review; it never rejects on its own. See [B10 Fraud signals explained](/help/b10).
 
-![Face match and Fraud network sections](/help/shots/a7-face-fraud.png "TODO")
+![Face match and Fraud network sections](/help/shots/a7-face-fraud.png)
 
 ### Customer risk rating and periodic review
 
@@ -135,7 +135,7 @@ There are 15 categories, from **Financial crime**, **Fraud** and **Corruption or
 
 A document is sent to review instead of rejected only when every critical reason is one you send to review. The report then says "Sent to review instead of rejected, under your organization's document rules." See [B5 Document checks](/help/b5).
 
-![Documents (IDP) section with the fraud actions](/help/shots/a7-documents.png "TODO")
+![Documents (IDP) section with the fraud actions](/help/shots/a7-documents.png)
 
 ## What each result means
 

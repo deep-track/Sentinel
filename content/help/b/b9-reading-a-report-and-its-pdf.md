@@ -34,7 +34,7 @@ This chapter walks through the parts that appear across the reports. The checks 
 3. Read the reason under the title, where the report has one. Document and AML reports explain the verdict in one or two sentences. A document report also shows a **Fraud risk score** out of 100.
 4. On a KYC report, read the **Verification Report** section. Each step (**Document Authenticity**, **Liveness Check**, **Identity Registry (IPRS)**, **AML / Sanctions Screening**, **Face match**) shows its result and the threshold it was judged against.
 
-![KYC report for Wanjiku Mwangi, Approved, with the deepfake shield clear](/help/shots/b9-kyc-report.png "TODO")
+![KYC report for Wanjiku Mwangi, Approved, with the deepfake shield clear](/help/shots/b9-kyc-report.png)
 
 ### Read the deepfake shield
 
@@ -44,7 +44,7 @@ KYC and document reports show the deepfake shield near the top: one headline for
 2. Read the list under it. Each line is one check, marked **Clear**, **Flagged**, **Unclear** or **Not run**, with a short detail.
 3. If anything is **Flagged** or **Unclear**, read [B10 Fraud signals explained](/help/b10) for what it means and what to do.
 
-![Document report for Daniel Ouma, Rejected, with the deepfake shield showing an AI-generated document](/help/shots/b9-document-report.png "TODO")
+![Document report for Daniel Ouma, Rejected, with the deepfake shield showing an AI-generated document](/help/shots/b9-document-report.png)
 
 ### Read the fraud network
 
@@ -60,7 +60,7 @@ AML and KYB reports show a **Customer risk rating** (on KYB, under **Automated c
 2. Read the line next to it. It says how often the customer must be reviewed, for example "Review every 12 months."
 3. Read the factors under it. Each one shows its points and why, for example "PEP +35: Politically exposed person, Class 2".
 
-![AML report for Daniel Kipruto Langat with a High risk rating and a PEP Class 2 hit](/help/shots/b9-aml-risk-rating.png "TODO")
+![AML report for Daniel Kipruto Langat with a High risk rating and a PEP Class 2 hit](/help/shots/b9-aml-risk-rating.png)
 
 ### Download the PDF
 

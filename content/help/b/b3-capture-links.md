@@ -34,7 +34,7 @@ Each link:
 6. Optional: add **Your reference**, for example your customer number CUST-20431. It shows in the list and is saved with the check.
 7. Click **Send link** (WhatsApp or SMS) or **Create link** (Copy link).
 
-![Capture links page with WhatsApp and Kiswahili selected](/help/shots/b3-capture-form.png "TODO")
+![Capture links page with WhatsApp and Kiswahili selected](/help/shots/b3-capture-form.png)
 
 For WhatsApp or SMS you see "Link queued for WhatsApp." (or SMS). The message reads, in English: "Demo Bank Ltd asks you to verify your identity. Open this secure link within 72 hours:" followed by the link. The Kiswahili message says the same.
 
@@ -58,7 +58,7 @@ The language link at the top right switches between English and Kiswahili at any
 
 The list under the form shows your 50 most recent links. Each row shows the customer's name (or number, or "Shared link"), your reference, how it was sent, the language and when. A status badge shows how far the customer got. Once they submit, the row links to the KYC check by its reference.
 
-![Capture links list with Joseph's and Halima's links](/help/shots/b3-capture-list.png "TODO")
+![Capture links list with Joseph's and Halima's links](/help/shots/b3-capture-list.png)
 
 To stop a link before the customer uses it, click **Cancel** on its row. The customer then sees "This link was cancelled."
 

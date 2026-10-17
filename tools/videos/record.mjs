@@ -166,6 +166,9 @@ for (const [index, scene] of script.scenes.entries()) {
 const total = elapsed() + 0.5;
 await sleep(500);
 const video = page.video();
+// Keep the renewed sign-in: Sentinel rotates its session, and the old one
+// stops working once it has been refreshed.
+await context.storageState({ path: AUTH });
 await context.close();
 await browser.close();
 const recorded = await video.path();

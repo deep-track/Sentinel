@@ -40,7 +40,7 @@ You can prepare a report from two places:
 - **A review case.** Open the case from **Reviews** (see B11). The **Suspicious transaction report** panel is below the decision area.
 - **A transaction alert.** Open the alert from **Transactions** (see B13). The panel is at the bottom of the page. It appears only when the alert's customer reference is the Sentinel reference of a KYC or AML check, because the report needs the customer's details from that check.
 
-![Suspicious transaction report panel on an escalated structuring alert](/help/shots/b14-panel.png "TODO")
+![Suspicious transaction report panel on an escalated structuring alert](/help/shots/b14-panel.png)
 
 ### Prepare the report
 
@@ -64,7 +64,7 @@ You can prepare a report from two places:
    From an alert, Sentinel fills these in from the alert's largest transaction. Check the amount: if that transaction was in US dollars and your local currency is KES, convert it.
 7. Click **Prepare and download**. Sentinel saves the report as a draft, gives it a reference such as STR-20261016-A1B2C3, and downloads the file, for example `STR-20261016-A1B2C3-STR.xml`.
 
-![Prepare a report for the FRC window with STR selected](/help/shots/b14-dialog.png "TODO")
+![Prepare a report for the FRC window with STR selected](/help/shots/b14-dialog.png)
 
 ### Submit it in goAML
 
@@ -80,7 +80,7 @@ You can prepare a report from two places:
 
 The report's status changes to submitted, with the FRC reference and the date.
 
-![STR register on the Reports page with a draft and a submitted report](/help/shots/b14-register.png "TODO")
+![STR register on the Reports page with a draft and a submitted report](/help/shots/b14-register.png)
 
 To download a report's file again, click **goAML XML** in the report panel, or **XML** in the STR register.
 
