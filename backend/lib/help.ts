@@ -92,6 +92,12 @@ function escapeHtml(text: string) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// The runbook's (Manual D) screenshots aren't public: they are served by
+// app/internal-ops/help/shots, to DeepTrack staff only.
+export function shotUrl(href: string): string {
+  return /^\/help\/shots\/d\d+-/.test(href) ? href.replace("/help/shots/", "/internal-ops/help/shots/") : href;
+}
+
 function render(body: string) {
   const headings: Chapter["headings"] = [];
   const marked = new Marked({
@@ -109,7 +115,7 @@ function render(body: string) {
         if (title === "TODO") {
           return `<span class="help-shot-todo" role="img" aria-label="${escapeHtml(text)}">Screenshot: ${escapeHtml(text)}</span>`;
         }
-        return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${title ? ` title="${escapeHtml(title)}"` : ""} loading="lazy" />`;
+        return `<img src="${escapeHtml(shotUrl(href))}" alt="${escapeHtml(text)}"${title ? ` title="${escapeHtml(title)}"` : ""} loading="lazy" />`;
       },
     },
   });
