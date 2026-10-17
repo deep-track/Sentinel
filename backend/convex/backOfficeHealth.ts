@@ -7,6 +7,7 @@ import { loadWatchlistCoverage } from "./amlPersistence";
 import { SOURCE_KEYS, SOURCE_LABELS } from "./lib/amlMatching";
 import { OPENSANCTIONS_BASE_URL } from "./lib/openSanctions";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
+import { demoClientIds, withoutDemo } from "./lib/demo";
 
 // Sentinel Back Office: service health. Three views of every dependency:
 // scheduled probes (is it reachable and is our key accepted), configuration
@@ -258,12 +259,14 @@ export const serviceHealth = query({
       }),
     );
 
-    // Verification traffic, last 7 days.
-    const rows = await ctx.db
+    // Verification traffic, last 7 days (without Demo Bank Ltd, the demo
+    // organization).
+    const fetchedRows = await ctx.db
       .query("verifications")
       .withIndex("by_created_at", (q) => q.gte("createdAt", weekAgo))
       .order("desc")
       .take(MAX_TRAFFIC_ROWS);
+    const rows = withoutDemo(fetchedRows, await demoClientIds(ctx));
     const clientIds = [...new Set(rows.map((row) => row.clientId))];
     const clientNames = new Map(
       (await Promise.all(clientIds.map((id) => ctx.db.get(id)))).filter(Boolean).map((client) => [client!._id, client!.name]),

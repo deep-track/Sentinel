@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { requireInternalUser } from "./lib/rbac";
+import { demoClientIds } from "./lib/demo";
 import { createdTime, profileNames } from "./userProfiles";
 
 // Sentinel Back Office: client health. Usage trends and churn warnings, API
@@ -71,7 +72,9 @@ export const clientHealth = query({
     await requireInternalUser(ctx);
     const weekStarts = [...args.weekStarts].sort((a, b) => a - b).slice(-WEEKS);
     const from = Math.min(weekStarts[0] ?? args.now, args.now - 28 * DAY_MS);
-    const clients = await ctx.db.query("clients").take(MAX_CLIENTS);
+    // Demo Bank Ltd (the demo organization) is not a real client to watch.
+    const demo = await demoClientIds(ctx);
+    const clients = (await ctx.db.query("clients").take(MAX_CLIENTS)).filter((client) => !demo.has(client._id));
 
     const rows = await ctx.db
       .query("verifications")

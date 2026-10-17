@@ -5,6 +5,7 @@ import type { QueryCtx } from "./_generated/server";
 import { recordAudit } from "./auditLog";
 import { getBalance } from "./lib/credits";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
+import { demoClientIds, withoutDemo } from "./lib/demo";
 import { BILLING_CURRENCIES, creditsToMoney, PLANS, toUsd, type BillingCurrency } from "./lib/pricing";
 
 // Sentinel Back Office: revenue and billing. Usage = deductions minus refunds
@@ -59,7 +60,9 @@ export const overview = query({
     const forecastFrom = args.now - FORECAST_WINDOW_DAYS * DAY_MS;
     const from = Math.min(monthStarts[0], forecastFrom);
 
-    const clients = await ctx.db.query("clients").take(MAX_CLIENTS);
+    // Demo Bank Ltd (the demo organization) is left out of usage and revenue.
+    const demo = await demoClientIds(ctx);
+    const clients = (await ctx.db.query("clients").take(MAX_CLIENTS)).filter((client) => !demo.has(client._id));
     const monthIndex = (at: number) => {
       for (let index = monthStarts.length - 1; index >= 0; index -= 1) if (at >= monthStarts[index]) return index;
       return -1;
@@ -107,13 +110,16 @@ export const overview = query({
 
     // Work done but not yet charged: open review items whose verification
     // has no deduction yet (charged when the review is resolved).
-    const open = (
-      await Promise.all(
-        (["pending", "in_review"] as const).map((status) =>
-          ctx.db.query("reviewQueue").withIndex("by_status_and_created_at", (q) => q.eq("status", status)).take(MAX_OPEN_REVIEWS),
-        ),
-      )
-    ).flat();
+    const open = withoutDemo(
+      (
+        await Promise.all(
+          (["pending", "in_review"] as const).map((status) =>
+            ctx.db.query("reviewQueue").withIndex("by_status_and_created_at", (q) => q.eq("status", status)).take(MAX_OPEN_REVIEWS),
+          ),
+        )
+      ).flat(),
+      demo,
+    );
     const clientById = new Map(clients.map((client) => [client._id, client]));
     const unbilled = (
       await Promise.all(

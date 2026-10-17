@@ -3,6 +3,7 @@ import { query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { SOURCE_KEYS, SOURCE_LABELS } from "./lib/amlMatching";
 import { requireInternalUser } from "./lib/rbac";
+import { demoClientIds, withoutDemo } from "./lib/demo";
 
 // Sentinel Back Office: model and data quality. How DeepTrack Live performs
 // month by month (verdict mix, service errors, how often its result ended in
@@ -67,11 +68,13 @@ export const quality = query({
       return -1;
     };
 
-    const rows = await ctx.db
+    const fetched = await ctx.db
       .query("verifications")
       .withIndex("by_created_at", (q) => q.gte("createdAt", from))
       .order("desc")
       .take(MAX_VERIFICATIONS);
+    // Demo Bank Ltd (the demo organization) holds seeded results, not real checks.
+    const rows = withoutDemo(fetched, await demoClientIds(ctx));
 
     const months = monthStarts.map((monthStart) => ({
       monthStart,
@@ -128,7 +131,7 @@ export const quality = query({
     });
 
     return {
-      truncated: rows.length === MAX_VERIFICATIONS,
+      truncated: fetched.length === MAX_VERIFICATIONS,
       months: months.map((month) => ({
         monthStart: month.monthStart,
         verifications: month.verifications,

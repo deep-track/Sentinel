@@ -4,6 +4,7 @@ import type { Doc } from "./_generated/dataModel";
 import { recordAudit } from "./auditLog";
 import { displayName } from "./reviewQueue";
 import { isInternalAdmin, requireInternalUser } from "./lib/rbac";
+import { demoClientIds, withoutDemo } from "./lib/demo";
 import { profileNames } from "./userProfiles";
 
 // Sentinel Back Office: review operations. Workload and turnaround per
@@ -66,14 +67,21 @@ export const reviewOperations = query({
     const since30 = args.now - 30 * DAY_MS;
     const since90 = args.now - 90 * DAY_MS;
 
-    const open = (
-      await Promise.all(
-        (["pending", "in_review"] as const).map((status) =>
-          ctx.db.query("reviewQueue").withIndex("by_status_and_created_at", (q) => q.eq("status", status)).take(MAX_ROWS),
-        ),
-      )
-    ).flat();
-    const recent = await ctx.db.query("reviewQueue").withIndex("by_created_at", (q) => q.gte("createdAt", since90)).take(MAX_ROWS);
+    // Demo Bank Ltd (the demo organization) reviews its own seeded cases;
+    // they are left out of DeepTrack's workload and turnaround.
+    const demo = await demoClientIds(ctx);
+    const open = withoutDemo(
+      (
+        await Promise.all(
+          (["pending", "in_review"] as const).map((status) =>
+            ctx.db.query("reviewQueue").withIndex("by_status_and_created_at", (q) => q.eq("status", status)).take(MAX_ROWS),
+          ),
+        )
+      ).flat(),
+      demo,
+    );
+    const fetchedRecent = await ctx.db.query("reviewQueue").withIndex("by_created_at", (q) => q.gte("createdAt", since90)).take(MAX_ROWS);
+    const recent = withoutDemo(fetchedRecent, demo);
     const resolved30 = recent.filter((item) => item.status === "resolved" && (item.resolvedAt ?? 0) >= since30);
 
     // Names: the newest name seen for each user id.
@@ -200,7 +208,7 @@ export const reviewOperations = query({
       holdReasons: [...reasonCounts.entries()].map(([reason, row]) => ({ reason, ...row })).sort((a, b) => b.last30 - a.last30),
       overturns: [...overturns.entries()].map(([type, row]) => ({ type, ...row })).sort((a, b) => b.decided - a.decided),
       openItems,
-      truncated: recent.length === MAX_ROWS,
+      truncated: fetchedRecent.length === MAX_ROWS,
     };
   },
 });
