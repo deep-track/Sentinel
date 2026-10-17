@@ -1,13 +1,16 @@
 import { ConvexError, v } from "convex/values";
 import { HOUR } from "@convex-dev/rate-limiter";
 import { internal } from "./_generated/api";
-import { internalAction, internalMutation, internalQuery, mutation, query, type MutationCtx } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { buildVerificationReference } from "./lib/crypto";
+import { buildVerificationReference, randomKeySegment, sha256Hex } from "./lib/crypto";
 import { requireClientRole } from "./lib/rbac";
 import { rateLimiter } from "./lib/rateLimits";
 import { assertCredits, chargeVerification } from "./lib/credits";
-import { creditsForVerification } from "./lib/verificationTypes";
+import { assertMediaSize, creditsForVerification } from "./lib/verificationTypes";
+import { recordAudit } from "./auditLog";
+import { checkLiveness, passesLivenessThreshold } from "./lib/awsClients/livenessClient";
+import { upstreamErrorCode } from "./lib/awsClients/internalFetch";
 import { africasTalkingSmsBody, africasTalkingSmsUrl, parseAfricasTalkingSendResponse } from "./lib/africasTalking";
 
 // "email" stays in the validator so older clients get a clear error instead of
@@ -18,6 +21,8 @@ const internalApi: any = internal;
 
 const PROVIDER_TIMEOUT_MS = 15_000;
 const E164_PATTERN = /^\+[1-9]\d{7,14}$/;
+// The texted capture link works once, for this long.
+const LINK_TTL_MS = 24 * 60 * 60 * 1000;
 
 // SMS toll-fraud guard: each invitation costs real money on Sentinel's Twilio
 // account. Per client, and per destination number within a client.
@@ -75,8 +80,14 @@ export const submit = mutation({
 
     const now = Date.now();
     const verificationId = await ctx.db.insert("verifications", { clientId: args.clientId, type: "liveness", status: "queued", creditsUsed, input: { contact, method: args.method }, reference: buildVerificationReference(), createdAt: now, updatedAt: now });
-    const requestId = await ctx.db.insert("livenessRequests", { clientId: args.clientId, contact, method: args.method, status: "pending", deliveryStatus: "pending", verificationId, createdAt: now, sentAt: now });
-    await ctx.scheduler.runAfter(0, internalApi.liveness.dispatch, { requestId });
+    // 256-bit one-time token for the hosted capture page. Only its hash is
+    // stored; the raw token travels in the scheduled send and the SMS.
+    const linkToken = randomKeySegment(32);
+    const requestId = await ctx.db.insert("livenessRequests", {
+      clientId: args.clientId, contact, method: args.method, status: "pending", deliveryStatus: "pending", verificationId,
+      createdAt: now, sentAt: now, linkTokenHash: await sha256Hex(linkToken), linkExpiresAt: now + LINK_TTL_MS,
+    });
+    await ctx.scheduler.runAfter(0, internalApi.liveness.dispatch, { requestId, linkToken });
     return { requestId, verificationId };
   },
 });
@@ -159,12 +170,14 @@ export async function sendInvitation(request: { method: "sms" | "whatsapp" | "em
 }
 
 export const dispatch = internalAction({
-  args: { requestId: v.id("livenessRequests") },
+  // linkToken is optional only for sends scheduled before tokens existed; a
+  // request without one has no working capture page, so it is not texted.
+  args: { requestId: v.id("livenessRequests"), linkToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const request: Doc<"livenessRequests"> | null = await ctx.runQuery(internalApi.liveness.getInternal, { requestId: args.requestId });
     if (!request || request.status !== "pending" || request.deliveryStatus !== "pending") return;
     const callbackBase = process.env.LIVENESS_PUBLIC_URL;
-    const link = callbackBase ? `${callbackBase.replace(/\/$/, "")}/liveness/${request._id}` : null;
+    const link = callbackBase && args.linkToken ? `${callbackBase.replace(/\/$/, "")}/liveness/${args.linkToken}` : null;
     const outcome = request.method === "email" || !link ? null : await sendInvitation(request, `Complete your Deeptrack liveness verification: ${link}`);
     if (!outcome) {
       await ctx.runMutation(internalApi.liveness.markDeliveryFailed, { requestId: args.requestId, reason: "Liveness delivery provider is not configured." });
@@ -270,38 +283,48 @@ export const applyCallback = internalMutation({
       await failRequest(ctx, row, "Liveness provider reported failure.");
       return { accepted: true };
     }
-    await ctx.db.patch(row._id, { status: "completed", completedAt: Date.now(), failureReason: undefined });
-    if (row.verificationId) {
-      const verification = await ctx.db.get(row.verificationId);
-      if (verification && verification.status !== "completed" && verification.status !== "failed") {
-        // A missing verdict fails closed to review.
-        const verdict = args.verdict ?? "review";
-        const result = args.result ?? { source: "liveness_callback" };
-        if (verdict === "review") {
-          // Same path as IDP review outcomes: completes with verdict "review"
-          // and inserts the reviewQueue row.
-          await ctx.runMutation(internal.verifications._completeWithReview, {
-            id: row.verificationId,
-            clientId: row.clientId,
-            result,
-            triggerType: "auto_escalation",
-            triggerReason: args.verdict ? "Liveness provider returned a review verdict" : "Liveness provider returned no verdict",
-            priority: "normal",
-          });
-        } else {
-          await ctx.runMutation(internal.verifications._complete, {
-            id: row.verificationId,
-            verdict,
-            confidence: verdict === "pass" ? 1 : 0,
-            result,
-          });
-        }
-        await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, { verificationId: row.verificationId });
-      }
-    }
+    // A missing verdict fails closed to review.
+    await completeRequest(ctx, row, {
+      verdict: args.verdict ?? "review",
+      result: args.result ?? { source: "liveness_callback" },
+      reviewReason: args.verdict ? "Liveness provider returned a review verdict" : "Liveness provider returned no verdict",
+    });
     return { accepted: true };
   },
 });
+
+// Completes a pending request and its verification. Shared by the external
+// result webhook and the hosted capture page.
+async function completeRequest(
+  ctx: MutationCtx,
+  row: Doc<"livenessRequests">,
+  outcome: { verdict: "pass" | "review" | "reject"; result: unknown; reviewReason: string },
+) {
+  await ctx.db.patch(row._id, { status: "completed", completedAt: Date.now(), failureReason: undefined });
+  if (!row.verificationId) return;
+  const verification = await ctx.db.get(row.verificationId);
+  if (!verification || verification.status === "completed" || verification.status === "failed") return;
+  if (outcome.verdict === "review") {
+    // Same path as IDP review outcomes: completes with verdict "review"
+    // and inserts the reviewQueue row.
+    await ctx.runMutation(internal.verifications._completeWithReview, {
+      id: row.verificationId,
+      clientId: row.clientId,
+      result: outcome.result,
+      triggerType: "auto_escalation",
+      triggerReason: outcome.reviewReason,
+      priority: "normal",
+    });
+  } else {
+    await ctx.runMutation(internal.verifications._complete, {
+      id: row.verificationId,
+      verdict: outcome.verdict,
+      confidence: outcome.verdict === "pass" ? 1 : 0,
+      result: outcome.result,
+    });
+  }
+  await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, { verificationId: row.verificationId });
+}
 
 export const list = query({
   args: { clientId: v.id("clients"), limit: v.optional(v.number()) },
@@ -319,5 +342,122 @@ export const status = query({
     if (!request) return null;
     await requireClientRole(ctx, request.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     return request;
+  },
+});
+
+// ── Hosted capture page (/liveness/<token>) ────────────────────────────────
+// Public, no sign-in: the 256-bit link token from the SMS is the only
+// credential. It is matched by its SHA-256 hash, works once, and expires.
+// The page learns only the requesting organisation's name.
+
+const LINK_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
+
+type LinkState = "invalid" | "expired" | "submitted" | "closed" | "ready";
+
+const LINK_MESSAGES: Record<Exclude<LinkState, "ready">, string> = {
+  invalid: "This verification link is not valid.",
+  expired: "This verification link has expired. Ask the organisation to send a new one.",
+  submitted: "A video has already been submitted with this link.",
+  closed: "This verification is no longer open.",
+};
+
+async function findByLinkToken(ctx: QueryCtx | MutationCtx, token: string) {
+  if (!LINK_TOKEN_PATTERN.test(token)) return null;
+  const hash = await sha256Hex(token);
+  return await ctx.db.query("livenessRequests").withIndex("by_link_token_hash", (q) => q.eq("linkTokenHash", hash)).unique();
+}
+
+function linkState(row: Doc<"livenessRequests"> | null, now: number): LinkState {
+  if (!row) return "invalid";
+  if (row.captureSubmittedAt !== undefined) return "submitted";
+  if (row.status !== "pending") return "closed";
+  if (row.linkExpiresAt === undefined || now > row.linkExpiresAt) return "expired";
+  return "ready";
+}
+
+// `now` comes from the browser (queries must not read the clock); it only
+// affects what the page shows. submitPublicCapture re-checks with the server clock.
+export const publicSession = query({
+  args: { token: v.string(), now: v.number() },
+  handler: async (ctx, args) => {
+    const row = await findByLinkToken(ctx, args.token);
+    const state = linkState(row, args.now);
+    if (state !== "ready" || !row) return { state, message: state === "ready" ? null : LINK_MESSAGES[state] };
+    const client = await ctx.db.get(row.clientId);
+    return { state, message: null, organisation: client?.name ?? null, expiresAt: row.linkExpiresAt ?? null };
+  },
+});
+
+export const submitPublicCapture = mutation({
+  args: { token: v.string(), videoBase64: v.string(), mediaType: v.union(v.literal("mp4"), v.literal("webm")) },
+  handler: async (ctx, args) => {
+    const row = await findByLinkToken(ctx, args.token);
+    const state = linkState(row, Date.now());
+    if (state !== "ready" || !row) throw new ConvexError({ code: "link_unavailable", message: LINK_MESSAGES[state as Exclude<LinkState, "ready">] });
+    if (!args.videoBase64.trim()) throw new ConvexError({ code: "invalid_argument", message: "The video is empty. Record it again." });
+    assertMediaSize({ videoBase64: args.videoBase64 });
+    const now = Date.now();
+    // Single use from here on, whatever the outcome.
+    await ctx.db.patch(row._id, { captureSubmittedAt: now });
+    await ctx.scheduler.runAfter(0, internalApi.liveness.processHostedCapture, {
+      requestId: row._id,
+      videoBase64: args.videoBase64,
+      mediaType: args.mediaType,
+    });
+    await recordAudit(ctx, {
+      actorId: `liveness_link:${row._id}`,
+      actorType: "system",
+      action: "liveness.capture_submitted",
+      targetType: "verification",
+      targetId: row.verificationId ?? row._id,
+      clientId: row.clientId,
+      metadata: { mediaType: args.mediaType, base64Chars: args.videoBase64.length },
+    });
+    return { accepted: true };
+  },
+});
+
+// Scores the submitted clip with DeepTrack Live and completes the request.
+// Any failure holds the verification for review; it never passes.
+export const processHostedCapture = internalAction({
+  args: { requestId: v.id("livenessRequests"), videoBase64: v.string(), mediaType: v.union(v.literal("mp4"), v.literal("webm")) },
+  handler: async (ctx, args) => {
+    const request: Doc<"livenessRequests"> | null = await ctx.runQuery(internalApi.liveness.getInternal, { requestId: args.requestId });
+    if (!request || request.status !== "pending") return;
+    if (request.verificationId) await ctx.runMutation(internalApi.verifications._markProcessing, { id: request.verificationId });
+
+    let outcome: { verdict: "pass" | "review" | "reject"; result: unknown; reviewReason: string };
+    try {
+      const liveness = await checkLiveness({ frames: args.videoBase64, mediaType: args.mediaType });
+      const decision = liveness.decision ?? (passesLivenessThreshold(liveness) ? "clear" : "review");
+      outcome = {
+        verdict: decision === "clear" ? "pass" : decision,
+        result: { source: "hosted_capture", liveness },
+        reviewReason: "DeepTrack Live could not confirm a live person",
+      };
+    } catch (err) {
+      const code = upstreamErrorCode(err);
+      console.error(`[liveness.processHostedCapture] scoring failed (${code})`, err instanceof Error ? err.message : "");
+      outcome = {
+        verdict: "review",
+        result: { source: "hosted_capture", liveness: { error: code } },
+        reviewReason: "Liveness scoring service unavailable — held for manual review",
+      };
+    }
+    await ctx.runMutation(internalApi.liveness._completeHostedCapture, { requestId: args.requestId, ...outcome });
+  },
+});
+
+export const _completeHostedCapture = internalMutation({
+  args: {
+    requestId: v.id("livenessRequests"),
+    verdict: v.union(v.literal("pass"), v.literal("review"), v.literal("reject")),
+    result: v.any(),
+    reviewReason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.requestId);
+    if (!row || row.status !== "pending") return;
+    await completeRequest(ctx, row, { verdict: args.verdict, result: args.result, reviewReason: args.reviewReason });
   },
 });
