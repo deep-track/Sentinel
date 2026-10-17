@@ -1,0 +1,172 @@
+{
+  "video": "v11-reports-and-fraud-signals",
+  "title": "Read a report and its fraud signals",
+  "chapter": "b9,b10",
+  "course": "Analyst training",
+  "order": 11,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Every finished check in Sentinel has a report. In this video, you'll learn to read one. You'll also learn to spot the four fraud signals Sentinel looks for: the fraud network, duplicate faces, deepfakes and AI-forged documents.",
+      "show": [
+        {
+          "card": "Read a report and its fraud signals",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click Identity (KYC) in the menu on the left, then click a row to open its report. Here is Wanjiku Mwangi, a clean pass. Her name is the title, with the check's reference under it. The verdict badge says Approved.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Identity (KYC)"
+        },
+        {
+          "click": "case:Wanjiku Mwangi"
+        }
+      ]
+    },
+    {
+      "id": "shield",
+      "say": "Near the top is the deepfake shield. It gives one headline for every deepfake and AI forgery check that ran. Each line under it is one check, marked Clear, Flagged, Unclear or Not run. Here, everything is clear.",
+      "show": [
+        {
+          "highlight": "case:Deepfake shield · DeepTrack Live"
+        },
+        {
+          "zoom": "case:Deepfake shield · DeepTrack Live"
+        }
+      ]
+    },
+    {
+      "id": "verification-report",
+      "say": "Scroll down to the Verification Report. Each step shows its result and the threshold it was judged against: the document, liveness, the IPRS registry, AML screening and the face match.",
+      "show": [
+        {
+          "scroll": "card:Verification Report"
+        },
+        {
+          "highlight": "card:Liveness Check"
+        }
+      ]
+    },
+    {
+      "id": "pdf",
+      "say": "To keep the report on the customer's file, or show it to an examiner, click Download report (PDF). The PDF carries the same verdict and evidence as the page, with times in East Africa Time. It doesn't use credits.",
+      "show": [
+        {
+          "highlight": "button:Download report (PDF)"
+        }
+      ]
+    },
+    {
+      "id": "duplicate-face",
+      "say": "Now Brenda Atieno. Look at the Face match row. Her selfie doesn't match her ID photo, and the same face was already verified under a different identity: Grace Achieng. One person with two national IDs is a red flag. Reject the new check, review the earlier one too, and consider an STR.",
+      "show": [
+        {
+          "goto": "/kyc"
+        },
+        {
+          "click": "case:Brenda Atieno"
+        },
+        {
+          "scroll": "case:Face match"
+        },
+        {
+          "zoom": "case:Same face under a different identity"
+        }
+      ]
+    },
+    {
+      "id": "deepfake",
+      "say": "James Mutua's check was declined. DeepTrack Live flagged his selfie as a fake or synthetic face, with high confidence, so Sentinel rejected it straight away. Never approve a flagged face on the photo alone. Ask the customer to redo the check live, or to come to a branch.",
+      "show": [
+        {
+          "goto": "/kyc"
+        },
+        {
+          "click": "case:James Mutua"
+        },
+        {
+          "highlight": "case:Selfie: real face"
+        },
+        {
+          "zoom": "case:Deepfake shield · DeepTrack Live"
+        }
+      ]
+    },
+    {
+      "id": "ai-document",
+      "say": "Document reports work the same way. Click Documents (IDP), then the result button that ends in View report. Daniel Ouma's ID was rejected as AI-generated. The report shows a fraud risk score out of 100. Ask for the original document, and never accept a re-upload of the same file.",
+      "show": [
+        {
+          "click": "sidebar:Documents (IDP)"
+        },
+        {
+          "click": "case:Rejected · View report"
+        },
+        {
+          "highlight": "case:AI-generated document suspected"
+        },
+        {
+          "highlight": "case:Fraud risk score"
+        }
+      ]
+    },
+    {
+      "id": "forensics",
+      "say": "The shield lists three forgery checks: AI-generated document, edited or tampered document, and photo substitution. A confident finding rejects the document. A less certain one sends it to review.",
+      "show": [
+        {
+          "zoom": "case:Deepfake shield · DeepTrack Live"
+        }
+      ]
+    },
+    {
+      "id": "fraud-network",
+      "say": "Reports can also show a fraud network section. It compares fingerprints of ID numbers and emails with earlier checks. A strong finding, such as the same ID number with a different name, sends a pass to review. It never rejects on its own. Ask the customer to explain.",
+      "show": [
+        {
+          "card": "Fraud network",
+          "subtitle": "No reuse found · Weak: shown only · Strong: a pass goes to review"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's how to read a report and its fraud signals. To learn more, open chapters B9 and B10 in Help.",
+      "show": [
+        {
+          "card": "Help → B9 Reading a report · B10 Fraud signals explained",
+          "subtitle": "sentinel.deeptrack.io/help/b9 · sentinel.deeptrack.io/help/b10"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The deepfake shield, Face match row and Fraud network rows are <p> text, not headings, so card: can't reach them. They are targeted with case:<text>, which falls back to page.getByText (first match, case-insensitive substring).",
+    "Documents (IDP) and AML Screening lists show the name as plain text; only the result button ('<label> · View report') is a link. 'case:Rejected · View report' assumes Daniel Ouma is the only rejected document in Demo Bank Ltd (seed: Maisha card and KRA PIN certificates are pass/review).",
+    "The demo seed stores no fraudNetwork result, so the Fraud network section doesn't render on these reports; it is shown as a title card instead.",
+    "The report header (h1 name + verdict badge) has no 'rounded' ancestor on the KYC page, so card:<name> would not resolve; the verdict is described, not highlighted.",
+    "record.mjs card: regex is built in a template literal as `^\\s*${value}`, so \\s becomes a literal 's' (^s*Heading). It still matches headings at the start, but worth fixing."
+  ]
+}

@@ -1,6 +1,8 @@
 import type { SessionData } from "@auth0/nextjs-auth0/types";
 import { decodeJwt } from "jose";
 import {
+	CONNECTION_CLAIM,
+	MFA_CLAIM,
 	getAuth0,
 	getCompanyIdClaimName,
 	getConfiguredOrganizationId,
@@ -102,6 +104,49 @@ function getCompanyId(user: Record<string, unknown>) {
 	const fromClaim = user[getCompanyIdClaimName()];
 	if (typeof fromClaim === "string" && fromClaim.length > 0) return fromClaim;
 	return undefined;
+}
+
+function claimsShowMfa(claims: Record<string, unknown>): boolean {
+	const amr = claims.amr;
+	if (Array.isArray(amr) && amr.includes("mfa")) return true;
+	return claims[MFA_CLAIM] === true;
+}
+
+/**
+ * True when the current session's sign-in used multi-factor authentication:
+ * the ID token's `amr` includes "mfa", or the Post-Login Action's
+ * https://deeptrack.io/mfa claim is set. Checks the session user and the
+ * stored ID token (decrypted session cookie, validated by the SDK at login).
+ */
+export async function sessionUsedMfa(): Promise<boolean> {
+	const session = await getValidatedSession();
+	if (!session) return false;
+	if (claimsShowMfa(session.user as Record<string, unknown>)) return true;
+	const idToken = session.tokenSet?.idToken;
+	if (!idToken) return false;
+	try {
+		const claims = decodeJwt(idToken) as Record<string, unknown>;
+		return claims.sub === session.user.sub && claimsShowMfa(claims);
+	} catch {
+		return false;
+	}
+}
+
+/** The Auth0 connection the current session signed in with, if known. */
+export async function sessionConnection(): Promise<string | null> {
+	const session = await getValidatedSession();
+	if (!session) return null;
+	const fromUser = (session.user as Record<string, unknown>)[CONNECTION_CLAIM];
+	if (typeof fromUser === "string") return fromUser;
+	const idToken = session.tokenSet?.idToken;
+	if (!idToken) return null;
+	try {
+		const claims = decodeJwt(idToken) as Record<string, unknown>;
+		const value = claims.sub === session.user.sub ? claims[CONNECTION_CLAIM] : null;
+		return typeof value === "string" ? value : null;
+	} catch {
+		return null;
+	}
 }
 
 export async function getAuth() {

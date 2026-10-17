@@ -1,0 +1,184 @@
+{
+  "video": "v30-compliance-tasks",
+  "title": "Compliance tasks",
+  "chapter": "d6",
+  "course": "Back Office",
+  "order": 30,
+  "internal": true,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Under the Kenya Data Protection Act, the client is the data controller, and DeepTrack processes data for them. In this video, you'll log data subject requests, approve data removals, sign off the weekly report and read the risk dashboard.",
+      "show": [
+        {
+          "card": "Compliance tasks",
+          "subtitle": "Sentinel by DeepTrack · Back Office"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Under Risk and compliance, click Compliance. One page holds the audit log, the weekly reports and the data subject requests.",
+      "show": [
+        {
+          "goto": "/internal-ops/overview"
+        },
+        {
+          "click": "sidebar:Compliance"
+        },
+        {
+          "zoom": "heading:Compliance"
+        }
+      ]
+    },
+    {
+      "id": "requests",
+      "say": "A person can ask to see their data, have it deleted, corrected, or no longer used. Log each request that reaches DeepTrack in Data subject requests. The header shows how many are open and past due.",
+      "show": [
+        {
+          "scroll": "card:Data subject requests"
+        },
+        {
+          "highlight": "card:Data subject requests"
+        }
+      ]
+    },
+    {
+      "id": "log",
+      "say": "Pick the type. In the subject field, type the verification reference, never the person's name or ID number. Set the date received and the days to respond, thirty by default. There's no client field, so put the client's name in the notes. Then click Log request.",
+      "show": [
+        {
+          "highlight": "field:Request type"
+        },
+        {
+          "highlight": "field:Days to respond"
+        },
+        {
+          "highlight": "button:Log request"
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "say": "Set the status to In progress when you start. A finished check isn't edited: for a correction, the client runs a new check. Checks inside the retention period are kept for seven years under POCAMLA. When you're done, set Completed or Rejected.",
+      "show": [
+        {
+          "card": "Work a request to a close",
+          "subtitle": "Open → In progress → Completed or Rejected"
+        }
+      ]
+    },
+    {
+      "id": "audit",
+      "say": "Sentinel never deletes records on its own. A client Admin requests a data removal, and a second person approves it. When a client has only one Admin, that's you. To find them, set the audit log period to the last seven days, and the action to retention dot purge requested.",
+      "show": [
+        {
+          "scroll": "card:Audit log"
+        },
+        {
+          "select": "field:Period",
+          "option": "Last 7 days"
+        },
+        {
+          "highlight": "field:Action"
+        }
+      ]
+    },
+    {
+      "id": "removal",
+      "say": "Confirm with the client in writing first. Then click Back to dashboard, switch to the client, and open Settings, Audit and data. Under Data retention, check the request and click Approve removal. You can't approve one you made yourself.",
+      "show": [
+        {
+          "highlight": "sidebar:Back to dashboard"
+        },
+        {
+          "card": "Approve a data removal",
+          "subtitle": "Client portal → Settings → Audit & data → Data retention → Approve removal"
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "say": "Every Monday morning, Sentinel generates the weekly compliance report. Click Download and read it, then click Sign off, with notes for the audit trail.",
+      "show": [
+        {
+          "scroll": "card:Weekly compliance reports"
+        },
+        {
+          "highlight": "card:Weekly compliance reports"
+        }
+      ]
+    },
+    {
+      "id": "risk",
+      "say": "Now click Risk. It covers all clients over thirteen weeks, and it's read only. Look at Critical hits and Fake faces caught every day, and make sure each one is in a review case.",
+      "show": [
+        {
+          "click": "sidebar:Risk"
+        },
+        {
+          "highlight": "text:Critical hits"
+        },
+        {
+          "highlight": "text:Fake faces caught"
+        }
+      ]
+    },
+    {
+      "id": "risk-panels",
+      "say": "Watchlist hits per week shows a jump in any one list. Hits by list, by country and by programme show where the hits come from.",
+      "show": [
+        {
+          "highlight": "card:Watchlist hits per week"
+        },
+        {
+          "zoom": "card:Hits by list"
+        }
+      ]
+    },
+    {
+      "id": "fake-faces",
+      "say": "Fake faces caught lists each one, from a selfie or a liveness video, with its confidence and outcome. In Demo Bank, James Mutua's selfie was judged fake at ninety-four percent.",
+      "show": [
+        {
+          "scroll": "card:Fake faces caught"
+        },
+        {
+          "highlight": "card:Fake faces caught"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's your compliance work in the Back Office. To learn more, open chapter D6 in the Runbook.",
+      "show": [
+        {
+          "card": "Runbook → D6 Compliance tasks",
+          "subtitle": "sentinel.deeptrack.io/internal-ops/help/d6"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The Log request form (Request type, Days to respond, Log request) renders only for internal admins without view-only; record with such an account. Nothing is typed or submitted.",
+    "The audit log's Action options come from data, so 'retention.purge_requested' may not be in the list; the Action select is only highlighted. The Period select is changed to 'Last 7 days' (a view filter, nothing saved). field:Action is a substring label match; 'Actor type' comes after it in the DOM, so the first match should be the Action select.",
+    "The audit log, Hits by client and Fake faces caught tables show other clients' names. Only highlights are used on them; the one zoom is on Hits by list (list names, no clients). Consider dropping the fake-faces highlight if other clients' rows appear there.",
+    "The data-removal approval lives in the client portal (Settings → Audit & data). It isn't recorded here, to avoid changing context to another org; a title card stands in. Approve removal and Sign off are never clicked.",
+    "heading:Compliance uses a substring match; the page h1 'Compliance' should be the first heading on the page."
+  ]
+}

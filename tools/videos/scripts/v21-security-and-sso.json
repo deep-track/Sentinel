@@ -1,0 +1,150 @@
+{
+  "video": "v21-security-and-sso",
+  "title": "Security and single sign-on",
+  "chapter": "a6",
+  "course": "Get started",
+  "order": 21,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Regulators like CBK and SASRA expect you to control who can reach customer data, and from where. In this video, you'll set up Sentinel's security rules for your organization.",
+      "show": [
+        {
+          "card": "Security and single sign-on",
+          "subtitle": "Sentinel by DeepTrack · Get started"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click Settings, then the Security tab. These rules apply to everyone in your organization. Only an Admin can change them. Everyone else can read them.",
+      "show": [
+        {
+          "goto": "/settings"
+        },
+        {
+          "click": "sidebar:Security"
+        }
+      ]
+    },
+    {
+      "id": "sso",
+      "say": "Single sign-on lets your team sign in with their company account, such as Microsoft or Google, instead of a Sentinel password. You'll need someone from IT who can create an app in your identity provider.",
+      "show": [
+        {
+          "highlight": "card:Single sign-on"
+        }
+      ]
+    },
+    {
+      "id": "sso-start",
+      "say": "Choose your identity provider, type your email domains, one per line, and click Set up single sign-on. Sentinel then shows a redirect URI to paste into your provider. Paste back the client ID and secret it gives you, and click Connect.",
+      "show": [
+        {
+          "zoom": "field:Identity provider"
+        },
+        {
+          "highlight": "button:Set up single sign-on"
+        }
+      ]
+    },
+    {
+      "id": "sso-require",
+      "say": "Once it's connected, click Test sign-in with your company account, and check that it works. Then turn on Require single sign-on for your domains. You can also let new people at your domains join with a role you choose. Nobody can join as Admin this way.",
+      "show": [
+        {
+          "card": "Test, then require single sign-on",
+          "subtitle": "Test sign-in with your company account → Require single sign-on → New people who sign in with SSO"
+        }
+      ]
+    },
+    {
+      "id": "mfa",
+      "say": "Under Sign-in, turn on Require two-step verification for all members. Anyone who signed in without a second step, such as a code from a phone app, must sign in again with one.",
+      "show": [
+        {
+          "scroll": "card:Sign-in"
+        },
+        {
+          "zoom": "field:Require two-step verification (MFA) for all members"
+        }
+      ]
+    },
+    {
+      "id": "timeout",
+      "say": "Sign out after inactivity signs people out when they stop using Sentinel. Choose from fifteen minutes to eight hours. The default is Off. A minute before the time runs out, they see a warning.",
+      "show": [
+        {
+          "zoom": "field:Sign out after inactivity"
+        }
+      ]
+    },
+    {
+      "id": "domains",
+      "say": "Under Allowed email domains, type one domain per line, such as demo-bank.example. Then only addresses at those domains can be invited to your team. Leave it empty to allow any address.",
+      "show": [
+        {
+          "scroll": "card:Allowed email domains"
+        },
+        {
+          "highlight": "card:Allowed email domains"
+        }
+      ]
+    },
+    {
+      "id": "ip",
+      "say": "The IP allowlist limits Sentinel to your own networks. Type one address or range per line, such as your head office. Sentinel shows the address you're connecting from, and won't save a list that locks you out. Turn on Apply to API requests too, and the same list protects your API.",
+      "show": [
+        {
+          "scroll": "card:IP allowlist"
+        },
+        {
+          "highlight": "card:IP allowlist"
+        },
+        {
+          "zoom": "field:Apply to API requests too"
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "say": "Click Save changes to apply your rules. Every change is recorded in the audit log, with the old and new values.",
+      "show": [
+        {
+          "highlight": "button:Save changes"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's Sentinel's security settings. To learn more, open chapter A6 in Help, Security and single sign-on.",
+      "show": [
+        {
+          "card": "Help → A6 Security and single sign-on",
+          "subtitle": "sentinel.deeptrack.io/help/a6"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The sso-start scene assumes single sign-on is NOT set up for Demo Bank, so the start form (Identity provider, Set up single sign-on) is showing. If SSO is pending or connected, those targets won't exist and the steps are skipped with a warning.",
+    "The Single sign-on card only renders for an Admin; the recording account must be Demo Bank's Admin.",
+    "The test-and-require step is a title card because it needs a connected provider. Nothing is clicked on this page.",
+    "'Add my address' is mentioned only indirectly and never targeted: it only appears when your address isn't on the list, and clicking it changes the draft."
+  ]
+}

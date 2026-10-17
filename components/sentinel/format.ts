@@ -5,9 +5,10 @@ export type Verdict = "pass" | "review" | "reject" | null;
 export type VerificationStatus = "queued" | "processing" | "completed" | "failed";
 
 const TYPE_LABELS: Record<string, string> = {
-  idp: "IDP",
+  idp: "KYC",
   kyb: "KYB",
   kyi: "KYI",
+  document: "IDP",
   aml: "AML",
   liveness: "Liveness",
 };
@@ -83,7 +84,7 @@ export function formatAge(ms: number): string {
   return `${Math.floor(ms / 86_400_000)}d`;
 }
 
-export const PLAN_LABELS = { trial: "Trial", starter: "Starter", growth: "Growth", enterprise: "Enterprise" } as const;
+export const PLAN_LABELS = { trial: "Trial", starter: "Starter", growth: "Growth", business: "Business", enterprise: "Enterprise" } as const;
 export type Plan = keyof typeof PLAN_LABELS;
 
 export type ClientStatus = "active" | "suspended" | "trial_expired";

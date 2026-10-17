@@ -77,8 +77,12 @@ async function getManagementToken(config: Auth0ManagementConfig) {
   return payload.access_token;
 }
 
-class Auth0ManagementError extends Error {
-  constructor(readonly status: number) {
+export class Auth0ManagementError extends Error {
+  constructor(
+    readonly status: number,
+    // Auth0's own explanation (e.g. a missing scope or an invalid option).
+    readonly auth0Message?: string,
+  ) {
     super(`Auth0 management request failed with status ${status}`);
     this.name = "Auth0ManagementError";
   }
@@ -98,7 +102,8 @@ async function managementRequest<T>(path: string, init: RequestInit = {}): Promi
   });
 
   if (!response.ok) {
-    throw new Auth0ManagementError(response.status);
+    const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
+    throw new Auth0ManagementError(response.status, typeof body?.message === "string" ? body.message.slice(0, 300) : undefined);
   }
 
   if (response.status === 204) return undefined as T;
@@ -145,7 +150,23 @@ export async function createOrganizationInvitation(params: {
   if (!canManageCompany(user, companyId)) {
     throw new Error("You can only invite users to your own company");
   }
+  return sendOrganizationInvitation({ inviter: user, email: params.email, redirectUrl: params.redirectUrl, companyId });
+}
 
+export function isInvitationEmailConfigured(): boolean {
+  return REQUIRED_ENV.every((name) => Boolean(process.env[name]?.trim()));
+}
+
+// Sends the Auth0 organization invitation email. No authorization of its
+// own: callers must already have checked that the inviter may invite to
+// `companyId` (createOrganizationInvitation above, or a client Admin's invite
+// that Convex's team.createInvite has just accepted).
+export async function sendOrganizationInvitation(params: {
+  inviter: Pick<AppUser, "id" | "fullName" | "email">;
+  email: string;
+  redirectUrl: string;
+  companyId: string;
+}) {
   const config = getConfig();
   const normalizedEmail = params.email.trim().toLowerCase();
   if (!normalizedEmail || !normalizedEmail.includes("@")) {
@@ -155,7 +176,7 @@ export async function createOrganizationInvitation(params: {
   return managementRequest<OrganizationInvitation>(invitationsPath(config), {
     method: "POST",
     body: JSON.stringify({
-      inviter: { name: user.fullName, email: user.email },
+      inviter: { name: params.inviter.fullName, email: params.inviter.email },
       invitee: { email: normalizedEmail },
       client_id: config.invitationClientId,
       connection_id: config.invitationConnectionId,
@@ -163,9 +184,24 @@ export async function createOrganizationInvitation(params: {
       send_invitation_email: true,
       // app_metadata is copied onto the user when the invitation is accepted;
       // the Post-Login Action emits companyId from it as a namespaced claim.
-      app_metadata: { redirectUrl: params.redirectUrl, companyId, invitedBy: user.id },
+      app_metadata: { redirectUrl: params.redirectUrl, companyId: params.companyId, invitedBy: params.inviter.id },
     }),
   });
+}
+
+// Deletes an Auth0 invitation after the caller's own authorization (a client
+// Admin revoking their team's invite in Convex). An invitation that is
+// already gone (accepted or expired) is not an error.
+export async function deleteOrganizationInvitation(invitationId: string) {
+  const config = getConfig();
+  const id = invitationId.trim();
+  if (!id) return;
+  try {
+    await managementRequest<void>(invitationsPath(config, id), { method: "DELETE" });
+  } catch (error) {
+    if (error instanceof Auth0ManagementError && error.status === 404) return;
+    throw error;
+  }
 }
 
 export async function revokeOrganizationInvitation(invitationId: string) {
@@ -197,4 +233,64 @@ export async function revokeOrganizationInvitation(invitationId: string) {
   }
 
   await managementRequest<void>(invitationsPath(config, id), { method: "DELETE" });
+}
+
+// ── Client single sign-on (enterprise connections) ─────────────────────────
+// Callers must already have checked the user may manage the client's SSO
+// (Convex sso.authorizeConnect / authorizeRemove). Needs these Management
+// API scopes on the M2M app: create:connections, delete:connections and
+// create:organization_connections.
+
+export function isConnectionManagementConfigured(): boolean {
+  return isInvitationEmailConfigured() && Boolean(process.env.AUTH0_CLIENT_ID?.trim());
+}
+
+export async function createEnterpriseConnection(params: {
+  name: string;
+  displayName: string;
+  strategy: "waad" | "google-apps" | "samlp" | "oidc";
+  options: Record<string, unknown>;
+}): Promise<{ id: string }> {
+  const config = getConfig();
+  const appClientId = process.env.AUTH0_CLIENT_ID?.trim();
+  if (!appClientId) throw new Error("AUTH0_CLIENT_ID is not set");
+  const connection = await managementRequest<{ id: string }>("/api/v2/connections", {
+    method: "POST",
+    body: JSON.stringify({
+      name: params.name,
+      display_name: params.displayName,
+      strategy: params.strategy,
+      options: params.options,
+      enabled_clients: [appClientId],
+    }),
+  });
+  // Members sign in through the shared Sentinel organization; the
+  // connection must be enabled on it (and users added on first login).
+  await managementRequest<unknown>(`/api/v2/organizations/${encodeURIComponent(config.organizationId)}/enabled_connections`, {
+    method: "POST",
+    body: JSON.stringify({ connection_id: connection.id, assign_membership_on_login: true, show_as_button: true }),
+  });
+  return { id: connection.id };
+}
+
+export async function deleteEnterpriseConnection(connectionId: string) {
+  try {
+    await managementRequest<void>(`/api/v2/connections/${encodeURIComponent(connectionId)}`, { method: "DELETE" });
+  } catch (error) {
+    if (error instanceof Auth0ManagementError && error.status === 404) return;
+    throw error;
+  }
+}
+
+// Where the client's identity provider sends users back, and the SAML
+// entity ID Auth0 uses for this connection.
+export function ssoCallbackDetails(connectionName: string | null) {
+  const domain = process.env.AUTH0_DOMAIN?.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (!domain) return null;
+  const tenant = domain.split(".")[0];
+  return {
+    callbackUrl: `https://${domain}/login/callback`,
+    samlAcsUrl: connectionName ? `https://${domain}/login/callback?connection=${connectionName}` : null,
+    samlEntityId: connectionName ? `urn:auth0:${tenant}:${connectionName}` : null,
+  };
 }

@@ -32,9 +32,10 @@ import { setActiveClient } from "@/app/(platform)/_lib/active-client-actions";
 
 const ROLE_LABELS: Record<ClientMembership["role"], string> = {
   client_admin: "Admin",
-  compliance_analyst: "Compliance analyst",
+  reviewer: "Reviewer",
+  compliance_analyst: "Analyst",
   developer: "Developer",
-  viewer: "Viewer",
+  viewer: "Viewer / Auditor",
 };
 
 function readCookie(name: string): string | null {

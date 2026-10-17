@@ -39,10 +39,20 @@ import {
   typeLabel,
   verdictBadge,
 } from "@/components/sentinel/format";
+import { formatMoney } from "@/backend/convex/lib/pricing";
 
 type PortalOverview = {
-  client: { name: string; plan: Plan; status: ClientStatus; creditLimit: number; creditThresholdPct: number };
-  credits: { balance: number; usedThisMonth: number };
+  client: { name: string; plan: Plan; status: ClientStatus; creditLimit: number; creditThresholdPct: number; billingCurrency: "USD" | "KES" };
+  credits: {
+    balance: number;
+    usedThisMonth: number;
+    currency: "USD" | "KES";
+    balanceValue: number;
+    usedThisMonthValue: number;
+    creditPrice: number;
+    planBonus: number;
+    prices: Array<{ service: string; label: string; credits: number; amount: number; currency: string }>;
+  };
   scans: { thisMonth: number; today: number };
   latency: { avgMs: number | null; p95Ms: number | null };
   flagged: { count: number; pct: number };
@@ -223,7 +233,7 @@ export function PortalView({ clientId, clientName }: { clientId: string; clientN
 
 function CreditsCard({ data }: { data: PortalOverview }) {
   const { creditLimit, creditThresholdPct } = data.client;
-  const { balance, usedThisMonth } = data.credits;
+  const { balance, usedThisMonth, currency, balanceValue, usedThisMonthValue, creditPrice, planBonus, prices } = data.credits;
   const pct = creditLimit > 0 ? Math.round((usedThisMonth / creditLimit) * 1000) / 10 : null;
   return (
     <Panel className="px-4 py-4">
@@ -236,6 +246,7 @@ function CreditsCard({ data }: { data: PortalOverview }) {
               <span className="text-[13px] text-sentinel-subtle">/ {formatNumber(creditLimit)}</span>
             ) : null}
           </div>
+          <div className="mt-1 text-[11px] text-sentinel-subtle">{formatMoney(usedThisMonthValue, currency)} this month</div>
         </div>
         <div className="text-right">
           <div className="text-[11px] text-sentinel-subtle">Balance remaining</div>
@@ -246,6 +257,7 @@ function CreditsCard({ data }: { data: PortalOverview }) {
           >
             {formatNumber(balance)} credits
           </div>
+          <div className="text-[11px] text-sentinel-subtle">worth {formatMoney(balanceValue, currency)}</div>
         </div>
       </div>
       {pct !== null ? (
@@ -263,6 +275,26 @@ function CreditsCard({ data }: { data: PortalOverview }) {
       ) : (
         <div className="mt-2 text-[11px] text-sentinel-subtle">No monthly plan limit set for this organization.</div>
       )}
+      <details className="mt-3 text-[11px]">
+        <summary className="cursor-pointer text-sentinel-subtle">
+          Your prices ({currency}) · 1 credit = {formatMoney(creditPrice, currency)}
+          {planBonus ? ` · ${Math.round(planBonus * 100)}% plan bonus` : ""}
+        </summary>
+        <table className="mt-2 w-full">
+          <tbody>
+            {prices.map((row) => (
+              <tr key={row.service} className="border-t border-sentinel-line">
+                <td className="py-1 pr-2">{row.label}</td>
+                <td className="py-1 pr-2 text-right text-sentinel-subtle">
+                  {row.credits} credit{row.credits === 1 ? "" : "s"}
+                </td>
+                <td className="py-1 text-right font-medium">{formatMoney(row.amount, currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-1 text-sentinel-subtle">You&apos;re only charged when a check completes. AML monitoring is included in the screening price.</p>
+      </details>
       {balance <= 0 ? (
         <div className="mt-2 text-[11px] text-sentinel-red-text">
           New verifications are refused until credits are added.{" "}

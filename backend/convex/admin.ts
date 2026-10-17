@@ -8,6 +8,8 @@ import { SOURCE_LABELS } from "./lib/amlMatching";
 import { getBalance, recordLedgerEntry } from "./lib/credits";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
 import { latencyStats } from "./portal";
+import { createdTime } from "./userProfiles";
+import { creditsToMoney } from "./lib/pricing";
 
 // Internal (Sentinel staff) client management and the cross-client ops
 // overview. Reads need an internal role; writes need internal_admin and are
@@ -24,6 +26,7 @@ const planValidator = v.union(
   v.literal("trial"),
   v.literal("starter"),
   v.literal("growth"),
+  v.literal("business"),
   v.literal("enterprise"),
 );
 const clientStatusValidator = v.union(v.literal("active"), v.literal("suspended"), v.literal("trial_expired"));
@@ -60,7 +63,10 @@ async function clientSummary(ctx: QueryCtx, client: ClientDoc, monthStart: numbe
     usedThisMonth,
     // Share of the plan's credit limit consumed this month (null without a limit).
     usagePct: client.creditLimit > 0 ? Math.round((usedThisMonth / client.creditLimit) * 1000) / 10 : null,
-    createdAt: client.createdAt,
+    billingCurrency: client.billingCurrency ?? "USD",
+    balanceValue: creditsToMoney(balance, client.billingCurrency ?? "USD", client.plan),
+    seatLimit: client.seatLimit ?? null,
+    createdAt: createdTime(client),
   };
 }
 
@@ -98,15 +104,20 @@ export const listClients = query({
 });
 
 export const getClient = query({
-  args: { clientId: v.id("clients"), monthStart: v.number(), ledgerLimit: v.optional(v.number()) },
+  // A string, not v.id: the id comes from the ?client= URL, and a malformed or
+  // foreign id must read as "not found" rather than fail validation and crash
+  // the page.
+  args: { clientId: v.string(), monthStart: v.number(), ledgerLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await requireInternalUser(ctx);
-    const client = await ctx.db.get(args.clientId);
+    const clientId = ctx.db.normalizeId("clients", args.clientId);
+    if (!clientId) return null;
+    const client = await ctx.db.get(clientId);
     if (!client) return null;
     const limit = Math.min(Math.max(Math.floor(args.ledgerLimit ?? 20), 1), 100);
     const ledger = await ctx.db
       .query("creditLedger")
-      .withIndex("by_client_created_at", (q) => q.eq("clientId", args.clientId))
+      .withIndex("by_client_created_at", (q) => q.eq("clientId", clientId))
       .order("desc")
       .take(limit);
     return {
@@ -122,7 +133,7 @@ export const getClient = query({
   },
 });
 
-// Cross-client overview for the Sentinel Ops console. Time boundaries come
+// Cross-client overview for the Sentinel Back Office. Time boundaries come
 // from the browser (queries must not read the wall clock).
 export const opsOverview = query({
   args: { now: v.number(), dayStart: v.number(), monthStart: v.number(), recentLimit: v.optional(v.number()) },
@@ -201,14 +212,14 @@ export const opsOverview = query({
       ...coverage.missing.map((key) => ({
         severity: "critical" as const,
         title: `${SOURCE_LABELS[key]} watchlist unavailable`,
-        detail: "AML screenings are held for manual review until it is ingested.",
+        detail: withLastError("AML screenings are held for manual review until it is ingested.", coverage.lastErrors[key]),
       })),
       ...coverage.versions
         .filter((version) => version.stale)
         .map((version) => ({
           severity: "warning" as const,
           title: `${SOURCE_LABELS[version.sourceKey]} watchlist is stale`,
-          detail: "AML screenings are held for manual review until it refreshes.",
+          detail: withLastError("AML screenings are held for manual review until it refreshes.", coverage.lastErrors[version.sourceKey]),
           at: version.fetchedAt,
         })),
       ...clients.flatMap(clientAlerts),
@@ -235,6 +246,10 @@ export const opsOverview = query({
   },
 });
 
+function withLastError(detail: string, lastError: string | undefined) {
+  return lastError ? `${detail} Last ingestion error: ${lastError}` : detail;
+}
+
 function requireReason(reason: string) {
   const trimmed = reason.trim();
   if (trimmed.length < 3) {
@@ -253,6 +268,9 @@ export const updateClient = mutation({
     creditLimit: v.optional(v.number()),
     rpmCap: v.optional(v.number()),
     creditThresholdPct: v.optional(v.number()),
+    billingCurrency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
+    // Team seats (active members + pending invites); null removes the limit.
+    seatLimit: v.optional(v.union(v.number(), v.null())),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -261,7 +279,24 @@ export const updateClient = mutation({
     const client = await ctx.db.get(args.clientId);
     if (!client) throw new ConvexError({ code: "not_found", message: "Client not found." });
 
-    const patch: Partial<Pick<ClientDoc, "name" | "plan" | "status" | "creditLimit" | "rpmCap" | "creditThresholdPct">> = {};
+    const patch: Partial<Pick<ClientDoc, "name" | "plan" | "status" | "creditLimit" | "rpmCap" | "creditThresholdPct" | "billingCurrency" | "seatLimit">> = {};
+    if (args.seatLimit !== undefined) {
+      if (args.seatLimit !== null && (!Number.isInteger(args.seatLimit) || args.seatLimit < 1 || args.seatLimit > 10_000)) {
+        throw new ConvexError({ code: "invalid_argument", message: "Seat limit must be a whole number from 1 to 10,000, or empty for no limit." });
+      }
+      if ((args.seatLimit ?? undefined) !== client.seatLimit) patch.seatLimit = args.seatLimit ?? undefined;
+    }
+    // Credits are counted in the billing currency (lib/pricing.ts), so it can
+    // only change while the client has no credits.
+    if (args.billingCurrency !== undefined && args.billingCurrency !== (client.billingCurrency ?? "USD")) {
+      if ((await getBalance(ctx, args.clientId)) !== 0) {
+        throw new ConvexError({
+          code: "invalid_argument",
+          message: "The billing currency can only change while the balance is zero. Adjust the balance to 0 first.",
+        });
+      }
+      patch.billingCurrency = args.billingCurrency;
+    }
     if (args.name !== undefined) {
       const name = args.name.trim();
       if (!name || name.length > 200) throw new ConvexError({ code: "invalid_argument", message: "Client name must be 1–200 characters." });

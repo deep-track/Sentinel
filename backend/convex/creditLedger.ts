@@ -3,6 +3,7 @@ import { internalMutation, internalQuery, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireClientRole } from "./lib/rbac";
 import { chargeVerification, getBalance, recordLedgerEntry } from "./lib/credits";
+import { CREDIT_VALUE, PLAN_BONUS, creditsToMoney, priceList } from "./lib/pricing";
 
 const ledgerType = v.union(
   v.literal("allocation"),
@@ -43,6 +44,28 @@ export const _getBalance = internalQuery({
   handler: async (ctx, args) => await getBalance(ctx, args.clientId),
 });
 
+// GET /v1/credits: balance in credits and in the client's billing currency,
+// the plan, and the plan's price per check (lib/pricing.ts).
+export const _getCreditSummary = internalQuery({
+  args: { clientId: v.id("clients") },
+  handler: async (ctx, args) => {
+    const client = await ctx.db.get(args.clientId);
+    const balance = await getBalance(ctx, args.clientId);
+    const plan = client?.plan ?? "starter";
+    const currency = client?.billingCurrency ?? "USD";
+    return {
+      balance,
+      currency,
+      creditPrice: CREDIT_VALUE[currency],
+      planBonus: PLAN_BONUS[currency][plan],
+      // What the balance is worth on this plan (after any plan bonus).
+      balanceValue: creditsToMoney(balance, currency, plan),
+      plan,
+      prices: priceList(plan, currency).map((row) => ({ service: row.service, credits: row.credits, amount: row.amount })),
+    };
+  },
+});
+
 export const _getLedgerHistory = internalQuery({
   args: {
     clientId: v.id("clients"),
@@ -77,6 +100,7 @@ export const getBalanceForClient = query({
     await requireClientRole(ctx, args.clientId, [
       "client_admin",
       "compliance_analyst",
+      "reviewer",
       "developer",
       "viewer",
     ]);
@@ -124,5 +148,60 @@ export const backfillAllocations = internalMutation({
       });
     }
     return { processed: page.page.length, allocated, done: page.isDone };
+  },
+});
+
+const HISTORY_ROLES = ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"] as const;
+
+// Client Billing page: plan, balance, prices and one page of the credit
+// ledger (newest first), with each line's money value and the check it was
+// for. `before` is the createdAt cursor from the previous page.
+export const billingForClient = query({
+  args: { clientId: v.id("clients"), limit: v.optional(v.number()), before: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requireClientRole(ctx, args.clientId, [...HISTORY_ROLES]);
+    const client = await ctx.db.get(args.clientId);
+    if (!client) return null;
+    const plan = client.plan;
+    const currency = client.billingCurrency ?? "USD";
+    const limit = Math.min(Math.max(Math.floor(args.limit ?? 25), 1), 100);
+    const rows = await ctx.db
+      .query("creditLedger")
+      .withIndex("by_client_created_at", (q) => {
+        const byClient = q.eq("clientId", args.clientId);
+        return args.before === undefined ? byClient : byClient.lt("createdAt", args.before);
+      })
+      .order("desc")
+      .take(limit + 1);
+    const page = rows.slice(0, limit);
+    const entries = await Promise.all(
+      page.map(async (row) => {
+        const verification = row.verificationId ? await ctx.db.get(row.verificationId) : null;
+        return {
+          _id: row._id,
+          createdAt: row.createdAt,
+          type: row.type,
+          credits: row.amount,
+          // Recorded when written; null for rows from before currency pricing.
+          value: row.value ?? null,
+          currency: row.currency ?? null,
+          reason: row.reason,
+          verificationId: verification?._id ?? null,
+          reference: verification?.reference ?? null,
+          verificationType: verification?.type ?? null,
+        };
+      }),
+    );
+    const balance = await getBalance(ctx, args.clientId);
+    return {
+      client: { name: client.name, plan, currency },
+      balance,
+      balanceValue: creditsToMoney(balance, currency, plan),
+      creditPrice: CREDIT_VALUE[currency],
+      planBonus: PLAN_BONUS[currency][plan],
+      prices: priceList(plan, currency),
+      entries,
+      nextCursor: rows.length > limit ? page[page.length - 1].createdAt : null,
+    };
   },
 });

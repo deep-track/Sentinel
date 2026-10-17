@@ -9,11 +9,20 @@ import { chargeVerification } from "./lib/credits";
 import {
   assertCreditsForNewVerification,
   assertMediaSize,
-  creditsForType,
+  creditsForVerification,
 } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
+import { queueReview } from "./clientReviews";
+import { checkFraudNetwork } from "./fraudNetwork";
 
-const verificationType = v.union(v.literal("idp"), v.literal("kyb"), v.literal("aml"), v.literal("liveness"), v.literal("kyi"));
+const verificationType = v.union(
+  v.literal("idp"),
+  v.literal("kyb"),
+  v.literal("aml"),
+  v.literal("liveness"),
+  v.literal("kyi"),
+  v.literal("document"),
+);
 const verificationStatus = v.union(v.literal("queued"), v.literal("processing"), v.literal("completed"), v.literal("failed"));
 const verificationVerdict = v.union(v.literal("pass"), v.literal("review"), v.literal("reject"));
 
@@ -43,7 +52,8 @@ export type IdpInput = Infer<typeof idpInput>;
 
 const DEDICATED_CREATE_PATH: Record<Exclude<Doc<"verifications">["type"], "idp">, string> = {
   kyb: "Use kyb.createKyb to submit a business verification.",
-  kyi: "Use kyi.createKyi to submit an investor verification.",
+  kyi: "KYI has been retired; use document verification (documents.submit) instead.",
+  document: "Use documents.submit to verify an identity document or proof of address.",
   aml: "Use aml.submit to run a sanctions screening.",
   liveness: "Use liveness.submit to create a liveness invitation.",
 };
@@ -171,7 +181,7 @@ function requireText(fields: Record<string, string>) {
 // Shared IDP creation path (dashboard KYC, generic create, public API).
 // Checks credits, inserts the row WITHOUT media, schedules processing with
 // the media, and audits the creation — all in the caller's transaction.
-async function createIdpVerification(
+export async function createIdpVerification(
   ctx: MutationCtx,
   params: {
     clientId: Id<"clients">;
@@ -206,7 +216,7 @@ async function createIdpVerification(
     livenessFramesBase64: input.livenessFramesBase64,
   });
 
-  const creditsUsed = creditsForType("idp");
+  const creditsUsed = await creditsForVerification(ctx, params.clientId, "idp");
   await assertCreditsForNewVerification(ctx, params.clientId, creditsUsed);
 
   const now = Date.now();
@@ -270,7 +280,7 @@ export const create = mutation({
     input: idpInput,
   },
   handler: async (ctx, args) => {
-    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     if (args.type !== "idp") {
       throw new ConvexError({ code: "invalid_argument", message: DEDICATED_CREATE_PATH[args.type] });
     }
@@ -294,7 +304,7 @@ export const createKyc = mutation({
     livenessFramesBase64: v.optional(v.string()), livenessMediaType: v.optional(livenessMediaType),
   },
   handler: async (ctx, args) => {
-    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     requireText({ documentFrontUrl: args.documentFrontUrl, selfieUrl: args.selfieUrl, selfieBase64: args.selfieBase64 });
     // The selfie goes to DeepTrack Live for a fake-face check (not a face
     // match against the document). It is size-checked and never stored.
@@ -405,14 +415,22 @@ export const _complete = internalMutation({
     const row = await ctx.db.get(args.id);
     if (!row) return null;
     const now = Date.now();
+    // Sentinel's fraud network for KYC: the ID number used with another
+    // person, or in a fraud rejection, sends a pass to review.
+    const network = row.type === "idp" && row.status !== "completed" ? await checkFraudNetwork(ctx, row, args.verdict, args.result) : null;
+    const verdict = network?.verdict ?? args.verdict;
+    const result = network?.summary && args.result && typeof args.result === "object" ? { ...args.result, fraudNetwork: network.summary } : args.result;
     await ctx.db.patch(args.id, {
       status: "completed",
-      verdict: args.verdict,
+      verdict,
       confidence: args.confidence,
-      result: args.result,
+      result,
       updatedAt: now,
       completedAt: now,
     });
+    if (network?.note && verdict === "review") {
+      await queueReview(ctx, { verificationId: args.id, clientId: row.clientId, triggerType: "auto_escalation", triggerReason: network.note.slice(0, 1000), priority: "normal" });
+    }
     if (args.chargeReason !== undefined) {
       await chargeVerification(ctx, {
         clientId: row.clientId,
@@ -469,21 +487,21 @@ export const _completeWithReview = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const row = await ctx.db.get(args.id);
+    const network = row?.type === "idp" && row.status !== "completed" ? await checkFraudNetwork(ctx, row, "review", args.result) : null;
     await ctx.db.patch(args.id, {
       status: "completed",
       verdict: "review",
-      result: args.result,
+      result: network?.summary && args.result && typeof args.result === "object" ? { ...args.result, fraudNetwork: network.summary } : args.result,
       updatedAt: now,
       completedAt: now,
     });
-    await ctx.db.insert("reviewQueue", {
+    await queueReview(ctx, {
       verificationId: args.id,
       clientId: args.clientId,
       triggerType: args.triggerType,
       triggerReason: args.triggerReason,
       priority: args.priority,
-      status: "pending",
-      createdAt: now,
     });
     if (args.notifyWebhook) {
       await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, { verificationId: args.id });

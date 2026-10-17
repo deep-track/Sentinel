@@ -1,6 +1,9 @@
 import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { creditsToMoney, formatMoney } from "./pricing";
+import { checkLowCredit } from "../notifications";
+import { maybeAutoTopUp } from "./autoTopUp";
 
 type LedgerType = "allocation" | "deduction" | "refund" | "adjustment";
 
@@ -58,8 +61,19 @@ export async function recordLedgerEntry(
 ) {
   assertLedgerAmount(entry.type, entry.amount);
   const balance = await getBalance(ctx, entry.clientId);
-  await ctx.db.insert("creditLedger", { ...entry, createdAt: Date.now() });
+  // Record what the credits were worth now, so later currency or plan
+  // changes never reprice history.
+  const client = await ctx.db.get(entry.clientId);
+  const currency = client?.billingCurrency ?? "USD";
+  await ctx.db.insert("creditLedger", {
+    ...entry,
+    currency,
+    value: creditsToMoney(entry.amount, currency, client?.plan ?? "starter"),
+    createdAt: Date.now(),
+  });
   await ctx.db.patch(entry.clientId, { creditBalance: balance + entry.amount });
+  await checkLowCredit(ctx, entry.clientId, balance + entry.amount);
+  if (entry.amount < 0) await maybeAutoTopUp(ctx, entry.clientId, balance + entry.amount);
   return balance + entry.amount;
 }
 
@@ -102,12 +116,18 @@ export async function chargeVerification(
     .filter((q) => q.eq(q.field("type"), "deduction"))
     .first();
   if (existing || args.amount <= 0) return false;
+  const client = await ctx.db.get(args.clientId);
+  const credits = Math.abs(args.amount);
+  const currency = client?.billingCurrency ?? "USD";
+  const detail = client
+    ? ` — ${credits} credit${credits === 1 ? "" : "s"}, ${formatMoney(creditsToMoney(credits, currency, client.plan), currency)} on ${client.plan}`
+    : "";
   await recordLedgerEntry(ctx, {
     clientId: args.clientId,
     verificationId: args.verificationId,
     type: "deduction",
-    amount: -Math.abs(args.amount),
-    reason: args.reason,
+    amount: -credits,
+    reason: `${args.reason}${detail}`.slice(0, 500),
   });
   return true;
 }

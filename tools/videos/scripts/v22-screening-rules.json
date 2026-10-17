@@ -1,0 +1,164 @@
+{
+  "video": "v22-screening-rules",
+  "title": "Screening rules",
+  "chapter": "a7",
+  "course": "Get started",
+  "order": 22,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Screening rules decide how Sentinel checks your customers: which AML hits count, how often customers are screened again, and what happens to a forged document. Let's walk through them.",
+      "show": [
+        {
+          "card": "Screening rules",
+          "subtitle": "Sentinel by DeepTrack · Get started"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Click Settings, then the Screening rules tab. A new organization starts with Sentinel's standard rules, so nothing changes until you save here.",
+      "show": [
+        {
+          "goto": "/settings"
+        },
+        {
+          "click": "sidebar:Screening rules"
+        }
+      ]
+    },
+    {
+      "id": "threshold",
+      "say": "Under AML matching, the match threshold sets how close a name must be to count as a hit. The default is seventy percent. Raising it cuts false positives, but can miss spelling variants of Kenyan and Somali names.",
+      "show": [
+        {
+          "highlight": "card:AML matching"
+        },
+        {
+          "zoom": "field:Match threshold"
+        }
+      ]
+    },
+    {
+      "id": "pep",
+      "say": "Then tick your high-risk PEP classes, Class 1 and Class 2 by default. A case with a PEP hit in a ticked class opens as high priority, so it gets your shortest deadline.",
+      "show": [
+        {
+          "highlight": "field:Class 1: national / head of state level"
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "say": "False-positive memory is on by default. When a reviewer approves an AML case, its hits are remembered as cleared for that customer, and aren't raised again unless they get more severe. To bring a hit back, an Admin or Reviewer clicks Forget in the list.",
+      "show": [
+        {
+          "scroll": "card:False-positive memory"
+        },
+        {
+          "zoom": "field:Don't raise cleared hits again"
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "say": "With AI hit review on, Sentinel's AI compares the customer with each hit as soon as a case opens, and recommends what to do. It only recommends. Your reviewers decide.",
+      "show": [
+        {
+          "scroll": "card:AI hit review"
+        },
+        {
+          "zoom": "field:Review hits with AI when a case opens"
+        }
+      ]
+    },
+    {
+      "id": "face",
+      "say": "Face match compares the selfie with the ID photo, and never rejects on its own. Searching for the same face among your customers is off by default. It keeps face templates, which are biometric data, so check your privacy notice first.",
+      "show": [
+        {
+          "scroll": "card:Face match"
+        },
+        {
+          "highlight": "card:Face match"
+        }
+      ]
+    },
+    {
+      "id": "network",
+      "say": "The fraud network compares ID numbers, phone numbers and emails across your checks. Turn on Join the Sentinel network to compare them with other organizations too. Only keyed fingerprints are compared, never the numbers themselves.",
+      "show": [
+        {
+          "scroll": "card:Fraud network"
+        },
+        {
+          "zoom": "field:Join the Sentinel network"
+        }
+      ]
+    },
+    {
+      "id": "risk",
+      "say": "Next, set how often customers are reviewed by risk rating: every 12, 24 or 36 months by default. Below that are your transaction monitoring thresholds, in US dollars.",
+      "show": [
+        {
+          "scroll": "card:Customer risk rating and periodic review"
+        },
+        {
+          "highlight": "card:Transaction monitoring"
+        }
+      ]
+    },
+    {
+      "id": "monitoring",
+      "say": "Choose how often monitored customers are re-screened: daily, weekly or monthly. Then, under Documents, choose whether an AI-generated document is rejected automatically, or sent to your team for review.",
+      "show": [
+        {
+          "zoom": "field:Re-screen frequency"
+        },
+        {
+          "zoom": "field:AI-generated document"
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "say": "When you're happy, click Save changes. New rules apply from that moment, and past results keep their verdict. Each save is recorded in the audit log.",
+      "show": [
+        {
+          "highlight": "button:Save changes"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "Those are your screening rules. To learn more, open chapter A7 in Help, Screening rules.",
+      "show": [
+        {
+          "card": "Help → A7 Screening rules",
+          "subtitle": "sentinel.deeptrack.io/help/a7"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "record.mjs builds card targets with new RegExp, so headings with brackets don't match. 'card:Documents (IDP)' would fail, so the documents step zooms field:AI-generated document instead.",
+    "The Help chapter calls the section 'Face match and duplicate faces'; the page heading is 'Face match', which is what the script targets.",
+    "field:Class 1: national / head of state level points at the first PEP class checkbox (the 'High-risk PEP classes' label isn't linked to an input). It is only highlighted.",
+    "Zooms on toggles target the checkbox through its label, so the zoomed area may be small."
+  ]
+}

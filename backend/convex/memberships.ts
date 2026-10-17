@@ -8,6 +8,7 @@ const MAX_MEMBERS_LISTED = 500;
 const clientRole = v.union(
   v.literal("client_admin"),
   v.literal("compliance_analyst"),
+  v.literal("reviewer"),
   v.literal("developer"),
   v.literal("viewer"),
 );

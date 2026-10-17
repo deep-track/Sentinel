@@ -4,6 +4,10 @@ import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { orchestrateIdpVerification } from "./lib/riskEngine";
+import { faceMatchReview } from "./lib/faceMatch";
+import type { FaceMatchStep } from "./faceMatchNode";
+
+const internalApi: any = internal;
 
 // Risk policy: without a liveness capture nothing proves the presenter is the
 // person on the document, so an otherwise clean result is held for manual
@@ -95,6 +99,29 @@ async function runOrchestration(ctx: ActionCtx, args: ProcessArgs) {
   let verdict = result.verdict;
   let reviewTrigger = result.reviewTrigger;
   let reason = result.reason;
+
+  // Face match (faceMatchNode.ts): the selfie or liveness photo against the
+  // ID photo, and the same face under another identity. Holds a pass for
+  // review; never rejects.
+  if (verdict !== "reject") {
+    const faceMatch: FaceMatchStep = await ctx.runAction(internalApi.faceMatchNode.run, {
+      verificationId: args.verificationId,
+      clientId: args.clientId,
+      selfieBase64: args.selfieBase64,
+      livenessFramesBase64: args.livenessMediaType === "jpeg_frames" ? args.livenessFramesBase64 : undefined,
+      documentFrontBase64: args.documentFrontBase64,
+      idNumber: args.idNumber,
+      name: `${args.firstName} ${args.lastName}`,
+    });
+    stepResults.faceMatch = faceMatch;
+    const note =
+      "error" in faceMatch ? "Face match: the face comparison service was unavailable." : faceMatch.status === "completed" ? faceMatchReview(faceMatch) : null;
+    if (note) {
+      if (verdict === "pass") reason = note;
+      verdict = "review";
+      reviewTrigger = { triggerType: "auto_escalation", triggerReason: reviewTrigger ? `${reviewTrigger.triggerReason} ${note}` : note };
+    }
+  }
   if (verdict === "pass" && !livenessCollected && REQUIRE_LIVENESS_FOR_AUTO_PASS) {
     verdict = "review";
     reason = "Liveness was not collected — held for manual review.";

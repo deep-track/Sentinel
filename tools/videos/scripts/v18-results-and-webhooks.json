@@ -1,0 +1,175 @@
+{
+  "video": "v18-results-and-webhooks",
+  "title": "Results and webhooks",
+  "chapter": "c6",
+  "course": "Developer quick start",
+  "order": 18,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Every check you start over the API returns an id. In this video, you'll fetch results and credits with it, and set up webhooks so Sentinel tells you the moment a check finishes.",
+      "show": [
+        {
+          "card": "Results and webhooks",
+          "subtitle": "Sentinel by DeepTrack · Developer quick start"
+        }
+      ]
+    },
+    {
+      "id": "fetch",
+      "say": "To fetch one result, call get slash v1 slash verify with the id. If the status is queued or processing, wait and try again. When it's completed, read the verdict. When it's failed, read the failure reason.",
+      "show": [
+        {
+          "card": "GET /v1/verify/{id}",
+          "subtitle": "queued → processing → completed or failed"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "say": "To list your checks, call get slash v1 slash verify, filtered by status or type. Results come newest first. Keep passing next cursor back until it's null.",
+      "show": [
+        {
+          "goto": "/help/c6"
+        },
+        {
+          "scroll": "case:When you filter by"
+        },
+        {
+          "highlight": "case:When you filter by"
+        }
+      ]
+    },
+    {
+      "id": "credits",
+      "say": "Get slash v1 slash credits returns your balance, what it's worth, and the price of each check on your plan. The ledger lists every credit added or used. These calls are free.",
+      "show": [
+        {
+          "scroll": "case:\"creditPrice\": 40"
+        },
+        {
+          "highlight": "case:\"creditPrice\": 40"
+        }
+      ]
+    },
+    {
+      "id": "ledger",
+      "say": "Your finance team sees the same ledger, with each line's value, under Billing and Credits.",
+      "show": [
+        {
+          "click": "sidebar:Billing & Credits"
+        },
+        {
+          "scroll": "case:Credit history"
+        },
+        {
+          "highlight": "case:Credit history"
+        }
+      ]
+    },
+    {
+      "id": "webhooks",
+      "say": "Polling works, but webhooks are better. Click Webhooks, under Developer. You can have up to five endpoints, for example one for production and one for staging.",
+      "show": [
+        {
+          "click": "sidebar:Webhooks"
+        },
+        {
+          "highlight": "card:Webhook endpoints"
+        }
+      ]
+    },
+    {
+      "id": "add",
+      "say": "Click Add endpoint, and enter a public HTTPS address. Tick the events you want, choose the products, and choose whether it gets live checks, test checks, or both. The signing secret is shown once, so store it safely.",
+      "show": [
+        {
+          "highlight": "button:Add endpoint"
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "say": "Sentinel sends a signed message when a check completes or fails, when monitoring finds a new hit, when a person decides a review case, and when your credits run low.",
+      "show": [
+        {
+          "card": "Webhook events",
+          "subtitle": "scan.complete · monitoring.alert · review.decided · credits.low"
+        }
+      ]
+    },
+    {
+      "id": "verify",
+      "say": "Always check the signature. It's an HMAC of the timestamp and the raw body, keyed with your secret. Reject anything older than five minutes, and reply with a 2xx within ten seconds. Do slow work afterwards.",
+      "show": [
+        {
+          "scroll": "card:Verifying deliveries"
+        },
+        {
+          "click": "button:Python"
+        },
+        {
+          "zoom": "card:Verifying deliveries"
+        }
+      ]
+    },
+    {
+      "id": "deliveries",
+      "say": "Every delivery is logged here. Filter by status to find failures. A failed delivery is retried six more times over about a day, and you can resend it whenever you like.",
+      "show": [
+        {
+          "scroll": "card:Deliveries"
+        },
+        {
+          "select": "field:Status",
+          "option": "failed"
+        }
+      ]
+    },
+    {
+      "id": "test-rotate",
+      "say": "Use Send test to check your receiver. To change the secret without a gap, click Rotate secret. For 24 hours, deliveries carry both signatures, so deploy the new secret first.",
+      "show": [
+        {
+          "highlight": "button:Send test"
+        },
+        {
+          "highlight": "button:Rotate secret"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's results, credits and webhooks. To learn more, open chapters C6 and C7 in Help.",
+      "show": [
+        {
+          "card": "Help → C6 Results and credits · C7 Webhooks",
+          "subtitle": "sentinel.deeptrack.io/help/c6 · sentinel.deeptrack.io/help/c7"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Add endpoint, Send test and Rotate secret are only highlighted, never clicked. The add-endpoint dialog is therefore not shown on screen; the narration describes its fields.",
+    "Send test and Rotate secret exist only if Demo Bank Ltd already has a webhook endpoint (the demo seed doesn't create one, as far as I can see). If none exists, those highlights are skipped with a warning, and the Deliveries list may be empty.",
+    "Scene 'verify' clicks the 'Python' language tab in the 'Verifying deliveries' card (read-only), then zooms the card.",
+    "Scene 'deliveries' sets the Status filter to 'failed' (a view filter only). field:Status relies on getByLabel('Status') matching the select's aria-label first.",
+    "Billing page section titles are <p>, not headings, so they are targeted with case:<text>.",
+    "Help chapters C6 and C7 are both covered; 'chapter' is set to c6."
+  ]
+}

@@ -2,24 +2,30 @@ import { ConvexError } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { assertCredits } from "./credits";
+import { priceCredits } from "./pricing";
 
 export type VerificationType = Doc<"verifications">["type"];
 
-export function creditsForType(type: VerificationType): number {
-  switch (type) {
-    case "idp": return 1;
-    case "kyi": return 1;
-    case "kyb": return 3;
-    case "aml": return 1;
-    case "liveness": return 1;
-  }
+// Credits (US cents) a new check costs, at the client's current plan price
+// (lib/pricing.ts). Called when the check is created; the amount is stored on
+// the verification (creditsUsed) and charged when it completes, so a later
+// plan change never reprices a check already submitted.
+export async function creditsForVerification(
+  ctx: { db: MutationCtx["db"] },
+  clientId: Id<"clients">,
+  type: VerificationType,
+  documentKind?: "identity" | "proof_of_address" | "kra_pin",
+): Promise<number> {
+  const client = await ctx.db.get(clientId);
+  return priceCredits(client?.plan ?? "starter", client?.billingCurrency ?? "USD", type, documentKind);
 }
 
 // Human-readable label used in ledger reasons and audit metadata.
 export function verificationTypeLabel(type: VerificationType): string {
   switch (type) {
-    case "idp": return "IDP verification";
+    case "idp": return "KYC identity verification";
     case "kyi": return "KYI verification";
+    case "document": return "IDP document verification";
     case "kyb": return "KYB verification";
     case "aml": return "AML sanctions screening";
     case "liveness": return "Liveness check";

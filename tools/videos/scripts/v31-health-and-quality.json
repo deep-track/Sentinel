@@ -1,0 +1,183 @@
+{
+  "video": "v31-health-and-quality",
+  "title": "Platform health and quality",
+  "chapter": "d7",
+  "course": "Back Office",
+  "order": 31,
+  "internal": true,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Three Back Office screens tell you whether Sentinel is working, and whether its results can be trusted. Use them at the start of an on-call shift, after a deploy, and when a client reports slow or odd results.",
+      "show": [
+        {
+          "card": "Platform health and quality",
+          "subtitle": "Sentinel by DeepTrack · Back Office"
+        }
+      ]
+    },
+    {
+      "id": "service-health",
+      "say": "Under Back office, click Service health. Read the status at the top right. All services up, configuration complete, means nothing needs you.",
+      "show": [
+        {
+          "goto": "/internal-ops/overview"
+        },
+        {
+          "click": "sidebar:Service health"
+        },
+        {
+          "zoom": "heading:Service health"
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "say": "External services lists DeepTrack Live, OpenSanctions and the scanning service, with status, uptime and response time. Sentinel probes them every fifteen minutes. After a fix, an internal admin can click Run checks now instead of waiting.",
+      "show": [
+        {
+          "highlight": "card:External services"
+        },
+        {
+          "highlight": "button:Run checks now"
+        }
+      ]
+    },
+    {
+      "id": "configuration",
+      "say": "Configuration shows whether each setting is present, never its value. A red Missing badge on a required setting needs engineering on-call. Never paste a key or token into a ticket or chat.",
+      "show": [
+        {
+          "scroll": "card:Configuration"
+        },
+        {
+          "zoom": "card:Configuration"
+        }
+      ]
+    },
+    {
+      "id": "watchlists",
+      "say": "In Watchlists, each list shows its records, when it last refreshed, and its status. After seven forty-five in the morning, every list should be current. A stale or missing list holds AML screenings for manual review.",
+      "show": [
+        {
+          "scroll": "card:Watchlists"
+        },
+        {
+          "highlight": "card:Watchlists"
+        },
+        {
+          "highlight": "text:Held by outages"
+        }
+      ]
+    },
+    {
+      "id": "traffic",
+      "say": "Failed scan steps names the service behind each failure. Speed and failures by type gives each check's volume, failure rate, median and p95 time. Raise anything worse than last week.",
+      "show": [
+        {
+          "highlight": "card:Failed scan steps"
+        },
+        {
+          "highlight": "card:Speed and failures by type"
+        }
+      ]
+    },
+    {
+      "id": "webhooks",
+      "say": "Client webhooks shows deliveries that failed, with the client's last response. Fix the cause with the client first, such as a wrong address or an expired certificate. Then click Resend.",
+      "show": [
+        {
+          "scroll": "card:Client webhooks"
+        },
+        {
+          "highlight": "card:Client webhooks"
+        }
+      ]
+    },
+    {
+      "id": "monitor",
+      "say": "Next, under Reviews, click Screening monitor. It covers AML screening over the last seven days. Check that screening failures is zero, and that high priority items are being worked.",
+      "show": [
+        {
+          "click": "sidebar:Screening monitor"
+        },
+        {
+          "zoom": "heading:AML Screening Monitor"
+        },
+        {
+          "highlight": "text:Screening failures"
+        }
+      ]
+    },
+    {
+      "id": "outcomes",
+      "say": "Screening outcomes splits screenings into pass, review and reject. Recent screening audit events shows each failure with its reason. Times here may be in UTC, three hours behind Nairobi.",
+      "show": [
+        {
+          "highlight": "card:Screening outcomes"
+        },
+        {
+          "scroll": "card:Recent screening audit events"
+        }
+      ]
+    },
+    {
+      "id": "quality",
+      "say": "Finally, under Risk and compliance, click Model and data quality. The tiles cover DeepTrack Live, the face and deepfake check, this month: how many checks were judged fake, service errors, and how many reviewers overturned.",
+      "show": [
+        {
+          "click": "sidebar:Model & data quality"
+        },
+        {
+          "highlight": "text:Judged fake"
+        },
+        {
+          "highlight": "text:Overturned by reviewers"
+        }
+      ]
+    },
+    {
+      "id": "by-month",
+      "say": "DeepTrack Live by month shows six months of selfie and video results. Compare them with the month before, and share them with the DeepTrack Live team. Watchlist freshness shows each list's record count and its last runs.",
+      "show": [
+        {
+          "zoom": "card:DeepTrack Live by month"
+        },
+        {
+          "scroll": "card:Watchlist freshness"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's platform health and quality. To learn more, open chapter D7 in the Runbook.",
+      "show": [
+        {
+          "card": "Runbook → D7 Platform health and quality",
+          "subtitle": "sentinel.deeptrack.io/internal-ops/help/d7"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Run checks now and Resend are never clicked. Run checks now only renders for internal admins without view-only; Resend is not targeted at all (one button per row, and rows name clients).",
+    "Slowest clients and Client webhooks list other clients. Slowest clients is skipped; Client webhooks is highlighted only, never zoomed. If it shows other clients prominently, consider replacing that scene's show with a title card.",
+    "The Screening monitor page uses shadcn Card (rounded-xl), so card:Screening outcomes and text:Screening failures should find a rounded box. Its Recent screening audit events table may show client targets; it is only scrolled to, not zoomed.",
+    "card:Watchlists relies on the first heading starting with 'Watchlists'; on Service health that is the Watchlists panel (the 'Watchlist gaps' tile is not a heading)."
+  ]
+}

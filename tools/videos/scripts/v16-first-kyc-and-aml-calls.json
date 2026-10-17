@@ -1,0 +1,187 @@
+{
+  "video": "v16-first-kyc-and-aml-calls",
+  "title": "Your first KYC and AML calls",
+  "chapter": "c2",
+  "course": "Developer quick start",
+  "order": 16,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "In this video, you'll send two calls from your own onboarding app: a full KYC identity check, and an AML screening that can also enrol the customer for ongoing monitoring.",
+      "show": [
+        {
+          "card": "Your first KYC and AML calls",
+          "subtitle": "Sentinel by DeepTrack · Developer quick start"
+        }
+      ]
+    },
+    {
+      "id": "scopes",
+      "say": "First, check your key's scopes. A KYC check needs Run KYC identity checks. An AML screening needs Run AML screenings, and the monitoring calls need Manage AML monitoring.",
+      "show": [
+        {
+          "goto": "/api-keys"
+        },
+        {
+          "click": "button:New key"
+        },
+        {
+          "click": "field:Everything"
+        },
+        {
+          "highlight": "field:Run KYC identity checks"
+        },
+        {
+          "highlight": "field:Manage AML monitoring"
+        },
+        {
+          "click": "button:Cancel"
+        }
+      ]
+    },
+    {
+      "id": "kyc-card",
+      "say": "A KYC check is one call. You send the ID image, a liveness capture, and the customer's ID number, names, date of birth and gender.",
+      "show": [
+        {
+          "card": "POST /v1/verify/idp",
+          "subtitle": "ID image + liveness capture + customer details"
+        }
+      ]
+    },
+    {
+      "id": "media",
+      "say": "Encode each file as plain base64. Each one can be up to about 730 kilobytes. Send JPEG frames for liveness where you can, because face match compares the first frame with the ID photo.",
+      "show": [
+        {
+          "goto": "/help/c2"
+        },
+        {
+          "scroll": "case:Prepare the media"
+        },
+        {
+          "highlight": "case:Prepare the media"
+        }
+      ]
+    },
+    {
+      "id": "kyc-send",
+      "say": "Here is the request. A live key returns 202 with status queued. Keep the id. The result arrives by webhook, or you can fetch it later.",
+      "show": [
+        {
+          "scroll": "case:\"livenessMediaType\": \"jpeg_frames\""
+        },
+        {
+          "highlight": "case:\"livenessMediaType\": \"jpeg_frames\""
+        }
+      ]
+    },
+    {
+      "id": "kyc-verdicts",
+      "say": "The verdict is pass, review or reject. Review means a step was unclear, and a case opens for your team. Because the API always takes a liveness capture, it's the only kind of KYC check that can be approved automatically.",
+      "show": [
+        {
+          "scroll": "case:Document, liveness, IPRS and AML all clear"
+        },
+        {
+          "highlight": "case:Document, liveness, IPRS and AML all clear"
+        }
+      ]
+    },
+    {
+      "id": "aml-card",
+      "say": "Now an AML screening. Only the name and entity type are required. Add a date of birth or ID number when you have one, so you get fewer look-alikes to review.",
+      "show": [
+        {
+          "card": "POST /v1/verify/aml",
+          "subtitle": "subjectName + entityType · add dateOfBirth and idNumber"
+        }
+      ]
+    },
+    {
+      "id": "aml-send",
+      "say": "Here, Wanjiku Kamau is screened against sanctions lists, PEP data, Kenyan risk lists and adverse media.",
+      "show": [
+        {
+          "goto": "/help/c4"
+        },
+        {
+          "scroll": "case:\"subjectName\": \"Wanjiku Kamau\""
+        },
+        {
+          "highlight": "case:\"subjectName\": \"Wanjiku Kamau\""
+        }
+      ]
+    },
+    {
+      "id": "monitor",
+      "say": "To keep watching a customer, set monitor to true and pass your own customer id as externalRef. Store the monitoring id you get back. Screen the same customer again and you get the same id, not a second subject.",
+      "show": [
+        {
+          "scroll": "case:\"monitor\": true"
+        },
+        {
+          "highlight": "case:\"monitor\": true"
+        }
+      ]
+    },
+    {
+      "id": "aml-result",
+      "say": "When the screening completes, pass shows as Clear, review as Needs review, and reject as Match. The screening object explains the reason and lists every hit.",
+      "show": [
+        {
+          "scroll": "case:Needs review"
+        },
+        {
+          "highlight": "case:Needs review"
+        }
+      ]
+    },
+    {
+      "id": "monitored",
+      "say": "Subjects you enrol through the API appear under Monitored subjects on the AML Screening page. When the relationship ends, delete the subject through the API to stop monitoring.",
+      "show": [
+        {
+          "click": "sidebar:AML Screening"
+        },
+        {
+          "scroll": "case:Monitored subjects"
+        },
+        {
+          "highlight": "case:Monitored subjects"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's KYC and AML from your own code. To learn more, open chapters C2 and C4 in Help.",
+      "show": [
+        {
+          "card": "Help → C2 KYC API · C4 AML and monitoring API",
+          "subtitle": "sentinel.deeptrack.io/help/c2 · sentinel.deeptrack.io/help/c4"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Scene 'scopes' opens the New API key dialog, unticks Everything to reveal the scope list, then clicks Cancel. Nothing is created. Needs an Admin or Developer sign-in.",
+    "Help targets use case:<text> (getByText fallback) because card:<heading> would ring the whole Help article. Texts were chosen so their first match on the page is the code line or table cell intended; case:Needs review on /help/c4 relies on the bold table cell being the first 'needs review' on that page (I checked the Markdown, not the rendered page).",
+    "Scene 'monitored' highlights the 'Monitored subjects' panel title on /aml-check (a <p>, not a heading), so the ring is on the title line only.",
+    "Help chapters C2 and C4 are both covered; 'chapter' is set to c2."
+  ]
+}

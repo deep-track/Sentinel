@@ -1,5 +1,13 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  dataSettingsValidator,
+  notificationSettingsValidator,
+  profileSettingsValidator,
+  reviewSettingsValidator,
+  screeningSettingsValidator,
+  securitySettingsValidator,
+} from "./lib/clientSettings";
 
 export default defineSchema({
   clientMembers: defineTable({
@@ -8,16 +16,114 @@ export default defineSchema({
     role: v.union(
       v.literal("client_admin"),
       v.literal("compliance_analyst"),
+      v.literal("reviewer"),
       v.literal("developer"),
       v.literal("viewer"),
     ),
     isActive: v.boolean(),
     invitedBy: v.optional(v.string()),
+    // Review queues this member is assigned cases from by round-robin
+    // (lib/clientSettings.ts QUEUES). Absent or empty = every queue.
+    queues: v.optional(v.array(v.string())),
+    deactivatedAt: v.optional(v.number()),
+    deactivatedBy: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_client", ["clientId"])
     .index("by_user", ["userId"])
     .index("by_client_and_user", ["clientId", "userId"]),
+
+  // Pending team invitations (team.ts). The invitee becomes a member the
+  // first time they sign in with this verified email (team.acceptMyInvites).
+  // The Auth0 invitation email is sent by the portal's server action
+  // (app/(platform)/settings/team/actions.ts).
+  teamInvites: defineTable({
+    clientId: v.id("clients"),
+    email: v.string(), // lower-cased
+    role: v.union(
+      v.literal("client_admin"),
+      v.literal("compliance_analyst"),
+      v.literal("reviewer"),
+      v.literal("developer"),
+      v.literal("viewer"),
+    ),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("revoked")),
+    invitedBy: v.string(),
+    invitedByName: v.optional(v.string()),
+    auth0InvitationId: v.optional(v.string()),
+    emailStatus: v.optional(v.union(v.literal("sent"), v.literal("failed"))),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+    acceptedBy: v.optional(v.string()),
+    revokedAt: v.optional(v.number()),
+    revokedBy: v.optional(v.string()),
+  })
+    .index("by_client_and_status", ["clientId", "status"])
+    .index("by_email_and_status", ["email", "status"]),
+
+  // A client's own settings (lib/clientSettings.ts): one row per client,
+  // one optional object per Settings section.
+  clientSettings: defineTable({
+    clientId: v.id("clients"),
+    review: v.optional(reviewSettingsValidator),
+    screening: v.optional(screeningSettingsValidator),
+    notifications: v.optional(notificationSettingsValidator),
+    security: v.optional(securitySettingsValidator),
+    data: v.optional(dataSettingsValidator),
+    profile: v.optional(profileSettingsValidator),
+    // Single sign-on (sso.ts): the client's Auth0 enterprise connection.
+    // Secrets live only in Auth0, never here.
+    sso: v.optional(
+      v.object({
+        status: v.union(v.literal("pending"), v.literal("connected")),
+        provider: v.union(v.literal("entra_id"), v.literal("google_workspace"), v.literal("saml"), v.literal("oidc")),
+        connectionName: v.string(),
+        connectionId: v.optional(v.string()),
+        domains: v.array(v.string()),
+        // Members at these domains must sign in through the connection.
+        enforce: v.boolean(),
+        // Role given to someone who signs in through SSO without an invite
+        // (absent = they need an invite).
+        jitRole: v.optional(v.union(v.literal("compliance_analyst"), v.literal("reviewer"), v.literal("developer"), v.literal("viewer"))),
+        connectedAt: v.optional(v.number()),
+        connectedBy: v.optional(v.string()),
+      }),
+    ),
+    // sso.connectionName when connected, for finding the client on sign-in.
+    ssoConnectionName: v.optional(v.string()),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_sso_connection", ["ssoConnectionName"]),
+
+  // In-app notifications per user (notifications.ts); emailed too when the
+  // event's settings ask for it and email is configured.
+  notifications: defineTable({
+    clientId: v.id("clients"),
+    userId: v.string(),
+    event: v.string(),
+    title: v.string(),
+    body: v.string(),
+    link: v.optional(v.string()),
+    readAt: v.optional(v.number()),
+    emailStatus: v.optional(v.union(v.literal("queued"), v.literal("sent"), v.literal("skipped"), v.literal("failed"))),
+    createdAt: v.number(),
+  })
+    .index("by_user_and_created_at", ["userId", "createdAt"])
+    .index("by_user_and_read_at", ["userId", "readAt"]),
+
+  // Display name and email per Auth0 user id, written by each user for
+  // themselves on sign-in (userProfiles.recordMine).
+  userProfiles: defineTable({
+    userId: v.string(),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    updatedAt: v.number(),
+    // Last time the user opened the portal (written at most hourly).
+    lastSeenAt: v.optional(v.number()),
+  }).index("by_user_id", ["userId"]),
 
   clients: defineTable({
     name: v.string(),
@@ -25,6 +131,7 @@ export default defineSchema({
       v.literal("trial"),
       v.literal("starter"),
       v.literal("growth"),
+      v.literal("business"),
       v.literal("enterprise"),
     ),
     status: v.union(
@@ -40,8 +147,45 @@ export default defineSchema({
     creditThresholdPct: v.number(), // alert fires when credits are low
     webhookUrl: v.optional(v.string()),
     webhookSecret: v.optional(v.string()), //verify a webhook 
+    // Currency the client is billed and shown amounts in (lib/pricing.ts).
+    // Absent = USD. The ledger is always in credits = US cents.
+    billingCurrency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
+    // Webhook events the client receives (absent = all of them).
+    webhookEvents: v.optional(v.array(v.string())),
+    // Most active members plus pending invites; set by DeepTrack. Absent = no limit.
+    seatLimit: v.optional(v.number()),
+    // When the low-credit notification last went out; cleared once the
+    // balance is topped up above the warning level again.
+    lowCreditNotifiedAt: v.optional(v.number()),
+    // Self-service trials (signups.ts): when the trial ends, who started it
+    // and their email domain (one trial per company domain).
+    trialEndsAt: v.optional(v.number()),
+    signupSource: v.optional(v.literal("self_service")),
+    signupOwner: v.optional(v.string()),
+    signupDomain: v.optional(v.string()),
+    // The invented "Demo Bank Ltd" (demoSeed.ts) for the manual and videos.
+    isDemo: v.optional(v.boolean()),
     createdAt: v.number(),
-  }),
+  })
+    .index("by_signup_owner", ["signupOwner"])
+    .index("by_signup_domain", ["signupDomain"])
+    .index("by_plan_and_status", ["plan", "status"]),
+
+  // Sign-up requests from the public /signup page, before the person has an
+  // account: the Auth0 invitation is sent to this email, and the trial form
+  // is filled in from it after they sign in.
+  signupRequests: defineTable({
+    email: v.string(), // lower-cased
+    name: v.string(),
+    company: v.string(),
+    country: v.string(),
+    status: v.union(v.literal("pending"), v.literal("invited"), v.literal("completed")),
+    createdAt: v.number(),
+    invitedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_email", ["email"])
+    .index("by_created_at", ["createdAt"]),
 
   apiKeys: defineTable({
     clientId: v.id("clients"),
@@ -51,6 +195,16 @@ export default defineSchema({
     revoked: v.boolean(),
     createdAt: v.number(),
     lastUsedAt: v.optional(v.number()),
+    // Display name chosen by the client.
+    label: v.optional(v.string()),
+    // API scopes (apiKeys.ts API_SCOPES). Absent = every scope (keys created
+    // before scopes existed).
+    scopes: v.optional(v.array(v.string())),
+    // A rotated key keeps working until this time, so the client can deploy
+    // the new key first.
+    expiresAt: v.optional(v.number()),
+    rotatedTo: v.optional(v.id("apiKeys")),
+    createdBy: v.optional(v.string()),
   })
     .index("by_prefix", ["prefix"])
     .index("by_client", ["clientId"]),
@@ -62,7 +216,8 @@ export default defineSchema({
       v.literal("kyb"),
       v.literal("aml"),
       v.literal("liveness"),
-      v.literal("kyi"),
+      v.literal("kyi"), // retired: existing records are read-only
+      v.literal("document"), // IDP: identity document or proof of address
     ),
     status: v.union(
       v.literal("queued"),
@@ -81,6 +236,10 @@ export default defineSchema({
     failureReason: v.optional(v.string()),
     disputeReason: v.optional(v.string()), // client-initiated dispute
     disputedAt: v.optional(v.number()),
+    // Personal data removed after the retention period (retention.ts); the
+    // row stays as a minimal record (reference, type, verdict, dates).
+    purgedAt: v.optional(v.number()),
+    retentionPurgeId: v.optional(v.id("retentionPurges")),
     createdAt: v.number(),
     updatedAt: v.number(),
     completedAt: v.optional(v.number()),
@@ -93,6 +252,91 @@ export default defineSchema({
     .index("by_client_and_created_at", ["clientId", "createdAt"])
     .index("by_client_and_type_and_created_at", ["clientId", "type", "createdAt"])
     .index("by_type_and_created_at", ["type", "createdAt"]),
+
+  // Transaction monitoring (transactions.ts): clients' customer
+  // transactions, the alerts the rules raise, and counterparty screenings.
+  transactions: defineTable({
+    clientId: v.id("clients"),
+    externalId: v.string(),
+    customerRef: v.string(),
+    occurredAt: v.number(),
+    amount: v.number(),
+    currency: v.union(v.literal("KES"), v.literal("USD")),
+    amountUsd: v.number(),
+    direction: v.union(v.literal("in"), v.literal("out")),
+    channel: v.union(v.literal("mpesa"), v.literal("cash"), v.literal("bank_transfer"), v.literal("rtgs"), v.literal("swift"), v.literal("card"), v.literal("cheque"), v.literal("other")),
+    counterpartyName: v.optional(v.string()),
+    counterpartyKey: v.optional(v.string()),
+    counterpartyCountry: v.optional(v.string()),
+    counterpartyAccount: v.optional(v.string()),
+    narration: v.optional(v.string()),
+    source: v.union(v.literal("api"), v.literal("upload")),
+    createdAt: v.number(),
+  })
+    .index("by_client_and_external", ["clientId", "externalId"])
+    .index("by_client_customer_time", ["clientId", "customerRef", "occurredAt"])
+    .index("by_client_counterparty", ["clientId", "counterpartyKey"])
+    .index("by_client_and_occurred_at", ["clientId", "occurredAt"]),
+
+  transactionAlerts: defineTable({
+    clientId: v.id("clients"),
+    customerRef: v.string(),
+    rule: v.union(v.literal("large_cash"), v.literal("structuring"), v.literal("velocity"), v.literal("high_risk_country"), v.literal("pass_through"), v.literal("dormant_reactivated"), v.literal("sanctioned_counterparty")),
+    severity: v.union(v.literal("high"), v.literal("medium")),
+    status: v.union(v.literal("open"), v.literal("closed"), v.literal("escalated")),
+    summary: v.string(),
+    transactionIds: v.array(v.id("transactions")),
+    key: v.string(),
+    createdAt: v.number(),
+    decidedAt: v.optional(v.number()),
+    decidedBy: v.optional(v.string()),
+    decisionNotes: v.optional(v.string()),
+  })
+    .index("by_client_and_status", ["clientId", "status"])
+    .index("by_client_customer_key", ["clientId", "customerRef", "key"])
+    .index("by_client_and_created_at", ["clientId", "createdAt"]),
+
+  counterpartyScreenings: defineTable({
+    clientId: v.id("clients"),
+    key: v.string(),
+    name: v.string(),
+    verdict: v.union(v.literal("pass"), v.literal("review"), v.literal("reject")),
+    reason: v.string(),
+    screenedAt: v.number(),
+  })
+    .index("by_client_and_key", ["clientId", "key"])
+    .index("by_client_and_screened_at", ["clientId", "screenedAt"]),
+
+  // Kenya capture links (capture.ts): the customer completes KYC on their
+  // phone. Only the token's SHA-256 is kept.
+  captureSessions: defineTable({
+    clientId: v.id("clients"),
+    tokenHash: v.string(),
+    status: v.union(v.literal("pending"), v.literal("opened"), v.literal("submitted"), v.literal("expired"), v.literal("cancelled")),
+    method: v.union(v.literal("sms"), v.literal("whatsapp"), v.literal("link")),
+    contact: v.optional(v.string()),
+    language: v.union(v.literal("en"), v.literal("sw")),
+    prefill: v.object({
+      firstName: v.optional(v.string()),
+      lastName: v.optional(v.string()),
+      idNumber: v.optional(v.string()),
+      dateOfBirth: v.optional(v.string()),
+      gender: v.optional(v.string()),
+    }),
+    externalRef: v.optional(v.string()),
+    deliveryStatus: v.union(v.literal("not_sent"), v.literal("pending"), v.literal("sent"), v.literal("failed")),
+    providerMessageId: v.optional(v.string()),
+    deliveryFailure: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    openedAt: v.optional(v.number()),
+    submittedAt: v.optional(v.number()),
+    verificationId: v.optional(v.id("verifications")),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_status_and_expires", ["status", "expiresAt"]),
 
   livenessRequests: defineTable({
     clientId: v.id("clients"),
@@ -118,6 +362,157 @@ export default defineSchema({
     .index("by_verification", ["verificationId"])
     .index("by_provider_message", ["providerMessageId"])
     .index("by_link_token_hash", ["linkTokenHash"]),
+  // Back Office: data subject requests (Kenya Data Protection Act) tracked by
+  // the compliance team. `subject` should be a verification reference, not
+  // the person's details.
+  dataRequests: defineTable({
+    requestType: v.union(v.literal("access"), v.literal("erasure"), v.literal("rectification"), v.literal("objection")),
+    subject: v.string(),
+    clientId: v.optional(v.id("clients")),
+    status: v.union(v.literal("open"), v.literal("in_progress"), v.literal("completed"), v.literal("rejected")),
+    receivedAt: v.number(),
+    dueAt: v.number(),
+    notes: v.optional(v.string()),
+    createdBy: v.string(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_status_and_due", ["status", "dueAt"])
+    .index("by_received_at", ["receivedAt"]),
+
+  // Back Office client health: one row per 4xx/5xx an authenticated API
+  // client received (kept 30 days). No request bodies or personal data.
+  apiErrors: defineTable({
+    clientId: v.id("clients"),
+    apiKeyId: v.id("apiKeys"),
+    environment: v.union(v.literal("live"), v.literal("test")),
+    route: v.string(),
+    status: v.number(),
+    at: v.number(),
+  })
+    .index("by_client_and_at", ["clientId", "at"])
+    .index("by_at", ["at"]),
+
+  // Back Office pricing: one row (key "default"). Price per credit for each
+  // plan; unset prices make the billing screens show credits only.
+  billingSettings: defineTable({
+    key: v.literal("default"),
+    // Legacy (before plan pricing): a flat price per credit. Unused now that
+    // credits are US cents; kept optional so existing rows still validate.
+    currency: v.optional(v.string()),
+    pricePerCredit: v.optional(v.any()),
+    // USD → KES rate for clients billed in KES (lib/pricing.ts).
+    usdToKes: v.optional(v.number()),
+    // Invoices (billing.ts): DeepTrack's details, VAT and how to pay by
+    // bank transfer or M-Pesa paybill to the bank.
+    seller: v.optional(
+      v.object({
+        name: v.optional(v.string()),
+        address: v.optional(v.string()),
+        kraPin: v.optional(v.string()),
+        email: v.optional(v.string()),
+        vatRatePct: v.optional(v.number()),
+        paymentInstructions: v.optional(v.string()),
+      }),
+    ),
+    // Next invoice number per year: DT-<year>-<0001>.
+    invoiceYear: v.optional(v.number()),
+    invoiceNext: v.optional(v.number()),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_key", ["key"]),
+
+  // Invoices: credit top-ups, plan prepayments and other charges. Paying one
+  // (Paystack, or marked paid by DeepTrack for a bank / M-Pesa transfer)
+  // adds its credits to the ledger once.
+  invoices: defineTable({
+    clientId: v.id("clients"),
+    number: v.string(),
+    kind: v.union(v.literal("top_up"), v.literal("plan"), v.literal("other")),
+    // A plan prepayment: paying it moves the client to this plan.
+    plan: v.optional(v.union(v.literal("starter"), v.literal("growth"), v.literal("business"), v.literal("enterprise"))),
+    status: v.union(v.literal("issued"), v.literal("paid"), v.literal("void")),
+    currency: v.union(v.literal("USD"), v.literal("KES")),
+    lines: v.array(v.object({ description: v.string(), quantity: v.number(), unitPrice: v.number(), amount: v.number() })),
+    subtotal: v.number(),
+    vatRatePct: v.number(),
+    vat: v.number(),
+    total: v.number(),
+    credits: v.number(), // added when paid
+    buyer: v.object({ name: v.string(), address: v.optional(v.string()), kraPin: v.optional(v.string()), email: v.optional(v.string()) }),
+    seller: v.object({ name: v.string(), address: v.optional(v.string()), kraPin: v.optional(v.string()), email: v.optional(v.string()), paymentInstructions: v.optional(v.string()) }),
+    issuedAt: v.number(),
+    dueAt: v.number(),
+    createdBy: v.string(),
+    automatic: v.optional(v.boolean()),
+    paidAt: v.optional(v.number()),
+    paymentMethod: v.optional(v.union(v.literal("paystack"), v.literal("bank_transfer"), v.literal("mpesa"), v.literal("other"))),
+    paymentReference: v.optional(v.string()),
+    markedPaidBy: v.optional(v.string()),
+    voidedAt: v.optional(v.number()),
+    voidedBy: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  })
+    .index("by_client_and_issued_at", ["clientId", "issuedAt"])
+    .index("by_number", ["number"])
+    .index("by_status_and_issued_at", ["status", "issuedAt"]),
+
+  // Paystack transactions for invoices.
+  payments: defineTable({
+    clientId: v.id("clients"),
+    invoiceId: v.id("invoices"),
+    reference: v.string(),
+    status: v.union(v.literal("initialized"), v.literal("success"), v.literal("failed")),
+    amount: v.number(), // subunits (cents)
+    currency: v.union(v.literal("USD"), v.literal("KES")),
+    email: v.string(),
+    saveCard: v.boolean(),
+    automatic: v.boolean(),
+    channel: v.optional(v.string()),
+    failureReason: v.optional(v.string()),
+    initiatedBy: v.string(),
+    createdAt: v.number(),
+    settledAt: v.optional(v.number()),
+  })
+    .index("by_reference", ["reference"])
+    .index("by_invoice", ["invoiceId"])
+    .index("by_status_and_created_at", ["status", "createdAt"]),
+
+  // Per-client billing options: billing email, the saved card (Paystack
+  // authorization, server-side only) and automatic top-up.
+  clientBilling: defineTable({
+    clientId: v.id("clients"),
+    billingEmail: v.optional(v.string()),
+    taxPin: v.optional(v.string()), // the client's KRA PIN, shown on invoices
+    card: v.optional(
+      v.object({
+        authorizationCode: v.string(),
+        email: v.string(),
+        last4: v.optional(v.string()),
+        brand: v.optional(v.string()),
+        expMonth: v.optional(v.string()),
+        expYear: v.optional(v.string()),
+        savedAt: v.number(),
+      }),
+    ),
+    autoTopUp: v.optional(v.object({ enabled: v.boolean(), amount: v.number(), thresholdCredits: v.number() })),
+    lastAutoTopUpAt: v.optional(v.number()),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_client", ["clientId"]),
+
+  // Back Office service health: one row per scheduled probe of an external
+  // dependency (every 15 min, kept 7 days).
+  serviceHealthChecks: defineTable({
+    service: v.union(v.literal("deeptrack_live"), v.literal("opensanctions"), v.literal("internal_api")),
+    ok: v.boolean(),
+    httpStatus: v.optional(v.number()),
+    latencyMs: v.optional(v.number()),
+    error: v.optional(v.string()),
+    checkedAt: v.number(),
+  })
+    .index("by_service_and_checked_at", ["service", "checkedAt"])
+    .index("by_checked_at", ["checkedAt"]),
   creditLedger: defineTable({
     clientId: v.id("clients"),
     verificationId: v.optional(v.id("verifications")),
@@ -129,6 +524,11 @@ export default defineSchema({
     ),
     amount: v.number(), // positive = added, negative = consumed
     reason: v.string(),
+    // Money value of `amount` when the row was written, in the client's
+    // billing currency then (lib/pricing.ts). Absent on rows written before
+    // currency pricing, whose money value is unknown.
+    currency: v.optional(v.union(v.literal("USD"), v.literal("KES"))),
+    value: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_client", ["clientId"])
@@ -136,7 +536,7 @@ export default defineSchema({
     .index("by_verification", ["verificationId"]),
 
   watchlistSources: defineTable({
-    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS")),
     displayName: v.string(),
     sourceUrl: v.string(),
     cadence: v.union(v.literal("daily"), v.literal("weekly")),
@@ -149,7 +549,7 @@ export default defineSchema({
   }).index("by_source_key", ["sourceKey"]),
 
   watchlistVersions: defineTable({
-    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS")),
     sourceUrl: v.string(),
     sourceVersion: v.string(),
     contentHash: v.string(),
@@ -173,7 +573,7 @@ export default defineSchema({
 
   watchlistEntries: defineTable({
     versionId: v.id("watchlistVersions"),
-    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED")),
+    sourceKey: v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS")),
     sourceRecordId: v.string(),
     entityType: v.union(v.literal("individual"), v.literal("entity"), v.literal("unknown")),
     primaryName: v.string(),
@@ -195,8 +595,13 @@ export default defineSchema({
     source: v.union(
       v.literal("OFAC_SDN"),
       v.literal("UN_CONSOLIDATED"),
+      v.literal("EU_FSF"),
+      v.literal("UK_SANCTIONS"),
       v.literal("FBI_MOST_WANTED"),
       v.literal("OPENSANCTIONS"),
+      v.literal("ADVERSE_MEDIA"),
+      v.literal("KE_PEP"),
+      v.literal("KE_RISK_LIST"),
     ),
     program: v.string(),
     matchScore: v.number(), // 0-100
@@ -209,12 +614,29 @@ export default defineSchema({
     externalId: v.optional(v.string()),
     topics: v.optional(v.array(v.string())),
     datasets: v.optional(v.array(v.string())),
+    // AML risk categories of the hit (lib/amlCategories.ts) and, for PEPs,
+    // the Class 1–4 tier. Absent on rows created before categories existed.
+    categories: v.optional(
+      v.array(
+        v.union(
+          v.literal("sanctions"),
+          v.literal("pep"),
+          v.literal("special_interest"),
+          v.literal("fitness_probity"),
+          v.literal("adverse_media"),
+          v.literal("insolvency"),
+        ),
+      ),
+    ),
+    pepClass: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4))),
+    pepStatus: v.optional(v.union(v.literal("current"), v.literal("former"), v.literal("unknown"))),
     matchMethod: v.union(
       v.literal("exact"),
       v.literal("normalized"),
       v.literal("alias"),
       v.literal("fuzzy"),
       v.literal("provider_score"),
+      v.literal("ai_classification"),
     ),
     riskLevel: v.union(v.literal("critical"), v.literal("high")),
     matchedCountry: v.optional(v.string()),
@@ -223,6 +645,96 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_verification", ["verificationId"])
     .index("by_watchlist_entry", ["watchlistEntryId"]),
+
+  // False-positive memory (amlCleared.ts, lib/amlClearedMatches.ts): AML hits
+  // a reviewer cleared for a customer, so they aren't raised again for them
+  // unless they become more severe. "Forget" sets revokedAt (kept for audit).
+  amlClearedMatches: defineTable({
+    clientId: v.id("clients"),
+    subjectKey: v.string(),
+    subjectName: v.string(),
+    matchKey: v.string(),
+    source: v.string(),
+    sourceRecordId: v.string(),
+    entityName: v.string(),
+    categories: v.array(v.string()),
+    pepClass: v.optional(v.number()),
+    riskLevel: v.union(v.literal("critical"), v.literal("high")),
+    verificationId: v.id("verifications"),
+    reviewId: v.id("reviewQueue"),
+    clearedBy: v.string(),
+    clearedByName: v.optional(v.string()),
+    reasonCode: v.optional(v.string()),
+    clearedAt: v.number(),
+    suppressedCount: v.number(),
+    lastSuppressedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    revokedBy: v.optional(v.string()),
+  })
+    .index("by_client_and_subject", ["clientId", "subjectKey"])
+    .index("by_client_and_cleared_at", ["clientId", "clearedAt"]),
+
+  // Ongoing AML monitoring (amlMonitoring.ts, lib/amlMonitoringStore.ts).
+  // Each active subject is re-screened daily; `hits` is the baseline from the
+  // last complete screening, and only new or more severe hits alert.
+  amlMonitoredSubjects: defineTable({
+    clientId: v.id("clients"),
+    reference: v.string(), // client-facing id, "mon_…"
+    status: v.union(v.literal("active"), v.literal("removed")),
+    subjectName: v.string(),
+    entityType: v.union(v.literal("individual"), v.literal("entity")),
+    country: v.optional(v.string()),
+    aliases: v.optional(v.array(v.string())),
+    dateOfBirth: v.optional(v.string()),
+    nationality: v.optional(v.string()),
+    idNumber: v.optional(v.string()),
+    registrationNumber: v.optional(v.string()),
+    jurisdiction: v.optional(v.string()),
+    externalRef: v.optional(v.string()), // the client's own customer id
+    enrolledVerificationId: v.id("verifications"),
+    enrolledBy: v.string(),
+    baselineSet: v.boolean(),
+    hits: v.array(
+      v.object({
+        key: v.string(),
+        source: v.string(),
+        sourceRecordId: v.string(),
+        entityName: v.string(),
+        categories: v.array(
+          v.union(
+            v.literal("sanctions"),
+            v.literal("pep"),
+            v.literal("special_interest"),
+            v.literal("fitness_probity"),
+            v.literal("adverse_media"),
+            v.literal("insolvency"),
+          ),
+        ),
+        pepClass: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4))),
+        riskLevel: v.union(v.literal("critical"), v.literal("high")),
+      }),
+    ),
+    screenCount: v.number(),
+    alertCount: v.number(),
+    lastScreenedAt: v.optional(v.number()),
+    lastAlertAt: v.optional(v.number()),
+    nextScreenAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    removedAt: v.optional(v.number()),
+    // Customer risk rating (lib/riskRating.ts) and the periodic review it sets.
+    riskRating: v.optional(v.any()),
+    nextReviewAt: v.optional(v.number()),
+    lastReviewedAt: v.optional(v.number()),
+    lastReviewedBy: v.optional(v.string()),
+    reviewDueNotifiedAt: v.optional(v.number()),
+  })
+    .index("by_client_and_status", ["clientId", "status", "createdAt"])
+    .index("by_status_and_next_screen", ["status", "nextScreenAt"])
+    .index("by_status_and_next_review", ["status", "nextReviewAt"])
+    .index("by_reference", ["reference"])
+    .index("by_client_and_external_ref", ["clientId", "externalRef"])
+    .index("by_enrolled_verification", ["enrolledVerificationId"]),
 
   reviewQueue: defineTable({
     verificationId: v.id("verifications"),
@@ -240,6 +752,11 @@ export default defineSchema({
       v.literal("resolved"),
     ),
     assignedTo: v.optional(v.string()),
+    // Display names captured when the item was assigned / resolved, so the
+    // Back Office can show people instead of sign-in IDs.
+    assignedToName: v.optional(v.string()),
+    assignedAt: v.optional(v.number()),
+    resolvedByName: v.optional(v.string()),
     resolutionAction: v.optional(
       v.union(
         v.literal("confirm"),
@@ -250,6 +767,42 @@ export default defineSchema({
     resolutionNotes: v.optional(v.string()),
     resolvedBy: v.optional(v.string()),
     escalated: v.optional(v.boolean()),
+    // ── The client team's own review (clientReviews.ts) ──
+    // Category and deadline under the client's rules, set when queued.
+    caseCategory: v.optional(v.string()),
+    queue: v.optional(v.string()),
+    dueAt: v.optional(v.number()),
+    clientAssignedTo: v.optional(v.string()),
+    clientAssignedToName: v.optional(v.string()),
+    clientAssignedAt: v.optional(v.number()),
+    // A first decision waiting for a second person (four-eyes).
+    recommendation: v.optional(
+      v.object({
+        action: v.union(v.literal("approve"), v.literal("reject")),
+        reasonCode: v.optional(v.string()),
+        notes: v.optional(v.string()),
+        by: v.string(),
+        byName: v.optional(v.string()),
+        role: v.string(),
+        at: v.number(),
+      }),
+    ),
+    clientEscalatedAt: v.optional(v.number()),
+    clientEscalatedBy: v.optional(v.string()),
+    overdueNotifiedAt: v.optional(v.number()),
+    // Who made the final decision: the client's team or DeepTrack.
+    decisionSource: v.optional(v.union(v.literal("client"), v.literal("deeptrack"))),
+    reasonCode: v.optional(v.string()),
+    approvedBy: v.optional(v.string()),
+    approvedByName: v.optional(v.string()),
+    // Client disputes: the result disputed and the one the client expects.
+    disputedVerdict: v.optional(v.union(v.literal("pass"), v.literal("reject"))),
+    expectedVerdict: v.optional(v.union(v.literal("pass"), v.literal("reject"))),
+    // AI hit review (aiHitReview.ts): status and Claude's recommendation.
+    aiAssessment: v.optional(v.any()),
+    // A client dispute the client withdrew (closed without a decision).
+    withdrawnAt: v.optional(v.number()),
+    withdrawnBy: v.optional(v.string()),
     createdAt: v.number(),
     resolvedAt: v.optional(v.number()),
   })
@@ -289,6 +842,43 @@ export default defineSchema({
     .index("by_client_and_timestamp", ["clientId", "timestamp"])
     .index("by_action_and_timestamp", ["action", "timestamp"]),
 
+  // Suspicious transaction / activity reports prepared from cases
+  // (strReports.ts): the goAML XML is rebuilt from these fields on download.
+  // The register is confidential (tipping-off): Admins and Reviewers only.
+  strReports: defineTable({
+    clientId: v.id("clients"),
+    verificationId: v.id("verifications"),
+    reviewId: v.optional(v.id("reviewQueue")),
+    // Prepared from a transaction monitoring alert (transactions.ts).
+    transactionAlertId: v.optional(v.id("transactionAlerts")),
+    reportCode: v.union(v.literal("STR"), v.literal("SAR")),
+    status: v.union(v.literal("draft"), v.literal("submitted")),
+    entityReference: v.string(),
+    reason: v.string(),
+    action: v.string(),
+    indicators: v.array(v.string()),
+    transaction: v.optional(
+      v.object({
+        number: v.string(),
+        date: v.number(),
+        amount: v.number(),
+        description: v.string(),
+        transmodeCode: v.optional(v.string()),
+        counterpartyName: v.optional(v.string()),
+        counterpartyAccount: v.optional(v.string()),
+      }),
+    ),
+    createdBy: v.string(),
+    createdByName: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    submittedAt: v.optional(v.number()),
+    submittedBy: v.optional(v.string()),
+    frcReference: v.optional(v.string()),
+  })
+    .index("by_client_and_created_at", ["clientId", "createdAt"])
+    .index("by_verification", ["verificationId"]),
+
   complianceReports: defineTable({
     reportType: v.literal("weekly_compliance"),
     periodStart: v.number(),
@@ -311,28 +901,82 @@ export default defineSchema({
     exportStorageId: v.optional(v.id("_storage")),
     // True when a source hit the export row cap, so counts are lower bounds.
     truncated: v.optional(v.boolean()),
+    // Back Office sign-off (internal_admin), recorded once.
+    signedOffBy: v.optional(v.string()),
+    signedOffByName: v.optional(v.string()),
+    signedOffAt: v.optional(v.number()),
+    signOffNotes: v.optional(v.string()),
     failureReason: v.optional(v.string()),
   })
     .index("by_generated_at", ["generatedAt"])
     .index("by_period", ["periodStart", "periodEnd"]),
 
+  // A client's webhook endpoints (webhooks.ts). Replaces the single
+  // clients.webhookUrl / webhookSecret, which are moved here on first use.
+  webhookEndpoints: defineTable({
+    clientId: v.id("clients"),
+    url: v.string(),
+    description: v.optional(v.string()),
+    secret: v.string(),
+    // A rotated secret: deliveries carry its signature in the *-Next headers
+    // until it becomes the secret (on activation, or after 24 hours).
+    nextSecret: v.optional(v.string()),
+    nextSecretCreatedAt: v.optional(v.number()),
+    // Event names (lib/webhookDispatch.ts WEBHOOK_EVENT_TYPES).
+    events: v.array(v.string()),
+    // Products whose checks are sent (absent = all).
+    products: v.optional(v.array(v.string())),
+    // Which checks: live keys and the portal, test keys, or both.
+    environment: v.union(v.literal("live"), v.literal("test"), v.literal("all")),
+    headers: v.optional(v.array(v.object({ name: v.string(), value: v.string() }))),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    pausedAt: v.optional(v.number()),
+    pausedReason: v.optional(v.string()),
+    consecutiveFailures: v.number(),
+    createdAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_client", ["clientId"]),
+
   webhookDeliveries: defineTable({
     clientId: v.id("clients"),
-    verificationId: v.id("verifications"),
+    // Absent for events not about a check (test events, low credits).
+    verificationId: v.optional(v.id("verifications")),
+    // Absent on deliveries made before endpoints existed.
+    endpointId: v.optional(v.id("webhookEndpoints")),
+    event: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("delivered"),
       v.literal("retrying"),
       v.literal("failed"),
+      // Held while its endpoint is paused; sent again when it resumes.
+      v.literal("paused"),
     ),
     attemptCount: v.number(),
     lastAttemptAt: v.optional(v.number()),
     nextRetryAt: v.optional(v.number()),
     lastResponseStatus: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    lastLatencyMs: v.optional(v.number()),
+    // Each attempt (latest 10): when, status code or error, and timing.
+    attempts: v.optional(
+      v.array(
+        v.object({
+          at: v.number(),
+          statusCode: v.optional(v.number()),
+          error: v.optional(v.string()),
+          latencyMs: v.optional(v.number()),
+        }),
+      ),
+    ),
+    test: v.optional(v.boolean()),
     payload: v.any(),
     createdAt: v.number(),
   })
     .index("by_client", ["clientId"])
+    .index("by_verification", ["verificationId"])
+    .index("by_endpoint", ["endpointId"])
     .index("by_status_and_retry", ["status", "nextRetryAt"]),
 
   kyiRecords: defineTable({
@@ -406,4 +1050,167 @@ kybDirectors: defineTable({
   createdAt: v.number(),
 })
   .index("by_kyb_verification", ["kybVerificationId"]),
+
+  // Removal of personal data past a client's retention period: requested by
+  // one Admin, approved by another (or DeepTrack), then run in batches.
+  retentionPurges: defineTable({
+    clientId: v.id("clients"),
+    status: v.union(v.literal("pending_approval"), v.literal("running"), v.literal("completed"), v.literal("cancelled")),
+    retentionMonths: v.number(),
+    cutoff: v.number(), // checks created before this
+    estimated: v.number(),
+    estimateCapped: v.boolean(),
+    requestedBy: v.string(),
+    requestedByName: v.optional(v.string()),
+    requestedAt: v.number(),
+    approvedBy: v.optional(v.string()),
+    approvedByName: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+    cancelledBy: v.optional(v.string()),
+    cancelledAt: v.optional(v.number()),
+    cursor: v.optional(v.number()),
+    purged: v.number(),
+    held: v.number(),
+    holds: v.object({ openCase: v.number(), monitoring: v.number(), str: v.number(), unfinished: v.number() }),
+    relatedRemoved: v.optional(v.number()),
+    // After the checks, transaction monitoring data (transactions occurred
+    // before the cutoff), in this order; `phaseCursor` is the stage's own.
+    phase: v.optional(v.union(v.literal("checks"), v.literal("transactions"), v.literal("alerts"), v.literal("screenings"))),
+    phaseCursor: v.optional(v.number()),
+    estimatedTransactions: v.optional(v.number()),
+    transactions: v.optional(v.object({ removed: v.number(), held: v.number(), alertsTrimmed: v.number(), alertsMinimized: v.number(), screeningsRemoved: v.number() })),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_client_and_requested_at", ["clientId", "requestedAt"])
+    .index("by_status", ["status"]),
+
+  // Sentinel's fraud network (fraudNetwork.ts): keyed fingerprints of the
+  // identifiers in each check. Never the identifier, name or date of birth.
+  fraudSignals: defineTable({
+    hash: v.string(), // HMAC of the identifier type and normalized value
+    kind: v.union(v.literal("id_number"), v.literal("document_number"), v.literal("phone"), v.literal("email")),
+    clientId: v.id("clients"),
+    verificationId: v.id("verifications"),
+    nameParts: v.array(v.string()), // HMACs of the canonical name parts
+    dob: v.optional(v.string()), // HMAC of the date of birth
+    outcome: v.union(v.literal("pass"), v.literal("review"), v.literal("reject"), v.literal("fraud")),
+    createdAt: v.number(),
+  })
+    .index("by_hash", ["hash"])
+    .index("by_verification", ["verificationId"]),
+
+  // Faces indexed in a client's Rekognition collection for duplicate-face
+  // search (faceMatchNode.ts): the face's id, never the image.
+  faceRecords: defineTable({
+    verificationId: v.id("verifications"),
+    clientId: v.id("clients"),
+    collectionId: v.string(),
+    faceId: v.string(),
+    createdAt: v.number(),
+  }).index("by_verification", ["verificationId"]),
+
+  // The fraud network's HMAC key, generated once by Sentinel. One row.
+  fraudNetworkKeys: defineTable({
+    key: v.literal("default"),
+    secret: v.string(),
+    createdAt: v.number(),
+  }).index("by_key", ["key"]),
+
+  // Country risk for customer risk ratings: the FATF lists, kept current by
+  // DeepTrack after each plenary (riskRatings.ts). One row, key "default".
+  riskSettings: defineTable({
+    key: v.literal("default"),
+    callForAction: v.array(v.string()),
+    increasedMonitoring: v.array(v.string()),
+    asOf: v.string(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_key", ["key"]),
+
+  // Sentinel's Kenyan PEP register (pepRegister.ts), curated by DeepTrack
+  // from Kenya Gazette notices, imports and manual entries.
+  pepRegister: defineTable({
+    fullName: v.string(),
+    aliases: v.array(v.string()),
+    position: v.string(),
+    organisation: v.optional(v.string()),
+    level: v.union(v.literal("national_executive"), v.literal("parliament"), v.literal("judiciary"), v.literal("constitutional_office"), v.literal("security"), v.literal("diplomatic"), v.literal("county_executive"), v.literal("county_government"), v.literal("state_corporation"), v.literal("political_party"), v.literal("family_associate")),
+    county: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    birthDate: v.optional(v.string()),
+    relatedTo: v.optional(v.string()),
+    source: v.union(v.literal("gazette"), v.literal("import"), v.literal("manual")),
+    sourceRef: v.optional(v.string()),
+    active: v.boolean(),
+    addedBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_active", ["active"])
+    .index("by_full_name", ["fullName"]),
+
+  // Kenyan enforcement, debarment and wanted lists (riskLists.ts), curated
+  // by DeepTrack from official publications.
+  riskListEntries: defineTable({
+    sourceKey: v.union(v.literal("KE_PPRA_DEBARRED"), v.literal("KE_CBK_ENFORCEMENT"), v.literal("KE_CMA_ENFORCEMENT"), v.literal("KE_IRA_ENFORCEMENT"), v.literal("KE_SASRA_ENFORCEMENT"), v.literal("KE_RBA_ENFORCEMENT"), v.literal("KE_EACC"), v.literal("KE_DCI_WANTED"), v.literal("KE_ARA_FORFEITURE"), v.literal("KE_OTHER")),
+    name: v.string(),
+    aliases: v.array(v.string()),
+    entityType: v.union(v.literal("individual"), v.literal("entity")),
+    reason: v.string(),
+    action: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    origin: v.union(v.literal("upload"), v.literal("page"), v.literal("import"), v.literal("manual")),
+    originRef: v.optional(v.string()),
+    active: v.boolean(),
+    addedBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_active", ["active"])
+    .index("by_source_and_active", ["sourceKey", "active"]),
+
+  // Publications read for the risk lists, waiting for approval.
+  riskListImports: defineTable({
+    sourceKey: v.union(v.literal("KE_PPRA_DEBARRED"), v.literal("KE_CBK_ENFORCEMENT"), v.literal("KE_CMA_ENFORCEMENT"), v.literal("KE_IRA_ENFORCEMENT"), v.literal("KE_SASRA_ENFORCEMENT"), v.literal("KE_RBA_ENFORCEMENT"), v.literal("KE_EACC"), v.literal("KE_DCI_WANTED"), v.literal("KE_ARA_FORFEITURE"), v.literal("KE_OTHER")),
+    label: v.string(),
+    url: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("reading"), v.literal("ready"), v.literal("failed"), v.literal("approved")),
+    proposals: v.optional(v.any()),
+    error: v.optional(v.string()),
+    uploadedBy: v.string(),
+    createdAt: v.number(),
+    approvedAt: v.optional(v.number()),
+    approvedCount: v.optional(v.number()),
+  }).index("by_created_at", ["createdAt"]),
+
+  // Kenya Gazette issues uploaded to the PEP register and what was found in
+  // them, waiting for DeepTrack to approve.
+  gazetteImports: defineTable({
+    label: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("reading"), v.literal("ready"), v.literal("failed"), v.literal("approved")),
+    proposals: v.optional(v.any()),
+    error: v.optional(v.string()),
+    uploadedBy: v.string(),
+    createdAt: v.number(),
+    approvedAt: v.optional(v.number()),
+    approvedCount: v.optional(v.number()),
+  }).index("by_created_at", ["createdAt"]),
+
+  // Kenya BRS lookups through MetaMap, which may answer at the callback URL.
+  // Only the SHA-256 of the callback token is stored.
+  kybRegistryLookups: defineTable({
+    verificationId: v.id("verifications"),
+    tokenHash: v.string(),
+    status: v.union(v.literal("pending"), v.literal("received")),
+    response: v.optional(v.any()),
+    requestedAt: v.number(),
+    receivedAt: v.optional(v.number()),
+  })
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_verification", ["verificationId"]),
 });

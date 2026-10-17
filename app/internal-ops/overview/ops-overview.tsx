@@ -48,6 +48,9 @@ export type ClientSummary = {
   balance: number;
   usedThisMonth: number;
   usagePct: number | null;
+  billingCurrency: "USD" | "KES";
+  balanceValue: number;
+  seatLimit: number | null;
   createdAt: number;
 };
 
@@ -261,7 +264,7 @@ export function OpsOverview() {
               <PanelHeader
                 icon={Activity}
                 title="Global verification log"
-                hint="IDP · KYB · KYI · AML · Liveness — all clients"
+                hint="KYC · IDP · KYB · AML · Liveness — all clients"
               />
               <DataTable
                 head={["Client", "Scan ID", "Type", "Verdict", "Confidence", "Latency", "Submitted"]}

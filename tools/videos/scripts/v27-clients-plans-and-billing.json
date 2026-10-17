@@ -1,0 +1,205 @@
+{
+  "video": "v27-clients-plans-and-billing",
+  "title": "Clients, plans and billing",
+  "chapter": "d3",
+  "course": "Back Office",
+  "order": 27,
+  "internal": true,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Every client has an account in the Back Office: a plan, a balance in credits and a billing currency. In this video, you'll manage an account, add credits, issue an invoice and check client health.",
+      "show": [
+        {
+          "card": "Clients, plans and billing",
+          "subtitle": "Sentinel by DeepTrack · Back Office"
+        }
+      ]
+    },
+    {
+      "id": "accounts",
+      "say": "Under Clients, click Client accounts. Self-service trials create themselves. For a client signed by sales, click New client.",
+      "show": [
+        {
+          "goto": "/internal-ops/overview"
+        },
+        {
+          "click": "sidebar:Client accounts"
+        },
+        {
+          "zoom": "heading:Client accounts"
+        }
+      ]
+    },
+    {
+      "id": "new-client",
+      "say": "Fill in the name, plan, billing currency and requests per minute. Kenyan entities pay in shillings. Check the starting credits: they're added straight away, with no invoice. If the client still has to pay, set them to zero and issue an invoice instead.",
+      "show": [
+        {
+          "click": "button:New client"
+        },
+        {
+          "highlight": "field:Organization name"
+        },
+        {
+          "highlight": "field:Starting credits / limit"
+        },
+        {
+          "highlight": "button:Create client"
+        }
+      ]
+    },
+    {
+      "id": "find",
+      "say": "To change an account, find the client. Search by name, then click it. Here's Demo Bank Ltd, our demo client.",
+      "show": [
+        {
+          "type": "field:Search clients",
+          "text": "Demo Bank"
+        },
+        {
+          "click": "button:Demo Bank Ltd"
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "say": "Under Account settings, a new plan changes the price of every future check at once. It adds no credits. A suspended or expired client can't start checks. Always give a reason for the audit log, then click Save changes.",
+      "show": [
+        {
+          "highlight": "card:Account settings"
+        },
+        {
+          "highlight": "field:Plan"
+        },
+        {
+          "highlight": "field:Status"
+        },
+        {
+          "highlight": "field:Reason (audit log)"
+        },
+        {
+          "highlight": "button:Save changes"
+        }
+      ]
+    },
+    {
+      "id": "credits",
+      "say": "To add or remove credits, choose the type: an allocation, a refund, or an adjustment. Enter the amount and a reason, then click Apply. The line appears in the credit ledger, and the client sees it too.",
+      "show": [
+        {
+          "scroll": "card:Add or adjust credits"
+        },
+        {
+          "highlight": "field:Type"
+        },
+        {
+          "highlight": "button:Apply"
+        },
+        {
+          "highlight": "card:Credit ledger"
+        }
+      ]
+    },
+    {
+      "id": "demo",
+      "say": "One rule about Demo Bank. It's invented, for the manual and training videos. Never edit it, add credits or invoice it. Engineering builds and resets it.",
+      "show": [
+        {
+          "card": "Demo Bank Ltd is for training only",
+          "subtitle": "Don't edit it, add credits or invoice it"
+        }
+      ]
+    },
+    {
+      "id": "billing",
+      "say": "Now open Revenue and billing. Check Running out within seven days every morning, and tell each client's account manager.",
+      "show": [
+        {
+          "click": "sidebar:Revenue & billing"
+        },
+        {
+          "highlight": "text:Running out within 7 days"
+        }
+      ]
+    },
+    {
+      "id": "invoices",
+      "say": "To bill a client, use Issue an invoice. Choose the client, a plan prepayment or another charge, and the days to pay. When money arrives by bank or M-Pesa, find the invoice under Unpaid invoices and click Mark paid, with the transaction code. Paystack payments mark themselves paid.",
+      "show": [
+        {
+          "scroll": "card:Issue an invoice"
+        },
+        {
+          "highlight": "button:Issue invoice"
+        },
+        {
+          "highlight": "card:Unpaid invoices"
+        }
+      ]
+    },
+    {
+      "id": "price-list",
+      "say": "The price list shows what each check costs on each plan. The US dollar to shilling rate also prices every shilling plan bought online, so update it monthly with the rate finance sets.",
+      "show": [
+        {
+          "scroll": "card:Price list"
+        },
+        {
+          "zoom": "card:Price list"
+        },
+        {
+          "highlight": "button:Save rate"
+        }
+      ]
+    },
+    {
+      "id": "health",
+      "say": "Finally, open Client health. Follow up every client whose usage is dropping. In Onboarding, find clients stuck before their first live check or first charge, and pass them to their account manager.",
+      "show": [
+        {
+          "click": "sidebar:Client health"
+        },
+        {
+          "highlight": "text:Usage dropping"
+        },
+        {
+          "highlight": "card:Onboarding"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's clients, plans and billing. To learn more, open chapter D3 in the Runbook.",
+      "show": [
+        {
+          "card": "Runbook → D3 Clients, plans and billing",
+          "subtitle": "sentinel.deeptrack.io/internal-ops/help/d3"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The new-client form is opened but never submitted; Create client is only highlighted. Clicking Demo Bank Ltd afterwards closes the form (setCreating(false)).",
+    "Typing 'Demo Bank' in the search box (label 'Search clients', sr-only) filters All clients down to Demo Bank Ltd, keeping other clients off screen. It assumes no other client name contains 'Demo Bank'.",
+    "The Client accounts list is visible for a moment before the search; the zoom is on the page heading only.",
+    "Revenue & billing shows other clients in Revenue by client, Low balance forecast and Unpaid invoices. Those panels are highlighted at most, never zoomed. card:Unpaid invoices assumes the invoice filter is on 'All clients (unpaid)' (the heading becomes 'Invoices' once a client is chosen).",
+    "field:Plan and field:Status rely on Playwright's substring label match; on Demo Bank's panel the first matches should be the Account settings selects. Save changes, Apply, Issue invoice, Save rate and Create client are highlighted only, never clicked.",
+    "Client health's Usage trend and Onboarding tables list other clients; only highlights are used there."
+  ]
+}

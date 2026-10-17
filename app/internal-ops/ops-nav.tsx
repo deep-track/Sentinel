@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Building2, ClipboardCheck, Radar, ShieldAlert, type LucideIcon } from "lucide-react";
+import { Activity, ArrowLeft, BookOpen, Building2, ClipboardCheck, FileCheck2, FlaskConical, Gauge, HeartPulse, Landmark, ListX, Radar, Receipt, ShieldAlert, ShieldX, type LucideIcon } from "lucide-react";
 import { cn } from "@/backend/lib/utils";
 
 type NavItem = { title: string; url: string; icon: LucideIcon };
@@ -10,17 +10,37 @@ type NavItem = { title: string; url: string; icon: LucideIcon };
 // Only pages that exist under app/internal-ops are listed here.
 const SECTIONS: Array<{ label: string; items: NavItem[] }> = [
   {
-    label: "Cross-client",
+    label: "Back office",
     items: [
       { title: "Overview", url: "/internal-ops/overview", icon: Radar },
-      { title: "Client accounts", url: "/internal-ops/clients", icon: Building2 },
+      { title: "Service health", url: "/internal-ops/health", icon: Activity },
+      { title: "Revenue & billing", url: "/internal-ops/billing", icon: Receipt },
+      { title: "Runbook", url: "/internal-ops/help", icon: BookOpen },
     ],
   },
   {
-    label: "Quality & review",
+    label: "Clients",
+    items: [
+      { title: "Client accounts", url: "/internal-ops/clients", icon: Building2 },
+      { title: "Client health", url: "/internal-ops/client-health", icon: HeartPulse },
+    ],
+  },
+  {
+    label: "Reviews",
     items: [
       { title: "Review queue", url: "/internal-ops/review-queue", icon: ClipboardCheck },
+      { title: "Review operations", url: "/internal-ops/review-ops", icon: Gauge },
       { title: "Screening monitor", url: "/internal-ops/monitoring", icon: ShieldAlert },
+      { title: "Kenyan PEP register", url: "/internal-ops/pep-register", icon: Landmark },
+      { title: "Kenyan risk lists", url: "/internal-ops/risk-lists", icon: ListX },
+    ],
+  },
+  {
+    label: "Risk & compliance",
+    items: [
+      { title: "Risk", url: "/internal-ops/risk", icon: ShieldX },
+      { title: "Compliance", url: "/internal-ops/compliance", icon: FileCheck2 },
+      { title: "Model & data quality", url: "/internal-ops/quality", icon: FlaskConical },
     ],
   },
 ];
@@ -28,7 +48,7 @@ const SECTIONS: Array<{ label: string; items: NavItem[] }> = [
 export function OpsNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Sentinel Ops" className="flex flex-col gap-1">
+    <nav aria-label="Sentinel Back Office" className="flex flex-col gap-1">
       {SECTIONS.map((section) => (
         <div key={section.label} className="flex flex-col gap-1">
           <div className="px-1.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-sentinel-faint">

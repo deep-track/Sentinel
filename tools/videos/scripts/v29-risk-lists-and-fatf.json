@@ -1,0 +1,168 @@
+{
+  "video": "v29-risk-lists-and-fatf",
+  "title": "Kenyan risk lists and FATF countries",
+  "chapter": "d5",
+  "course": "Back Office",
+  "order": 29,
+  "internal": true,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Every client's screening and risk rating depend on two things on one page: Kenyan risk lists, and the FATF country lists. In this video, you'll keep both up to date.",
+      "show": [
+        {
+          "card": "Kenyan risk lists and FATF countries",
+          "subtitle": "Sentinel by DeepTrack · Back Office"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Under Reviews, click Kenyan risk lists. These are enforcement, debarment and wanted lists from Kenyan authorities that international data doesn't carry. Every active entry is screened in every AML and KYB check.",
+      "show": [
+        {
+          "goto": "/internal-ops/overview"
+        },
+        {
+          "click": "sidebar:Kenyan risk lists"
+        },
+        {
+          "zoom": "heading:Kenyan risk lists"
+        }
+      ]
+    },
+    {
+      "id": "tiles",
+      "say": "Each tile is one list, from PPRA debarments to CBK enforcement, EACC cases and DCI wanted persons, with its count. Click a tile to show only that list. Click it again to show all.",
+      "show": [
+        {
+          "click": "button:PPRA debarred firms and individuals"
+        },
+        {
+          "highlight": "button:PPRA debarred firms and individuals"
+        },
+        {
+          "click": "button:PPRA debarred firms and individuals"
+        }
+      ]
+    },
+    {
+      "id": "read",
+      "say": "To read a publication, choose the list and type a title. Then choose a file, or enter one page on the authority's own site. Click Read names. Sentinel checks robots dot text first, fetches that one page once, and never follows links.",
+      "show": [
+        {
+          "scroll": "card:Read a publication"
+        },
+        {
+          "zoom": "card:Read a publication"
+        },
+        {
+          "highlight": "button:Read names"
+        }
+      ]
+    },
+    {
+      "id": "approve",
+      "say": "When reading finishes, check each line: the name, whether it's a person or an organisation, the reason and the reference. Tick the right lines and click Approve. Nothing counts until you approve, and approval is final.",
+      "show": [
+        {
+          "card": "Approve the names",
+          "subtitle": "Check each line · Tick the right ones · Approve N"
+        }
+      ]
+    },
+    {
+      "id": "csv-add",
+      "say": "You can also import a CSV, with name, entity type and reason, or add one entry by hand. Get person or organisation right. Sentinel only matches people against people, and organisations against organisations.",
+      "show": [
+        {
+          "highlight": "card:Import CSV"
+        },
+        {
+          "highlight": "card:Add an entry"
+        }
+      ]
+    },
+    {
+      "id": "entries",
+      "say": "Sentinel doesn't check for duplicates, so search All entries for a name before you add it. Don't remove a debarment just because it has ended. Clients see it marked ended, which is still useful history.",
+      "show": [
+        {
+          "scroll": "card:All entries"
+        },
+        {
+          "highlight": "card:All entries"
+        }
+      ]
+    },
+    {
+      "id": "fatf",
+      "say": "At the top is Country risk. Customer risk ratings use the FATF black list and grey list for the geography factor. After each FATF plenary, in February, June and October, read the two public statements on the FATF website.",
+      "show": [
+        {
+          "scroll": "card:Country risk (FATF)"
+        },
+        {
+          "zoom": "card:Country risk (FATF)"
+        }
+      ]
+    },
+    {
+      "id": "fatf-edit",
+      "say": "Edit the call for action list and the increased monitoring list, using two-letter country codes. Set the statement date. Saving replaces both lists, and an empty box saves an empty list, so check both before you click Save.",
+      "show": [
+        {
+          "highlight": "field:Call for action (black list)"
+        },
+        {
+          "highlight": "field:Increased monitoring (grey list)"
+        },
+        {
+          "highlight": "field:FATF statement date"
+        }
+      ]
+    },
+    {
+      "id": "kenya",
+      "say": "Keep Kenya on the grey list while FATF lists it. Clients billed in shillings don't get geography points for Kenya, so it only affects other clients. Existing ratings change when each customer is screened again.",
+      "show": [
+        {
+          "card": "Keep KE on the grey list while FATF lists it",
+          "subtitle": "Ratings update at the next screening · monitored customers daily"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's the Kenyan risk lists and FATF countries. Check the PPRA, EACC and DCI sites weekly. To learn more, open chapter D5 in the Runbook.",
+      "show": [
+        {
+          "card": "Runbook → D5 Kenyan risk lists and FATF countries",
+          "subtitle": "sentinel.deeptrack.io/internal-ops/help/d5"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The FATF Save button is never clicked or highlighted (button:Save would also match other buttons by substring); the three FATF fields are highlighted instead. Read names and Import are highlighted only.",
+    "The list tiles are buttons whose accessible name is the list label plus its count, so button:PPRA debarred firms and individuals is a substring match. Clicking twice filters then resets the entries table (view-only, no save).",
+    "The Read a publication, Import CSV and Add an entry panels render only for internal admins without view-only; record with such an account.",
+    "The FATF fields are disabled for non-admins but still exist, so the highlights work either way.",
+    "Entries are public Kenyan enforcement data, not client data; the table is highlighted, not zoomed."
+  ]
+}

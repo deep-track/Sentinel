@@ -10,6 +10,7 @@ export const rateLimiter = new RateLimiter(rateLimiterComponent, {
   publicApiTrial: { kind: "token bucket", rate: 10, period: MINUTE, capacity: 10 },
   publicApiStarter: { kind: "token bucket", rate: 60, period: MINUTE, capacity: 10 },
   publicApiGrowth: { kind: "token bucket", rate: 200, period: MINUTE, capacity: 30 },
+  publicApiBusiness: { kind: "token bucket", rate: 500, period: MINUTE, capacity: 60 },
   publicApiEnterprise: { kind: "token bucket", rate: 1000, period: MINUTE, capacity: 100 },
   // Failed API-key authentications per caller (IP when known, else key
   // prefix). Checked before authentication so brute-force / prefix
@@ -17,15 +18,16 @@ export const rateLimiter = new RateLimiter(rateLimiterComponent, {
   publicApiAuthFailures: { kind: "token bucket", rate: 20, period: MINUTE, capacity: 20 },
 });
 
-export type ClientPlan = "trial" | "starter" | "growth" | "enterprise";
+export type ClientPlan = "trial" | "starter" | "growth" | "business" | "enterprise";
 
 type RateLimitCtx = Pick<ActionCtx, "runMutation" | "runQuery">;
 type RateLimitResult = { ok: true } | { ok: false; retryAfterMs: number };
 
-const PLAN_TO_LIMITER: Record<ClientPlan, "publicApiTrial" | "publicApiStarter" | "publicApiGrowth" | "publicApiEnterprise"> = {
+const PLAN_TO_LIMITER: Record<ClientPlan, "publicApiTrial" | "publicApiStarter" | "publicApiGrowth" | "publicApiBusiness" | "publicApiEnterprise"> = {
   trial: "publicApiTrial",
   starter: "publicApiStarter",
   growth: "publicApiGrowth",
+  business: "publicApiBusiness",
   enterprise: "publicApiEnterprise",
 };
 

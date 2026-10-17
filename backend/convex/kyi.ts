@@ -7,7 +7,7 @@ import { requireClientRole } from "./lib/rbac";
 import {
   assertCreditsForNewVerification,
   assertMediaSize,
-  creditsForType,
+  creditsForVerification,
   verificationTypeLabel,
 } from "./lib/verificationTypes";
 import { actorTypeForClientRole, recordAudit } from "./auditLog";
@@ -62,6 +62,12 @@ export const createKyi = mutation({
     corporateDocUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // KYI has been retired: identity documents and proof of address are now
+    // verified by IDP (documents.submit). Existing KYI records stay readable.
+    void ctx;
+    void args;
+    throw new ConvexError({ code: "invalid_argument", message: "KYI has been retired. Use IDP document verification instead." });
+
     // Also rejects inactive clients (write role set).
     const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
 
@@ -85,7 +91,7 @@ export const createKyi = mutation({
     });
     const investmentAmount = parseInvestmentAmount(args.investmentAmount);
 
-    const creditsUsed = creditsForType("kyi");
+    const creditsUsed = await creditsForVerification(ctx, args.clientId, "kyi");
     await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
 
     const now = Date.now();
@@ -256,7 +262,7 @@ export const getByVerification = query({
   handler: async (ctx, args) => {
     const verification = await ctx.db.get(args.verificationId);
     if (!verification) return null;
-    await requireClientRole(ctx, verification.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    await requireClientRole(ctx, verification.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     return await ctx.db.query("kyiRecords").withIndex("by_verification", (q) => q.eq("verificationId", args.verificationId)).unique();
   },
 });

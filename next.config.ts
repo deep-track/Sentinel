@@ -82,6 +82,13 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // The Help pages read the manual's Markdown from disk at request time.
+  outputFileTracingIncludes: {
+    "/help": ["./content/help/{a,b,c}/**/*"],
+    "/help/*": ["./content/help/{a,b,c}/**/*"],
+    "/internal-ops/help": ["./content/help/d/**/*"],
+    "/internal-ops/help/*": ["./content/help/d/**/*"],
+  },
   images: {
     remotePatterns: [
       {

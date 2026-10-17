@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/backend/lib/auth";
 import { Button } from "@/components/ui/button";
+import { TrialStart } from "./trial-start";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +33,13 @@ export default async function AccessPendingPage({
         <p className="mt-4 text-slate-600 dark:text-slate-300">
           {authorizationUnavailable
             ? "We could not verify your customer access right now. Please try again in a few minutes."
-            : "Your sign-in succeeded, but no active customer workspace is assigned to this account yet."}
+            : "Your sign-in succeeded, but no workspace is assigned to this account yet. If your team uses Sentinel, ask its Admin to invite you; otherwise start a free trial below."}
         </p>
         <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
           Signed in as {user.email}. Contact your Sentinel administrator if you
           believe you should already have access.
         </p>
+        {!authorizationUnavailable ? <TrialStart /> : null}
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild>
             <Link href="/">Try again</Link>

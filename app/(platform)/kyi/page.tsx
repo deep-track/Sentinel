@@ -119,14 +119,14 @@ export default async function KYIPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">KYI Verifications</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Verify and onboard investors with full due diligence
+              KYI has been retired. Past investor verifications stay available here; verify new documents in IDP.
             </p>
           </div>
 
           <div className="flex gap-2 flex-wrap">
             <Button asChild className="bg-violet-600 hover:bg-violet-700 text-white">
-              <Link href="/kyi/new">
-                <FileCheck className="mr-2 h-4 w-4" /> New Verification
+              <Link href="/idp">
+                <FileCheck className="mr-2 h-4 w-4" /> Verify documents in IDP
               </Link>
             </Button>
           </div>

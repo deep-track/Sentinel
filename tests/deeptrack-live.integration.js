@@ -176,3 +176,15 @@ test("liveness video routes to DeepTrack Live and a video reject is decisive", (
   assert.match(wizard, /livenessFramesBase64: data\.livenessVideoBase64/);
   assert.doesNotMatch(wizard, /livenessFramesBase64: data\.selfieBase64/, "the still selfie is never sent as liveness");
 });
+
+test("DeepTrack Live has no default service URL", () => {
+  assert.equal(live.DEEPTRACK_LIVE_DEFAULT_BASE_URL, undefined);
+  const client = read("backend/convex/lib/awsClients/faceCheckClient.ts");
+  assert.match(client, /Missing required env var DEEPTRACK_LIVE_BASE_URL/);
+  const health = read("backend/convex/backOfficeHealth.ts");
+  assert.match(health, /error: "DEEPTRACK_LIVE_BASE_URL is not set"/);
+  assert.match(health, /key: "DEEPTRACK_LIVE_BASE_URL", label: "DeepTrack Live URL"/);
+  for (const file of ["backend/convex/lib/deeptrackLive.ts", "backend/convex/lib/awsClients/faceCheckClient.ts", "backend/convex/backOfficeHealth.ts"]) {
+    assert.doesNotMatch(read(file), /onrender\.com/, file);
+  }
+});

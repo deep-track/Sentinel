@@ -1,0 +1,167 @@
+{
+  "video": "v28-the-kenyan-pep-register",
+  "title": "The Kenyan PEP register",
+  "chapter": "d4",
+  "course": "Back Office",
+  "order": 28,
+  "internal": true,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "The Kenyan PEP register is Sentinel's own list of politically exposed persons in Kenya, with their relatives and close associates. Every active entry is screened in every AML check, for every client. In this video, you'll keep it up to date.",
+      "show": [
+        {
+          "card": "The Kenyan PEP register",
+          "subtitle": "Sentinel by DeepTrack · Back Office"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Under Reviews, click Kenyan PEP register. It covers national, county and parastatal office holders that international data misses or lists late. Clients are told our team keeps it current from the Kenya Gazette. This is how we keep that promise.",
+      "show": [
+        {
+          "goto": "/internal-ops/overview"
+        },
+        {
+          "click": "sidebar:Kenyan PEP register"
+        },
+        {
+          "zoom": "heading:Kenyan PEP register"
+        }
+      ]
+    },
+    {
+      "id": "three-ways",
+      "say": "You add people three ways: upload a Kenya Gazette issue, import a CSV, or add one person by hand. Only internal admins see these panels.",
+      "show": [
+        {
+          "highlight": "card:Kenya Gazette"
+        },
+        {
+          "highlight": "card:Import CSV"
+        },
+        {
+          "highlight": "card:Add a person"
+        }
+      ]
+    },
+    {
+      "id": "gazette",
+      "say": "Sentinel never downloads the Gazette. Kenya Law's terms forbid scraping, so you get each issue yourself and upload it. Type the issue, for example volume and number with the date, choose the PDF, and click Read appointments. AI reads it while you carry on.",
+      "show": [
+        {
+          "zoom": "card:Kenya Gazette"
+        },
+        {
+          "highlight": "button:Read appointments"
+        }
+      ]
+    },
+    {
+      "id": "approve",
+      "say": "When reading finishes, check every line against the notice: the name, position, county, date and notice number. Tick each real appointment, then click Approve. Nothing is added until you do. Approval is final, so add anything you missed by hand.",
+      "show": [
+        {
+          "card": "Approve the appointments",
+          "subtitle": "Check each line · Tick the real ones · Approve N"
+        }
+      ]
+    },
+    {
+      "id": "ends",
+      "say": "A grey ends badge marks a revocation or end of term. If the name and position match a current entry exactly, Sentinel sets its end date. If not, it adds a new, ended entry. Then remove the older one that still shows current.",
+      "show": [
+        {
+          "card": "Ends lines",
+          "subtitle": "Exact match: end date set · No match: new ended entry, remove the old current one"
+        }
+      ]
+    },
+    {
+      "id": "csv",
+      "say": "For county officials, boards, relatives and associates you've compiled yourself, use Import CSV. You need full name, position and level. Write dates as year, month, day. Every family associate row needs related to, or the whole file stops. Compare Imported with your row count.",
+      "show": [
+        {
+          "zoom": "card:Import CSV"
+        },
+        {
+          "highlight": "button:Import"
+        }
+      ]
+    },
+    {
+      "id": "add",
+      "say": "To add one person, fill in the full name and position, choose the level, and click Add. For a family member or close associate, fill in who they're related to.",
+      "show": [
+        {
+          "highlight": "card:Add a person"
+        }
+      ]
+    },
+    {
+      "id": "entries",
+      "say": "Before you approve or add anyone, search Entries for the name. Sentinel doesn't check for duplicates, and a duplicate gives the client two identical hits.",
+      "show": [
+        {
+          "scroll": "card:Entries"
+        },
+        {
+          "highlight": "card:Entries"
+        }
+      ]
+    },
+    {
+      "id": "remove",
+      "say": "Remove an entry only when it's wrong or a duplicate. Someone who has left office stays on the register with an end date, because a former PEP is still a PEP.",
+      "show": [
+        {
+          "card": "A former PEP is still a PEP",
+          "subtitle": "Remove only wrong or duplicate entries"
+        }
+      ]
+    },
+    {
+      "id": "routine",
+      "say": "Upload each Friday's Gazette and approve it the same day. Check daily for special issues, and for any issue still reading or failed. After an election or Cabinet change, import the new office holders.",
+      "show": [
+        {
+          "card": "Your routine",
+          "subtitle": "Fridays: upload and approve · Daily: special issues and stuck items · After elections: import"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's the Kenyan PEP register. To learn more, open chapter D4 in the Runbook.",
+      "show": [
+        {
+          "card": "Runbook → D4 The Kenyan PEP register",
+          "subtitle": "sentinel.deeptrack.io/internal-ops/help/d4"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The Gazette, Import CSV and Add a person panels only render for internal admins without view-only (canWrite). Record with an internal admin account, otherwise those highlights fail.",
+    "Read appointments and Import are highlighted only; nothing is uploaded or approved. No Gazette issue is shown being read or approved, because that would need an upload; those steps use title cards.",
+    "The Add button is not targeted: button:Add is a substring match and could hit another button; the whole Add a person panel is highlighted instead.",
+    "The Entries search box has a placeholder but no label, so it can't be targeted with field:; the search is described, not typed.",
+    "The Entries table shows real Kenyan PEP data (public office holders), not client data. It is highlighted, not zoomed."
+  ]
+}

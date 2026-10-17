@@ -1,6 +1,5 @@
 import { UpstreamServiceError, invalidResponse } from "./internalFetch";
 import {
-  DEEPTRACK_LIVE_DEFAULT_BASE_URL,
   DEEPTRACK_LIVE_IMAGE_PATH,
   DEEPTRACK_LIVE_VIDEO_JOB_PATH,
   DEEPTRACK_LIVE_VIDEO_PATH,
@@ -15,7 +14,7 @@ import {
 export type FaceCheckRequest = { selfieBase64: string };
 export type VideoLivenessRequest = { videoBase64: string; mediaType: "mp4" | "webm" };
 
-// Render free/starter instances can cold-start, so allow longer than the
+// The model service can be slow to warm up, so allow longer than the
 // internal services.
 const REQUEST_TIMEOUT_MS = 45_000;
 // A video job is polled until done, failed, or this budget runs out.
@@ -24,7 +23,13 @@ const VIDEO_POLL_INTERVAL_MS = 2_000;
 const LOGGED_BODY_LIMIT = 300;
 
 function baseUrl(): string {
-  const raw = process.env.DEEPTRACK_LIVE_BASE_URL?.trim() || DEEPTRACK_LIVE_DEFAULT_BASE_URL;
+  const raw = process.env.DEEPTRACK_LIVE_BASE_URL?.trim();
+  if (!raw) {
+    throw new UpstreamServiceError(
+      "upstream_misconfigured",
+      "Missing required env var DEEPTRACK_LIVE_BASE_URL: set it in the Convex deployment's environment variables.",
+    );
+  }
   let url: URL;
   try {
     url = new URL(raw);
