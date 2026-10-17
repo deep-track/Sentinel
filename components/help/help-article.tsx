@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Chapter, ChapterMeta } from "@/backend/lib/help";
 import { MANUALS } from "@/backend/lib/help";
+import { HelpVideos } from "./help-videos";
 
 // Typography for a rendered chapter. The Markdown comes from content/help in
 // this repo (never from users), so it is rendered as HTML.
@@ -57,6 +58,7 @@ export function HelpArticle({
             <span className="font-medium">Roles:</span> {chapter.roles}
           </p>
         ) : null}
+        <HelpVideos chapterId={chapter.id} />
         <div className={PROSE} dangerouslySetInnerHTML={{ __html: chapter.html }} />
         <nav aria-label="Chapters" className="mt-12 flex justify-between gap-4 border-t border-slate-200 pt-6 text-sm dark:border-slate-800">
           {previous ? (

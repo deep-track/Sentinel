@@ -1112,6 +1112,17 @@ kybDirectors: defineTable({
     createdAt: v.number(),
   }).index("by_verification", ["verificationId"]),
 
+  // Training videos uploaded to the private S3 bucket (trainingVideosNode.ts):
+  // one row per video and voice. The catalog itself is
+  // lib/trainingVideoCatalog.json.
+  trainingVideoFiles: defineTable({
+    video: v.string(),
+    voice: v.union(v.literal("default"), v.literal("kenyan")),
+    bytes: v.number(),
+    hasCaptions: v.boolean(),
+    uploadedAt: v.number(),
+  }).index("by_video_and_voice", ["video", "voice"]),
+
   // The fraud network's HMAC key, generated once by Sentinel. One row.
   fraudNetworkKeys: defineTable({
     key: v.literal("default"),

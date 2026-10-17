@@ -1,6 +1,6 @@
 // Joins the recording with each voice's narration, placed at each scene's
 // start, into out/<video>/<video>-<voice>.mp4 (1080p H.264 + AAC) and a
-// caption file <video>-<voice>.srt for YouTube.
+// caption file <video>-<voice>.srt (publish.mjs turns it into WebVTT).
 //   node tools/videos/assemble.mjs b11-review-case
 import fs from "node:fs";
 import path from "node:path";
