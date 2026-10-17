@@ -147,7 +147,7 @@ export const list = query({
   },
 });
 
-async function canReadClient(ctx: QueryCtx, clientId: Id<"clients">): Promise<boolean> {
+export async function canReadClient(ctx: QueryCtx, clientId: Id<"clients">): Promise<boolean> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError({ code: "unauthenticated", message: "Sign in required." });
   if (await isInternalAdmin(ctx)) return true;

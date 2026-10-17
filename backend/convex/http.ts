@@ -21,6 +21,8 @@ import { MAX_EXTERNAL_REF_LENGTH } from "./lib/amlMonitoringStore";
 import { paystackSecret, validPaystackSignature } from "./lib/paystack";
 
 const http = httpRouter();
+// Functions newer than the checked-in _generated types.
+const internalApi: any = internal;
 
 
 function json(body: unknown, status = 200, extraHeaders?: Record<string, string>) {
@@ -602,6 +604,319 @@ http.route({
   }),
 });
 
+
+// ── KYB: business verification ─────────────────────────────────────────────
+// POST /v1/verify/kyb: the business, its directors / owners and two files
+// (registration certificate, proof of address). The files are stored in
+// Convex storage and the check runs like one started on the KYB page.
+
+const KYB_MAX_FILE_BASE64_CHARS = 4_000_000; // about 3 MB per file
+const KYB_TEXT: Array<[string, number, boolean]> = [
+  ["businessName", 200, true],
+  ["registrationNumber", 100, true],
+  ["incorporationCountry", 100, true],
+  ["businessType", 100, false],
+  ["externalRef", 100, false],
+];
+const DIRECTOR_TEXT: Array<[string, number, boolean]> = [
+  ["firstName", 100, true],
+  ["lastName", 100, true],
+  ["email", 200, true],
+  ["position", 100, true],
+  ["shareholding", 20, false],
+  ["dateOfBirth", 10, true],
+  ["idNumber", 50, true],
+];
+
+type KybDirector = { firstName: string; lastName: string; email: string; position: string; shareholding?: string; dateOfBirth: string; idNumber: string };
+type KybBody = {
+  businessName: string;
+  registrationNumber: string;
+  incorporationCountry: string;
+  businessType?: string;
+  externalRef?: string;
+  registrationDoc: Uint8Array<ArrayBuffer>;
+  proofOfAddress: Uint8Array<ArrayBuffer>;
+  directors: KybDirector[];
+};
+
+// Base64 (a data: prefix and line breaks are removed) to bytes; null when
+// it isn't base64.
+function decodeBase64(value: string): Uint8Array<ArrayBuffer> | null {
+  const clean = value.replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
+  if (!clean || !/^[A-Za-z0-9+/]+={0,2}$/.test(clean)) return null;
+  try {
+    const binary = atob(clean);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+// JPEG, PNG, WebP or PDF, from the first bytes (the pipeline checks again).
+function knownFileType(bytes: Uint8Array): boolean {
+  const starts = (...sig: number[]) => sig.every((byte, index) => bytes[index] === byte);
+  return starts(0xff, 0xd8, 0xff) || starts(0x89, 0x50, 0x4e, 0x47) || starts(0x25, 0x50, 0x44, 0x46) || (starts(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50);
+}
+
+const KYB_DETAILS = {
+  businessName: "required, at most 200 characters",
+  registrationNumber: "required: e.g. PVT-AB1234 or CPR/2015/123456",
+  incorporationCountry: "required: ISO code or name, e.g. KE",
+  businessType: "optional",
+  externalRef: "optional: your reference",
+  registrationDocBase64: "required: base64 JPEG, PNG, WebP or PDF of the registration certificate (or CR12), at most 4,000,000 characters",
+  proofOfAddressBase64: "required: base64 JPEG, PNG, WebP or PDF of a proof of address in the business's name, at most 4,000,000 characters",
+  directors: "required: 1 to 50 of { firstName, lastName, email, position, shareholding (optional, e.g. \"40%\"), dateOfBirth (YYYY-MM-DD), idNumber }",
+};
+
+function parseKybBody(body: unknown): Parsed<KybBody> {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, response: json({ error: "Request body must be a JSON object" }, 400) };
+  }
+  const b = body as Record<string, unknown>;
+  const invalid: string[] = [];
+  const out: Record<string, string> = {};
+  for (const [field, max, required] of KYB_TEXT) {
+    const value = b[field];
+    if (value === undefined || value === null || (typeof value === "string" && !value.trim())) {
+      if (required) invalid.push(field);
+      continue;
+    }
+    if (typeof value !== "string" || value.trim().length > max) invalid.push(field);
+    else out[field] = value.trim();
+  }
+  const files: Record<string, Uint8Array<ArrayBuffer>> = {};
+  for (const field of ["registrationDocBase64", "proofOfAddressBase64"] as const) {
+    const value = b[field];
+    if (typeof value !== "string" || !value.trim()) {
+      invalid.push(field);
+      continue;
+    }
+    if (value.length > KYB_MAX_FILE_BASE64_CHARS) {
+      return { ok: false, response: json({ error: `${field} is too large (max ${KYB_MAX_FILE_BASE64_CHARS} base64 characters)` }, 413) };
+    }
+    const bytes = decodeBase64(value);
+    if (!bytes || !knownFileType(bytes)) invalid.push(field);
+    else files[field] = bytes;
+  }
+  const directors: KybDirector[] = [];
+  if (!Array.isArray(b.directors) || b.directors.length === 0 || b.directors.length > 50) {
+    invalid.push("directors");
+  } else {
+    b.directors.forEach((item, index) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        invalid.push(`directors[${index}]`);
+        return;
+      }
+      const d = item as Record<string, unknown>;
+      const director: Record<string, string> = {};
+      for (const [field, max, required] of DIRECTOR_TEXT) {
+        const value = d[field];
+        if (value === undefined || value === null || (typeof value === "string" && !value.trim())) {
+          if (required) invalid.push(`directors[${index}].${field}`);
+          continue;
+        }
+        if (typeof value !== "string" || value.trim().length > max) invalid.push(`directors[${index}].${field}`);
+        else director[field] = value.trim();
+      }
+      if (director.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(director.dateOfBirth)) invalid.push(`directors[${index}].dateOfBirth`);
+      if (director.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(director.email)) invalid.push(`directors[${index}].email`);
+      directors.push(director as KybDirector);
+    });
+  }
+  if (invalid.length > 0) {
+    return { ok: false, response: json({ error: `Missing or invalid fields: ${invalid.slice(0, 20).join(", ")}`, details: KYB_DETAILS }, 400) };
+  }
+  return {
+    ok: true,
+    value: {
+      businessName: out.businessName,
+      registrationNumber: out.registrationNumber,
+      incorporationCountry: out.incorporationCountry,
+      ...(out.businessType ? { businessType: out.businessType } : {}),
+      ...(out.externalRef ? { externalRef: out.externalRef } : {}),
+      registrationDoc: files.registrationDocBase64,
+      proofOfAddress: files.proofOfAddressBase64,
+      directors,
+    },
+  };
+}
+
+http.route({
+  path: "/v1/verify/kyb",
+  method: "POST",
+  handler: apiAction("POST /v1/verify/kyb", async (ctx, request, auth) => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Invalid JSON body" }, 400);
+    }
+    const parsed = parseKybBody(body);
+    if (!parsed.ok) return parsed.response;
+    const { registrationDoc, proofOfAddress, ...business } = parsed.value;
+    // Files can't travel through a mutation's arguments at this size, so
+    // they are stored first and dropped again if the check is refused.
+    const registrationDocStorageId = await ctx.storage.store(new Blob([registrationDoc]));
+    const proofOfAddressStorageId = await ctx.storage.store(new Blob([proofOfAddress]));
+    // Once the mutation succeeds the check owns the files (a test key's
+    // mutation deletes them itself).
+    let created = false;
+    const discard = () => ctx.runMutation(internalApi.kyb._discardFiles, { storageIds: [registrationDocStorageId, proofOfAddressStorageId] });
+    try {
+      const response = await createdResponse("kyb", async () => {
+        const result = await ctx.runMutation(internalApi.kyb._createFromApi, {
+          clientId: auth.clientId,
+          apiKeyId: auth.apiKeyId,
+          environment: auth.environment,
+          ...business,
+          registrationDocStorageId,
+          proofOfAddressStorageId,
+        });
+        created = true;
+        return result;
+      });
+      if (!created) await discard();
+      return response;
+    } catch (error) {
+      if (!created) await discard();
+      throw error;
+    }
+  }),
+});
+
+// Client-facing view of a completed KYB check.
+function kybSummary(result: unknown) {
+  const r = (result ?? {}) as Record<string, unknown>;
+  const part = (value: unknown) => {
+    const item = (value ?? null) as { verdict?: unknown; reason?: unknown } | null;
+    return item ? { verdict: typeof item.verdict === "string" ? item.verdict : null, reason: typeof item.reason === "string" ? item.reason : null } : null;
+  };
+  return {
+    reason: typeof r.reason === "string" ? r.reason : null,
+    certificate: part(r.certificate),
+    proofOfAddress: part(r.proofOfAddress),
+    registry: r.registry && typeof r.registry === "object" ? { status: (r.registry as { status?: unknown }).status ?? null } : null,
+    parties: (Array.isArray(r.parties) ? r.parties : []).map((party: Record<string, unknown>) => ({
+      name: party.name ?? null,
+      role: party.role ?? null,
+      verdict: party.verdict ?? null,
+      reason: party.reason ?? null,
+      hits: typeof party.hits === "number" ? party.hits : 0,
+    })),
+  };
+}
+
+// ── Capture links ───────────────────────────────────────────────────────────
+// The customer opens the link on their phone, photographs their ID and
+// takes a selfie; that becomes an ordinary KYC check (billed when they
+// submit, result by webhook). Links last 72 hours.
+
+const CAPTURE_DETAILS = {
+  method: ["link", "sms", "whatsapp"],
+  contact: "required for sms and whatsapp: phone number in international format, e.g. +254712345678",
+  language: ["en", "sw"],
+  prefill: "optional: { firstName, lastName, idNumber, dateOfBirth (YYYY-MM-DD), gender }, filled in for the customer",
+  externalRef: "optional: your customer id, at most 100 characters",
+};
+
+function captureReference(request: Request): string | null {
+  const reference = new URL(request.url).pathname.split("/").pop();
+  return reference && /^cap_[A-Za-z0-9]{1,64}$/.test(reference) ? reference : null;
+}
+
+http.route({
+  path: "/v1/capture-links",
+  method: "POST",
+  handler: apiAction("POST /v1/capture-links", async (ctx, request, auth) => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Invalid JSON body" }, 400);
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "Request body must be a JSON object" }, 400);
+    const b = body as Record<string, unknown>;
+    const invalid: string[] = [];
+    const method = b.method ?? "link";
+    if (method !== "link" && method !== "sms" && method !== "whatsapp") invalid.push("method");
+    const language = b.language ?? "en";
+    if (language !== "en" && language !== "sw") invalid.push("language");
+    if (method !== "link" && (typeof b.contact !== "string" || !b.contact.trim())) invalid.push("contact");
+    if (b.externalRef !== undefined && b.externalRef !== null && (typeof b.externalRef !== "string" || b.externalRef.length > 100)) invalid.push("externalRef");
+    const prefill: Record<string, string> = {};
+    if (b.prefill !== undefined && b.prefill !== null) {
+      if (typeof b.prefill !== "object" || Array.isArray(b.prefill)) invalid.push("prefill");
+      else {
+        for (const [key, value] of Object.entries(b.prefill as Record<string, unknown>)) {
+          if (!["firstName", "lastName", "idNumber", "dateOfBirth", "gender"].includes(key) || (value !== null && typeof value !== "string")) invalid.push(`prefill.${key}`);
+          else if (typeof value === "string" && value.trim()) prefill[key] = value;
+        }
+      }
+    }
+    if (invalid.length) return json({ error: `Invalid fields: ${invalid.join(", ")}`, details: CAPTURE_DETAILS }, 400);
+    try {
+      const created = await ctx.runMutation(internalApi.capture._createFromApi, {
+        clientId: auth.clientId,
+        apiKeyId: auth.apiKeyId,
+        environment: auth.environment,
+        method: method as "link" | "sms" | "whatsapp",
+        ...(typeof b.contact === "string" && b.contact.trim() ? { contact: b.contact } : {}),
+        language: language as "en" | "sw",
+        ...(Object.keys(prefill).length ? { prefill } : {}),
+        ...(typeof b.externalRef === "string" && b.externalRef.trim() ? { externalRef: b.externalRef } : {}),
+      });
+      return json(created, 201);
+    } catch (err) {
+      if (err instanceof ConvexError) {
+        const data = err.data as { code?: string; message?: string } | undefined;
+        if (data?.code === "invalid_argument") return json({ error: data.message ?? "Invalid request", details: CAPTURE_DETAILS }, 400);
+        if (data?.code === "rate_limited") return json({ error: data.message ?? "Too many capture links" }, 429);
+        if (data?.code === "forbidden") return json({ error: "Account is not active" }, 403);
+      }
+      throw err;
+    }
+  }),
+});
+
+http.route({
+  path: "/v1/capture-links",
+  method: "GET",
+  handler: apiAction("GET /v1/capture-links", async (ctx, request, auth) => {
+    const url = new URL(request.url);
+    const limit = parseNumberParam(url, "limit", { integer: true, min: 1, max: 100 });
+    if (!limit.ok) return limit.response;
+    const before = parseNumberParam(url, "before", { min: 0, max: Number.MAX_SAFE_INTEGER });
+    if (!before.ok) return before.response;
+    return json(await ctx.runQuery(internalApi.capture._listForApi, { clientId: auth.clientId, limit: limit.value ?? 50, before: before.value }));
+  }),
+});
+
+http.route({
+  pathPrefix: "/v1/capture-links/",
+  method: "GET",
+  handler: apiAction("GET /v1/capture-links/*", async (ctx, request, auth) => {
+    const reference = captureReference(request);
+    if (!reference) return json({ error: "Missing or invalid capture link id" }, 400);
+    const link = await ctx.runQuery(internalApi.capture._getForApi, { clientId: auth.clientId, reference });
+    return link ? json(link) : json({ error: "Capture link not found" }, 404);
+  }),
+});
+
+http.route({
+  pathPrefix: "/v1/capture-links/",
+  method: "DELETE",
+  handler: apiAction("DELETE /v1/capture-links/*", async (ctx, request, auth) => {
+    const reference = captureReference(request);
+    if (!reference) return json({ error: "Missing or invalid capture link id" }, 400);
+    const link = await ctx.runMutation(internalApi.capture._cancelFromApi, { clientId: auth.clientId, apiKeyId: auth.apiKeyId, reference });
+    return link ? json(link) : json({ error: "Capture link not found" }, 404);
+  }),
+});
+
 // Client-facing view of a completed document verification.
 function documentSummary(result: unknown) {
   const r = (result ?? {}) as Record<string, unknown>;
@@ -750,6 +1065,7 @@ http.route({
       sandbox: (record.input as { sandbox?: unknown } | undefined)?.sandbox === true,
       ...(record.type === "aml" && record.status === "completed" ? { screening: amlScreeningSummary(record.result) } : {}),
       ...(record.type === "document" && record.status === "completed" ? { document: documentSummary(record.result) } : {}),
+      ...(record.type === "kyb" && record.status === "completed" ? { kyb: kybSummary(record.result) } : {}),
     });
   }),
 });

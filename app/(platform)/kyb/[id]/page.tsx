@@ -80,24 +80,28 @@ function maskId(value: string | null | undefined): string {
   return value.length <= 4 ? value : `${"•".repeat(Math.min(value.length - 4, 6))}${value.slice(-4)}`;
 }
 
+type DocumentLinks = { registrationDoc: string | null; proofOfAddress: string | null; viaApi: boolean };
+
 async function getRecord(id: string) {
   try {
     const client = await getAuthenticatedConvexClient();
     if (!client) {
-      return { verification: null, directors: [] as DirectorRow[], error: "Your session couldn't be verified. Sign in again." };
+      return { verification: null, directors: [] as DirectorRow[], documents: null, error: "Your session couldn't be verified. Sign in again." };
     }
     const verification: VerificationRow | null = await client.query(anyApi.verifications.get, { id });
     if (!verification) {
-      return { verification: null, directors: [] as DirectorRow[], error: "This record doesn't exist, or you don't have access to it." };
+      return { verification: null, directors: [] as DirectorRow[], documents: null, error: "This record doesn't exist, or you don't have access to it." };
     }
     if (verification.type !== "kyb") {
-      return { verification: null, directors: [] as DirectorRow[], error: "This record isn't a business (KYB) verification." };
+      return { verification: null, directors: [] as DirectorRow[], documents: null, error: "This record isn't a business (KYB) verification." };
     }
     const directors: DirectorRow[] = await client.query(anyApi.kyb.getDirectors, { kybVerificationId: id });
-    return { verification, directors, error: undefined };
+    // Uploaded in the dashboard (a URL) or sent through the API (stored by Sentinel).
+    const documents: DocumentLinks | null = await client.query(anyApi.kyb.documentLinks, { kybVerificationId: id }).catch(() => null);
+    return { verification, directors, documents, error: undefined };
   } catch (error) {
     console.error("[kyb detail] Convex query failed", error);
-    return { verification: null, directors: [] as DirectorRow[], error: "Record details are temporarily unavailable." };
+    return { verification: null, directors: [] as DirectorRow[], documents: null, error: "Record details are temporarily unavailable." };
   }
 }
 
@@ -311,7 +315,7 @@ function AutomatedChecks({ result }: { result: unknown }) {
 
 export default async function KYBDetailPage({ params }: KYBDetailPageProps) {
   const { id } = await params;
-  const { verification, directors, error } = await getRecord(id);
+  const { verification, directors, documents, error } = await getRecord(id);
   const input =
     verification?.input && typeof verification.input === "object"
       ? (verification.input as Record<string, unknown>)
@@ -356,8 +360,9 @@ export default async function KYBDetailPage({ params }: KYBDetailPageProps) {
               <InfoRow label="Registration number" value={text(input.registrationNumber) ?? "—"} />
               <InfoRow label="Country of incorporation" value={country} />
               {text(input.businessType) ? <InfoRow label="Business type" value={text(input.businessType)} /> : null}
-              <InfoRow label="Incorporation certificate" value={<DocumentLink url={httpsUrl(input.registrationDocUrl)} />} />
-              <InfoRow label="Proof of address" value={<DocumentLink url={httpsUrl(input.proofOfAddressUrl)} />} />
+              <InfoRow label="Incorporation certificate" value={<DocumentLink url={documents?.registrationDoc ?? httpsUrl(input.registrationDocUrl)} />} />
+              <InfoRow label="Proof of address" value={<DocumentLink url={documents?.proofOfAddress ?? httpsUrl(input.proofOfAddressUrl)} />} />
+              {documents?.viaApi ? <InfoRow label="Submitted through" value="The API" /> : null}
               <InfoRow label="Submitted" value={formatDate(verification.createdAt)} />
               <InfoRow label="Last updated" value={formatDate(verification.updatedAt)} />
               {verification.completedAt ? <InfoRow label="Completed" value={formatDate(verification.completedAt)} /> : null}

@@ -79,12 +79,14 @@ export const createClient = mutation({
 
 // What a key may call (http.ts checks each route). Keys without scopes
 // (created before scopes existed) may call everything.
-export const API_SCOPES = ["verify:kyc", "verify:aml", "verify:document", "monitoring", "results:read", "credits:read"] as const;
+export const API_SCOPES = ["verify:kyc", "verify:aml", "verify:document", "verify:kyb", "capture", "monitoring", "results:read", "credits:read"] as const;
 export type ApiScope = (typeof API_SCOPES)[number];
 export const API_SCOPE_LABELS: Record<ApiScope, string> = {
   "verify:kyc": "Run KYC identity checks",
   "verify:aml": "Run AML screenings",
   "verify:document": "Run IDP document checks",
+  "verify:kyb": "Run business (KYB) checks",
+  capture: "Create and manage capture links",
   monitoring: "Manage AML monitoring",
   "results:read": "Read check results",
   "credits:read": "Read credits and usage",
@@ -388,6 +390,8 @@ export function scopeForRoute(route: string): ApiScope | null {
   if (route === "POST /v1/verify/idp") return "verify:kyc";
   if (route === "POST /v1/verify/aml") return "verify:aml";
   if (route === "POST /v1/verify/document") return "verify:document";
+  if (route === "POST /v1/verify/kyb") return "verify:kyb";
+  if (route.includes("/v1/capture-links")) return "capture";
   if (route.includes("/v1/monitoring/") || route.startsWith("POST /v1/transactions")) return "monitoring";
   if (route.startsWith("GET /v1/verify")) return "results:read";
   if (route.startsWith("GET /v1/credits")) return "credits:read";

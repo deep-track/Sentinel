@@ -39,7 +39,7 @@ const OUTLINE = {
     "Filing an STR or SAR",
     "Disputes",
   ],
-  c: ["Quick start", "KYC API", "Documents API", "AML and monitoring API", "Transactions API", "Results and credits", "Webhooks"],
+  c: ["Quick start", "KYC API", "Documents API", "AML and monitoring API", "Transactions API", "Results and credits", "Webhooks", "KYB and capture links API"],
   d: [
     "The Back Office at a glance",
     "Review queue and disputes",

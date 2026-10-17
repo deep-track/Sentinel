@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { HOUR } from "@convex-dev/rate-limiter";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireClientRole } from "./lib/rbac";
 import { rateLimiter } from "./lib/rateLimits";
@@ -62,8 +62,76 @@ function cleanPrefill(prefill: CapturePrefill | undefined): CapturePrefill {
   return out;
 }
 
+type Method = "sms" | "whatsapp" | "link";
+type CreateArgs = {
+  clientId: Id<"clients">;
+  method: Method;
+  contact?: string;
+  language: "en" | "sw";
+  prefill?: CapturePrefill;
+  externalRef?: string;
+  actor: { actorId: string; actorType: "client_user" | "client_api_key" };
+};
+
+// Checks a link request without writing anything: the cleaned contact,
+// prefill and reference. Shared by the dashboard, the API and test keys.
+function validateLink(args: Pick<CreateArgs, "method" | "contact" | "prefill" | "externalRef">) {
+  let contact: string | undefined;
+  if (args.method !== "link") {
+    contact = normalizePhoneNumber(args.contact ?? "") ?? undefined;
+    if (!contact) invalid("Enter the phone number in international format, e.g. +254700000000.");
+  }
+  return { contact, prefill: cleanPrefill(args.prefill), externalRef: args.externalRef?.trim().slice(0, 100) || undefined };
+}
+
 // Creates a link. "link" returns it to share yourself; "sms" and "whatsapp"
 // also send it. The link is only ever shown here, once.
+async function createLink(ctx: MutationCtx, args: CreateArgs) {
+  const client = await ctx.db.get(args.clientId);
+  if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
+  const { contact, prefill, externalRef } = validateLink(args);
+  const perClient = await rateLimiter.limit(ctx, "captureLinkPerClient", { key: args.clientId, config: PER_CLIENT_LIMIT });
+  if (!perClient.ok) throw new ConvexError({ code: "rate_limited", message: "Too many capture links. Try again later." });
+  if (contact) {
+    const perContact = await rateLimiter.limit(ctx, "captureLinkPerContact", { key: `${args.clientId}:${contact}`, config: PER_CONTACT_LIMIT });
+    if (!perContact.ok) throw new ConvexError({ code: "rate_limited", message: "Too many links to this number. Try again later." });
+  }
+
+  const token = randomKeySegment(32);
+  const reference = `cap_${randomKeySegment(16)}`;
+  const now = Date.now();
+  const expiresAt = now + CAPTURE_LINK_HOURS * 60 * 60 * 1000;
+  const sessionId = await ctx.db.insert("captureSessions", {
+    clientId: args.clientId,
+    tokenHash: await sha256Hex(token),
+    reference,
+    status: "pending",
+    method: args.method,
+    ...(contact ? { contact } : {}),
+    language: args.language,
+    prefill,
+    ...(externalRef ? { externalRef } : {}),
+    deliveryStatus: args.method === "link" ? "not_sent" : "pending",
+    createdBy: args.actor.actorId,
+    createdAt: now,
+    expiresAt,
+  });
+  const link = captureLink(appUrl(), token);
+  if (args.method !== "link") {
+    await ctx.scheduler.runAfter(0, internalApi.capture.dispatch, { sessionId, message: captureMessage(args.language, client.name, link) });
+  }
+  await recordAudit(ctx, {
+    actorId: args.actor.actorId,
+    actorType: args.actor.actorType,
+    action: "capture.link_created",
+    targetType: "captureSession",
+    targetId: sessionId,
+    clientId: args.clientId,
+    metadata: { method: args.method, language: args.language },
+  });
+  return { sessionId, reference, link, expiresAt };
+}
+
 export const create = mutation({
   args: {
     clientId: v.id("clients"),
@@ -75,51 +143,127 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const actor = await requireClientRole(ctx, args.clientId, [...SEND_ROLES]);
-    const client = await ctx.db.get(args.clientId);
-    if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
-    let contact: string | undefined;
-    if (args.method !== "link") {
-      contact = normalizePhoneNumber(args.contact ?? "") ?? undefined;
-      if (!contact) invalid("Enter the phone number in international format, e.g. +254700000000.");
-    }
-    const externalRef = args.externalRef?.trim().slice(0, 100) || undefined;
-    const perClient = await rateLimiter.limit(ctx, "captureLinkPerClient", { key: args.clientId, config: PER_CLIENT_LIMIT });
-    if (!perClient.ok) throw new ConvexError({ code: "rate_limited", message: "Too many capture links. Try again later." });
-    if (contact) {
-      const perContact = await rateLimiter.limit(ctx, "captureLinkPerContact", { key: `${args.clientId}:${contact}`, config: PER_CONTACT_LIMIT });
-      if (!perContact.ok) throw new ConvexError({ code: "rate_limited", message: "Too many links to this number. Try again later." });
-    }
-
-    const token = randomKeySegment(32);
-    const now = Date.now();
-    const sessionId = await ctx.db.insert("captureSessions", {
-      clientId: args.clientId,
-      tokenHash: await sha256Hex(token),
-      status: "pending",
-      method: args.method,
-      ...(contact ? { contact } : {}),
-      language: args.language,
-      prefill: cleanPrefill(args.prefill),
-      ...(externalRef ? { externalRef } : {}),
-      deliveryStatus: args.method === "link" ? "not_sent" : "pending",
-      createdBy: actor.userId,
-      createdAt: now,
-      expiresAt: now + CAPTURE_LINK_HOURS * 60 * 60 * 1000,
-    });
-    const link = captureLink(appUrl(), token);
-    if (args.method !== "link") {
-      await ctx.scheduler.runAfter(0, internalApi.capture.dispatch, { sessionId, message: captureMessage(args.language, client.name, link) });
-    }
-    await recordAudit(ctx, {
-      actorId: actor.userId,
-      actorType: "client_user",
-      action: "capture.link_created",
-      targetType: "captureSession",
-      targetId: sessionId,
-      clientId: args.clientId,
-      metadata: { method: args.method, language: args.language },
-    });
+    const { sessionId, link } = await createLink(ctx, { ...args, actor: { actorId: actor.userId, actorType: "client_user" } });
     return { sessionId, link };
+  },
+});
+
+// -- The capture links API (http.ts: /v1/capture-links) ---------------------
+
+// What the API shows of a link: never the token, prefilled ID number or
+// date of birth.
+async function apiView(ctx: QueryCtx | MutationCtx, row: Doc<"captureSessions">, now: number) {
+  const verification = row.verificationId ? await ctx.db.get(row.verificationId) : null;
+  return {
+    id: row.reference ?? null,
+    method: row.method,
+    contact: row.contact ?? null,
+    language: row.language,
+    externalRef: row.externalRef ?? null,
+    status: effectiveStatus(row, now),
+    delivery: row.deliveryStatus,
+    deliveryFailure: row.deliveryFailure ?? null,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    openedAt: row.openedAt ?? null,
+    submittedAt: row.submittedAt ?? null,
+    // The KYC check the customer's capture became.
+    verificationId: verification?.reference ?? null,
+  };
+}
+
+const methodValidator = v.union(v.literal("sms"), v.literal("whatsapp"), v.literal("link"));
+
+// POST /v1/capture-links. Test-mode keys get the checks and a sample
+// response; nothing is stored or sent.
+export const _createFromApi = internalMutation({
+  args: {
+    clientId: v.id("clients"),
+    apiKeyId: v.id("apiKeys"),
+    environment: v.union(v.literal("live"), v.literal("test")),
+    method: methodValidator,
+    contact: v.optional(v.string()),
+    language,
+    prefill: v.optional(prefillValidator),
+    externalRef: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { clientId, apiKeyId, environment, ...link } = args;
+    if (environment === "test") {
+      const { contact, externalRef } = validateLink(link);
+      const now = Date.now();
+      return {
+        id: `cap_test_${randomKeySegment(12)}`,
+        link: null,
+        method: link.method,
+        contact: contact ?? null,
+        language: link.language,
+        externalRef: externalRef ?? null,
+        status: "pending" as const,
+        delivery: link.method === "link" ? ("not_sent" as const) : ("pending" as const),
+        createdAt: now,
+        expiresAt: now + CAPTURE_LINK_HOURS * 60 * 60 * 1000,
+        sandbox: true,
+      };
+    }
+    const created = await createLink(ctx, { clientId, ...link, actor: { actorId: apiKeyId, actorType: "client_api_key" } });
+    const row = (await ctx.db.get(created.sessionId))!;
+    return { ...(await apiView(ctx, row, Date.now())), link: created.link };
+  },
+});
+
+async function byReference(ctx: QueryCtx | MutationCtx, clientId: Id<"clients">, reference: string) {
+  return await ctx.db.query("captureSessions").withIndex("by_client_and_reference", (q) => q.eq("clientId", clientId).eq("reference", reference)).unique();
+}
+
+// GET /v1/capture-links: newest first; `before` is the createdAt of the last
+// link seen. Links made before the API (no public id) are left out.
+export const _listForApi = internalQuery({
+  args: { clientId: v.id("clients"), limit: v.number(), before: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("captureSessions")
+      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .order("desc")
+      .filter((q) => q.and(q.neq(q.field("reference"), undefined), args.before === undefined ? true : q.lt(q.field("createdAt"), args.before)))
+      .take(args.limit + 1);
+    const page = rows.slice(0, args.limit);
+    const now = Date.now();
+    return {
+      data: await Promise.all(page.map((row) => apiView(ctx, row, now))),
+      nextCursor: rows.length > args.limit ? page[page.length - 1].createdAt : null,
+    };
+  },
+});
+
+export const _getForApi = internalQuery({
+  args: { clientId: v.id("clients"), reference: v.string() },
+  handler: async (ctx, args) => {
+    const row = await byReference(ctx, args.clientId, args.reference);
+    return row ? await apiView(ctx, row, Date.now()) : null;
+  },
+});
+
+// DELETE /v1/capture-links/{id}: the link stops working. A submitted or
+// expired link is left as it is.
+export const _cancelFromApi = internalMutation({
+  args: { clientId: v.id("clients"), apiKeyId: v.id("apiKeys"), reference: v.string() },
+  handler: async (ctx, args) => {
+    const row = await byReference(ctx, args.clientId, args.reference);
+    if (!row) return null;
+    const status = effectiveStatus(row, Date.now());
+    if (status === "pending" || status === "opened") {
+      await ctx.db.patch(row._id, { status: "cancelled", prefill: {} });
+      await recordAudit(ctx, {
+        actorId: args.apiKeyId,
+        actorType: "client_api_key",
+        action: "capture.link_cancelled",
+        targetType: "captureSession",
+        targetId: row._id,
+        clientId: args.clientId,
+      });
+    }
+    return await apiView(ctx, (await ctx.db.get(row._id))!, Date.now());
   },
 });
 

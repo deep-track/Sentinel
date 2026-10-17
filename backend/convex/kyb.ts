@@ -1,16 +1,18 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { buildVerificationReference, sha256Hex } from "./lib/crypto";
 import { readBrsResponse } from "./lib/kenyaBrs";
 import { requireClientRole } from "./lib/rbac";
+import { canReadClient } from "./verifications";
 import { assertCreditsForNewVerification, creditsForVerification } from "./lib/verificationTypes";
 import { chargeVerification } from "./lib/credits";
 import { isPartialIsoDate } from "./lib/amlCategories";
 import { subjectKeyFor } from "./lib/amlClearedMatches";
 import type { ScreeningRules } from "./lib/clientSettings";
-import { actorTypeForClientRole, recordAudit } from "./auditLog";
+import { actorTypeForClientRole, recordAudit, type AuditActorType } from "./auditLog";
 import { queueReview } from "./clientReviews";
 import { checkFraudNetwork } from "./fraudNetwork";
 import { screenSubjects, type ScreeningOutcome } from "./aml";
@@ -30,6 +32,99 @@ const directorInput = v.object({
   idNumber: v.string(),
 });
 
+async function requireActiveClient(ctx: MutationCtx, clientId: Id<"clients">) {
+  const client = await ctx.db.get(clientId);
+  if (!client || client.status !== "active") throw new ConvexError({ code: "forbidden", message: "Client account is not active." });
+}
+
+type DirectorInput = { firstName: string; lastName: string; email: string; position: string; shareholding?: string; dateOfBirth: string; idNumber: string };
+// The two documents: UploadThing URLs from the dashboard, or files the API
+// stored in Convex storage.
+type KybDocuments =
+  | { registrationDocUrl: string; proofOfAddressUrl: string }
+  | { registrationDocStorageId: Id<"_storage">; proofOfAddressStorageId: Id<"_storage"> };
+
+// Shared KYB creation (dashboard and API): checks, charges nothing yet,
+// inserts the check and its directors, schedules the automated checks and
+// audits it.
+async function createKybVerification(
+  ctx: MutationCtx,
+  args: {
+    clientId: Id<"clients">;
+    businessName: string;
+    registrationNumber: string;
+    incorporationCountry: string;
+    businessType?: string;
+    externalRef?: string;
+    documents: KybDocuments;
+    directors: DirectorInput[];
+    actor: { actorId: string; actorType: AuditActorType };
+  },
+) {
+  const hasCertificate = "registrationDocUrl" in args.documents ? Boolean(args.documents.registrationDocUrl.trim()) : true;
+  if (!args.businessName.trim() || !args.registrationNumber.trim() || !hasCertificate) {
+    throw new ConvexError({ code: "invalid_argument", message: "Business name, registration number, and registration document are required." });
+  }
+  if (args.directors.length === 0) {
+    throw new ConvexError({ code: "invalid_argument", message: "At least one director/UBO is required." });
+  }
+  if (args.directors.length > MAX_DIRECTORS) {
+    throw new ConvexError({ code: "invalid_argument", message: `At most ${MAX_DIRECTORS} directors/UBOs can be submitted.` });
+  }
+
+  const creditsUsed = await creditsForVerification(ctx, args.clientId, "kyb");
+  await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
+
+  const now = Date.now();
+  const reference = buildVerificationReference();
+  const verificationId = await ctx.db.insert("verifications", {
+    clientId: args.clientId,
+    type: "kyb",
+    status: "queued",
+    creditsUsed,
+    input: {
+      businessName: args.businessName,
+      registrationNumber: args.registrationNumber,
+      incorporationCountry: args.incorporationCountry,
+      businessType: args.businessType,
+      ...args.documents,
+      ...(args.externalRef ? { externalRef: args.externalRef } : {}),
+      directorCount: args.directors.length,
+    },
+    reference,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  for (const director of args.directors) {
+    await ctx.db.insert("kybDirectors", {
+      kybVerificationId: verificationId,
+      clientId: args.clientId,
+      firstName: director.firstName,
+      lastName: director.lastName,
+      email: director.email,
+      position: director.position,
+      shareholding: director.shareholding,
+      dateOfBirth: director.dateOfBirth,
+      idNumber: director.idNumber,
+      status: "pending",
+      createdAt: now,
+    });
+  }
+
+  await ctx.scheduler.runAfter(0, internal.kyb.processKybVerification, { verificationId, clientId: args.clientId });
+  await recordAudit(ctx, {
+    actorId: args.actor.actorId,
+    actorType: args.actor.actorType,
+    action: "verification.created",
+    targetType: "verification",
+    targetId: verificationId,
+    clientId: args.clientId,
+    metadata: { type: "kyb", reference, directorCount: args.directors.length },
+  });
+  return { id: verificationId, reference };
+}
+
 export const createKyb = mutation({
   args: {
     clientId: v.id("clients"),
@@ -44,67 +139,105 @@ export const createKyb = mutation({
   handler: async (ctx, args) => {
     // Also rejects inactive clients (write role set).
     const actor = await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
-    if (!args.businessName.trim() || !args.registrationNumber.trim() || !args.registrationDocUrl.trim()) {
-      throw new ConvexError({ code: "invalid_argument", message: "Business name, registration number, and registration document are required." });
-    }
-    if (args.directors.length === 0) {
-      throw new ConvexError({ code: "invalid_argument", message: "At least one director/UBO is required." });
-    }
-    if (args.directors.length > MAX_DIRECTORS) {
-      throw new ConvexError({ code: "invalid_argument", message: `At most ${MAX_DIRECTORS} directors/UBOs can be submitted.` });
-    }
-
-    const creditsUsed = await creditsForVerification(ctx, args.clientId, "kyb");
-    await assertCreditsForNewVerification(ctx, args.clientId, creditsUsed);
-
-    const now = Date.now();
-    const reference = buildVerificationReference();
-    const verificationId = await ctx.db.insert("verifications", {
-      clientId: args.clientId,
-      type: "kyb",
-      status: "queued",
-      creditsUsed,
-      input: {
-        businessName: args.businessName,
-        registrationNumber: args.registrationNumber,
-        incorporationCountry: args.incorporationCountry,
-        businessType: args.businessType,
-        registrationDocUrl: args.registrationDocUrl,
-        proofOfAddressUrl: args.proofOfAddressUrl,
-        directorCount: args.directors.length,
-      },
-      reference,
-      createdAt: now,
-      updatedAt: now,
+    const { registrationDocUrl, proofOfAddressUrl, ...rest } = args;
+    return await createKybVerification(ctx, {
+      ...rest,
+      documents: { registrationDocUrl, proofOfAddressUrl },
+      actor: { actorId: actor.userId, actorType: actorTypeForClientRole(actor.role) },
     });
+  },
+});
 
-    for (const director of args.directors) {
-      await ctx.db.insert("kybDirectors", {
-        kybVerificationId: verificationId,
-        clientId: args.clientId,
-        firstName: director.firstName,
-        lastName: director.lastName,
-        email: director.email,
-        position: director.position,
-        shareholding: director.shareholding,
-        dateOfBirth: director.dateOfBirth,
-        idNumber: director.idNumber,
-        status: "pending",
+// POST /v1/verify/kyb (http.ts stored the two files first). Test-mode keys
+// get a sandbox "pass" without processing or charges, like the other
+// checks; the files are deleted.
+export const _createFromApi = internalMutation({
+  args: {
+    clientId: v.id("clients"),
+    apiKeyId: v.id("apiKeys"),
+    environment: v.union(v.literal("live"), v.literal("test")),
+    businessName: v.string(),
+    registrationNumber: v.string(),
+    incorporationCountry: v.string(),
+    businessType: v.optional(v.string()),
+    externalRef: v.optional(v.string()),
+    registrationDocStorageId: v.id("_storage"),
+    proofOfAddressStorageId: v.id("_storage"),
+    directors: v.array(directorInput),
+  },
+  handler: async (ctx, args) => {
+    const { clientId, apiKeyId, environment, registrationDocStorageId, proofOfAddressStorageId, ...business } = args;
+    await requireActiveClient(ctx, clientId);
+    if (environment === "test") {
+      await ctx.storage.delete(registrationDocStorageId);
+      await ctx.storage.delete(proofOfAddressStorageId);
+      const now = Date.now();
+      const reference = buildVerificationReference();
+      const id = await ctx.db.insert("verifications", {
+        clientId,
+        type: "kyb",
+        status: "completed",
+        verdict: "pass",
+        confidence: 1,
+        creditsUsed: 0,
+        input: { sandbox: true, businessName: business.businessName, directorCount: business.directors.length },
+        result: { sandbox: true, reason: "Test-mode API key: the business was not checked and no credits were charged." },
+        reference,
         createdAt: now,
+        updatedAt: now,
+        completedAt: now,
       });
+      await ctx.scheduler.runAfter(0, internal.webhooks.dispatchWebhook, { verificationId: id });
+      await recordAudit(ctx, {
+        actorId: apiKeyId,
+        actorType: "client_api_key",
+        action: "verification.created",
+        targetType: "verification",
+        targetId: id,
+        clientId,
+        metadata: { type: "kyb", reference, sandbox: true },
+      });
+      return { reference, status: "completed" as const, verdict: "pass" as const, sandbox: true };
     }
-
-    await ctx.scheduler.runAfter(0, internal.kyb.processKybVerification, { verificationId, clientId: args.clientId });
-    await recordAudit(ctx, {
-      actorId: actor.userId,
-      actorType: actorTypeForClientRole(actor.role),
-      action: "verification.created",
-      targetType: "verification",
-      targetId: verificationId,
-      clientId: args.clientId,
-      metadata: { type: "kyb", reference, directorCount: args.directors.length },
+    const created = await createKybVerification(ctx, {
+      clientId,
+      ...business,
+      documents: { registrationDocStorageId, proofOfAddressStorageId },
+      actor: { actorId: apiKeyId, actorType: "client_api_key" },
     });
-    return { id: verificationId, reference };
+    return { reference: created.reference, status: "queued" as const, verdict: null, sandbox: false };
+  },
+});
+
+// A refused API request (no credits, inactive account): its stored files go.
+export const _discardFiles = internalMutation({
+  args: { storageIds: v.array(v.id("_storage")) },
+  handler: async (ctx, args) => {
+    for (const id of args.storageIds) await ctx.storage.delete(id).catch(() => undefined);
+  },
+});
+
+// Links to a KYB check's two documents for its report, whether they were
+// uploaded in the dashboard or sent through the API.
+export const documentLinks = query({
+  args: { kybVerificationId: v.id("verifications") },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.kybVerificationId);
+    if (!row || row.type !== "kyb" || !(await canReadClient(ctx, row.clientId))) return null;
+    const input = (row.input ?? {}) as Record<string, unknown>;
+    const link = async (url: unknown, storageId: unknown) => {
+      if (typeof url === "string" && url.startsWith("https://")) return url;
+      if (typeof storageId === "string") {
+        const id = ctx.db.system.normalizeId("_storage", storageId);
+        return id ? await ctx.storage.getUrl(id) : null;
+      }
+      return null;
+    };
+    return {
+      registrationDoc: await link(input.registrationDocUrl, input.registrationDocStorageId),
+      proofOfAddress: await link(input.proofOfAddressUrl, input.proofOfAddressStorageId),
+      viaApi: typeof input.registrationDocStorageId === "string",
+    };
   },
 });
 
