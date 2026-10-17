@@ -36,7 +36,7 @@ Every request goes to your Sentinel API host, written in this manual as `https:/
 
 Keys look like `gt_test_` or `gt_live_`, followed by two blocks of letters and digits. The table shows each key by its prefix, its scopes, when it was created and last used, and its status.
 
-![API keys table with one active test key](/help/shots/c1-keys-table.png "TODO")
+![API keys table with one active test key](/help/shots/c1-keys-table.png)
 
 ### Store the key in your environment
 

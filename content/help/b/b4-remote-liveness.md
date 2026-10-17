@@ -41,7 +41,7 @@ If the number isn't in international format, you see "Enter the phone number in 
 
 The **Sent requests** list on the same page shows your 50 most recent requests, newest first. Each row has the **Contact**, the **Method**, the **Status** and when it was **Sent**. The list updates by itself, so you can leave the page open.
 
-![Sent requests list on the Liveness page](/help/shots/b4-sent-requests.png "TODO")
+![Sent requests list on the Liveness page](/help/shots/b4-sent-requests.png)
 
 If a request shows **failed**, hold the pointer over the badge to see why, for example "Liveness link undelivered: Message could not be delivered."
 

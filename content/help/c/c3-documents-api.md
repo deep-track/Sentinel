@@ -27,7 +27,7 @@ Keys, test mode, rate limits and the general error format are in [C1 Quick start
 - **Admin** and **Developer** create keys and choose their scopes on the **API Keys** page.
 - Everyone in your organization can open API checks on the **Documents (IDP)** page. Any document that doesn't pass opens a review case for your team. See [B11 Deciding a review case](/help/b11).
 
-![API Keys page with a key that has the Run IDP document checks scope](/help/shots/c3-key-scope.png "TODO")
+![API Keys page with a key that has the Run IDP document checks scope](/help/shots/c3-key-scope.png)
 
 ## Step by step
 

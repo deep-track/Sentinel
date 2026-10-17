@@ -58,7 +58,7 @@ Each field holds up to 300 characters. Spaces at the start and end are removed, 
 3. The logo saves straight away. You don't need to click **Save changes**.
 4. To change it, click **Replace**. To take it off, click **Remove**.
 
-![Logo card with an uploaded logo and the Replace and Remove buttons](/help/shots/a4-logo.png "TODO")
+![Logo card with an uploaded logo and the Replace and Remove buttons](/help/shots/a4-logo.png)
 
 ## What each result means
 

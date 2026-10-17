@@ -25,7 +25,7 @@ Keys, test mode, rate limits and the general error format are in [C1 Quick start
 - **Admin** and **Developer** create keys and choose their scopes on the **API Keys** page.
 - Everyone in your organization can see API checks on the **Identity (KYC)** page. Your team decides checks held for review in **Reviews**. See [B11 Deciding a review case](/help/b11).
 
-![API Keys page with a key that has the Run KYC identity checks scope](/help/shots/c2-key-scope.png "TODO")
+![API Keys page with a key that has the Run KYC identity checks scope](/help/shots/c2-key-scope.png)
 
 ## Step by step
 
@@ -135,7 +135,7 @@ A live key returns `202` with `status` `queued`. Keep the `id`.
 2. Or poll `GET /v1/verify/{id}` until `status` is `completed` or `failed`. This returns the `verdict` but not the step details. See [C6 Results and credits](/help/c6).
 3. If the verdict is `review`, your team decides the case in **Reviews**. You then get `sentinel.review.decided`, or a second `sentinel.scan.complete` with the final verdict.
 
-![Webhook delivery log showing a KYC result for Wanjiku Mwangi](/help/shots/c2-webhook-log.png "TODO")
+![Webhook delivery log showing a KYC result for Wanjiku Mwangi](/help/shots/c2-webhook-log.png)
 
 ## What each result means
 

@@ -142,7 +142,7 @@ curl -X POST http://localhost:3000/ \
 
 A test event is sent once, is never retried and doesn't count towards pausing. Its `event` is `sentinel.test` and its `scan_id` starts with `test_`.
 
-![Webhook endpoints with an active endpoint and a delivered test event](/help/shots/c7-endpoints.png "TODO")
+![Webhook endpoints with an active endpoint and a delivered test event](/help/shots/c7-endpoints.png)
 
 ### Read the delivery log
 
@@ -151,7 +151,7 @@ A test event is sent once, is never retried and doesn't count towards pausing. I
 3. Click a row to open it. You see each attempt with its HTTP status and time, and the exact payload that was sent.
 4. To send it again, click **Resend**. To resend every failed delivery for an endpoint, click **Resend N failed** on its row.
 
-![Delivery details with three attempts and the payload](/help/shots/c7-delivery.png "TODO")
+![Delivery details with three attempts and the payload](/help/shots/c7-delivery.png)
 
 ### Rotate the secret
 

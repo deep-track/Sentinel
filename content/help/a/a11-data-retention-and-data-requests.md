@@ -43,7 +43,7 @@ Under the field, Sentinel tells you how many checks and transactions are older t
 
 Only one removal can wait or run at a time.
 
-![Removal waiting for approval, requested by one Admin](/help/shots/a11-pending.png "TODO")
+![Removal waiting for approval, requested by one Admin](/help/shots/a11-pending.png)
 
 ### Approve or cancel a removal
 
@@ -55,7 +55,7 @@ Only one removal can wait or run at a time.
 
 When the removal finishes, it appears under **Removal history**, with who requested it, who approved it, and what was kept.
 
-![Removal history with one completed removal and the checks kept](/help/shots/a11-history.png "TODO")
+![Removal history with one completed removal and the checks kept](/help/shots/a11-history.png)
 
 ### Answer a customer's data request
 

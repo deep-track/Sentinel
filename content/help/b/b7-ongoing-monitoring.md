@@ -57,7 +57,7 @@ In Demo Bank Ltd, Daniel Kipruto Langat (customer reference CUST-PEP-01) is moni
 4. Read the **Ongoing monitoring alert** section first. **New hits** and **Hits now more severe** name exactly what changed. **Monitored subject** and **Customer reference** tell you which customer it is.
 5. Read the matching cards under **Findings**, then decide the case as in [B11](/help/b11). If you clear it, those hits are remembered as cleared for this customer and aren't raised again unless they become more severe.
 
-![Report with the Ongoing monitoring alert section](/help/shots/b7-alert-report.png "TODO")
+![Report with the Ongoing monitoring alert section](/help/shots/b7-alert-report.png)
 
 If your organization uses webhooks, each alert is also sent as a separate monitoring alert event ([C4](/help/c4)).
 

@@ -105,7 +105,7 @@ This matters when cases are assigned automatically. For example, if Otieno Odhia
 1. In the **Access** column, click **Deactivate** next to the person.
 2. Confirm. They lose access right away. Their open cases go back to the unassigned queue so nobody's work is lost.
 
-![Members table with one active Admin and one deactivated Analyst](/help/shots/a5-members.png "TODO")
+![Members table with one active Admin and one deactivated Analyst](/help/shots/a5-members.png)
 
 You can't deactivate yourself. Another Admin must do it.
 

@@ -645,43 +645,322 @@
       "name": "d7-quality",
       "route": "/internal-ops/quality",
       "internal": true
+    },
+    {
+      "name": "a2-invoice",
+      "route": "/billing",
+      "wait": 3000,
+      "steps": [
+        {
+          "click": "css:a[href^='/billing/invoices/']"
+        }
+      ]
+    },
+    {
+      "name": "a4-logo",
+      "route": "/settings/organization",
+      "crop": "card:Logo"
+    },
+    {
+      "name": "a5-members",
+      "route": "/settings/team",
+      "crop": "card:Members"
+    },
+    {
+      "name": "a6-sso-setup",
+      "route": "/settings/security",
+      "crop": "card:Single sign-on",
+      "note": "Needs single sign-on pending (demoScreens:add with sso pending); a6-sso-connected needs it connected."
+    },
+    {
+      "name": "a7-cleared-hits",
+      "route": "/settings/screening",
+      "crop": "card:False-positive memory"
+    },
+    {
+      "name": "a11-pending",
+      "route": "/settings/audit",
+      "crop": "text:Removal waiting for approval"
+    },
+    {
+      "name": "a11-history",
+      "route": "/settings/audit",
+      "crop": "card:Data retention"
+    },
+    {
+      "name": "b4-sent-requests",
+      "route": "/liveness",
+      "crop": "text:Sent requests"
+    },
+    {
+      "name": "b7-alert-report",
+      "route": "/aml-check/kh77efpv9n0ask8ge7m18m160n8gfm29"
+    },
+    {
+      "name": "b11-four-eyes",
+      "route": "/reviews/kd74tyfa884fhcmbfadh1qg7bs8gfp52",
+      "crop": "form:decision",
+      "maxHeight": 880
+    },
+    {
+      "name": "b15-dispute-dialog",
+      "route": "/kyc",
+      "steps": [
+        {
+          "click": "case:Samuel Cheruiyot"
+        },
+        {
+          "click": "button:Dispute this result"
+        }
+      ],
+      "crop": "dialog:"
+    },
+    {
+      "name": "c1-keys-table",
+      "route": "/api-keys",
+      "crop": "text:Keys are shown by prefix only"
+    },
+    {
+      "name": "c2-key-scope",
+      "route": "/api-keys"
+    },
+    {
+      "name": "c3-key-scope",
+      "route": "/api-keys"
+    },
+    {
+      "name": "c4-api-key-scopes",
+      "route": "/api-keys"
+    },
+    {
+      "name": "c2-webhook-log",
+      "route": "/webhooks",
+      "crop": "card:Deliveries"
+    },
+    {
+      "name": "c7-endpoints",
+      "route": "/webhooks"
+    },
+    {
+      "name": "c7-delivery",
+      "route": "/webhooks",
+      "steps": [
+        {
+          "click": "row:ver_3ffb7d815546eab5a3706f81ebb8b908"
+        }
+      ],
+      "crop": "dialog:"
+    },
+    {
+      "name": "d1-overview",
+      "route": "/internal-ops/overview",
+      "internal": true
+    },
+    {
+      "name": "d6-requests",
+      "route": "/internal-ops/compliance",
+      "internal": true,
+      "crop": "card:Data subject requests"
+    },
+    {
+      "name": "d6-removal-pending",
+      "route": "/settings/audit",
+      "internal": true,
+      "crop": "card:Data retention"
+    },
+    {
+      "name": "d6-risk",
+      "route": "/internal-ops/risk",
+      "internal": true
+    },
+    {
+      "name": "a6-sso-connected",
+      "route": "/settings/security",
+      "crop": "card:Single sign-on"
+    },
+    {
+      "name": "b3-customer-intro",
+      "customer": ".auth/capture-link.txt",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "note": "The capture link is read from the git-ignored .auth/capture-link.txt and opened signed out at phone size."
+    },
+    {
+      "name": "b2-new-submit",
+      "route": "/kyc/new",
+      "steps": [
+        {
+          "click": "css:[role=radio]:has-text('National ID')"
+        },
+        {
+          "file": "css:input[type=file] >> nth=0",
+          "path": "id-front.png"
+        },
+        {
+          "file": "css:input[type=file] >> nth=1",
+          "path": "id-back.png"
+        },
+        {
+          "click": "button:Continue"
+        },
+        {
+          "file": "css:input[type=file] >> nth=0",
+          "path": "selfie.png"
+        },
+        {
+          "click": "button:Continue"
+        },
+        {
+          "click": "button:Skip, person not present"
+        },
+        {
+          "type": "field:First name",
+          "text": "Amani"
+        },
+        {
+          "type": "field:Last name",
+          "text": "Specimen"
+        },
+        {
+          "type": "field:ID / document number",
+          "text": "DEMO1234"
+        },
+        {
+          "fill": "field:Date of birth",
+          "text": "1990-01-01"
+        },
+        {
+          "select": "field:Gender",
+          "option": "Female"
+        }
+      ]
+    },
+    {
+      "name": "b8-wizard-people",
+      "route": "/kyb/new",
+      "steps": [
+        {
+          "type": "field:Business Name",
+          "text": "Msitu Demo Traders Ltd"
+        },
+        {
+          "type": "field:Registration Number",
+          "text": "PVT-DEMO2024X"
+        },
+        {
+          "type": "css:input[placeholder='Search for a country...']",
+          "text": "Kenya"
+        },
+        {
+          "click": "button:Kenya"
+        },
+        {
+          "click": "button:Continue",
+          "allow": true
+        },
+        {
+          "file": "css:input[type=file] >> nth=0",
+          "path": "certificate.png"
+        },
+        {
+          "file": "css:input[type=file] >> nth=1",
+          "path": "utility-bill.png"
+        },
+        {
+          "click": "button:Continue"
+        },
+        {
+          "type": "css:[id^='firstName-'] >> nth=0",
+          "text": "Amani"
+        },
+        {
+          "type": "css:[id^='lastName-'] >> nth=0",
+          "text": "Specimen"
+        },
+        {
+          "fill": "css:[id^='dob-'] >> nth=0",
+          "text": "1980-05-14"
+        },
+        {
+          "type": "css:[id^='email-'] >> nth=0",
+          "text": "amani@msitu-demo.example"
+        },
+        {
+          "type": "css:[id^='idNumber-'] >> nth=0",
+          "text": "DEMO1001"
+        },
+        {
+          "select": "css:[id^='position-'] >> nth=0",
+          "option": "Director"
+        },
+        {
+          "fill": "css:[id^='shareholding-'] >> nth=0",
+          "text": "60"
+        },
+        {
+          "click": "button:Add Another Person"
+        },
+        {
+          "type": "css:[id^='firstName-'] >> nth=1",
+          "text": "Baraka"
+        },
+        {
+          "type": "css:[id^='lastName-'] >> nth=1",
+          "text": "Sample"
+        },
+        {
+          "fill": "css:[id^='dob-'] >> nth=1",
+          "text": "1985-09-03"
+        },
+        {
+          "type": "css:[id^='email-'] >> nth=1",
+          "text": "baraka@msitu-demo.example"
+        },
+        {
+          "type": "css:[id^='idNumber-'] >> nth=1",
+          "text": "DEMO1002"
+        },
+        {
+          "select": "css:[id^='position-'] >> nth=1",
+          "option": "Shareholder"
+        },
+        {
+          "fill": "css:[id^='shareholding-'] >> nth=1",
+          "text": "40"
+        },
+        {
+          "scroll": "css:h2",
+          "offset": 80
+        }
+      ]
+    },
+    {
+      "name": "b13-upload-summary",
+      "route": "/transactions",
+      "uploads": true,
+      "steps": [
+        {
+          "file": "css:input[type=file][accept*=csv]",
+          "path": "transactions.csv"
+        },
+        {
+          "wait": 2500
+        }
+      ],
+      "crop": "text:Upload transactions",
+      "note": "Uploads 5 invented rows to Demo Bank Ltd; runs only when named, with --uploads."
     }
   ],
   "skipped": {
     "a1-start-trial": "Shown only to a new sign-up before their organization exists.",
     "a1-trial-banner": "Demo Bank Ltd is on the Business plan, not a trial.",
-    "a2-invoice": "Demo Bank Ltd has no invoices; issuing one would save.",
-    "a4-logo": "Demo Bank Ltd has no logo; uploading one would save.",
-    "a5-members": "Needs a deactivated Analyst; Demo Bank Ltd has only Bryan.",
-    "a6-sso-setup": "Set up single sign-on saves a connection.",
-    "a6-sso-connected": "Demo Bank Ltd has no single sign-on connection.",
-    "a11-pending": "Needs a requested removal; requesting one saves.",
-    "a11-history": "Needs a completed removal.",
-    "b2-new-submit": "The KYC wizard needs ID and selfie uploads to reach Review & Submit.",
-    "b3-customer-intro": "The customer's phone page; opening a capture link uses it.",
-    "b4-sent-requests": "No liveness requests sent; sending one sends a text.",
-    "b8-wizard-people": "The KYB wizard needs document uploads before UBO & Directors.",
-    "b11-four-eyes": "Needs a recommendation sent by a team member.",
-    "b13-upload-summary": "Needs a transactions upload.",
-    "b15-dispute-dialog": "James Mutua is already disputed, so the Dispute this result button isn't shown.",
-    "c1-keys-table": "Demo Bank Ltd has no API keys; creating one saves.",
-    "c2-key-scope": "Demo Bank Ltd has no API keys; creating one saves.",
-    "c3-key-scope": "Demo Bank Ltd has no API keys; creating one saves.",
-    "c4-api-key-scopes": "Demo Bank Ltd has no API keys; creating one saves.",
-    "c2-webhook-log": "Demo Bank Ltd has no webhook endpoints or deliveries.",
-    "c7-endpoints": "Demo Bank Ltd has no webhook endpoints; adding one saves.",
-    "c7-delivery": "Demo Bank Ltd has no webhook deliveries.",
     "d4-gazette-reading": "Needs a Gazette issue uploaded and read.",
     "d4-gazette-approve": "Needs a Gazette issue uploaded and read.",
     "d5-approve": "Needs a publication uploaded and read.",
-    "d6-requests": "No open data subject request; logging one saves.",
-    "d6-removal-pending": "Needs a requested removal; requesting one saves.",
-    "a7-cleared-hits": "No cleared hits yet; they appear only after a reviewer approves an AML case.",
     "a10-export": "The log has fewer entries than a page, so there is no Load more button.",
-    "b7-alert-report": "No ongoing monitoring alert has been raised for Demo Bank Ltd (Alerts raised: 0).",
-    "d1-overview": "Client accounts on the Overview lists only active clients (Deeptrack), not Demo Bank Ltd, and the review queue panel shows DeepTrack's own test items, not the James Mutua dispute.",
     "d4-entries": "The Kenyan PEP register has no entries yet, so a search shows an empty table.",
-    "d6-risk": "No fake face caught for Demo Bank Ltd (Fake faces caught: 0), and Hits by client lists only Deeptrack.",
     "d7-services": "Two of the three services show Down (their URLs aren't configured), not all three up."
   }
 }

@@ -46,7 +46,7 @@ You can also let the customer do the photos on their own phone. See [B3 Capture 
 5. Check the summary. It shows **Liveness: Not collected in this flow**. Click **Edit captures** to change a photo.
 6. Tick the consent box and click **Submit Verification**.
 
-![Review & Submit step with identity details filled in](/help/shots/b2-new-submit.png "TODO")
+![Review & Submit step with identity details filled in](/help/shots/b2-new-submit.png)
 
 The page shows **Verification Submitted** with the check's reference. It updates by itself while Sentinel works, usually within a few minutes. Click **View report** to open the report.
 
