@@ -49,6 +49,7 @@ const TYPE_LABELS: Record<string, string> = {
   idp: "KYC",
   kyb: "KYB",
   kyi: "KYI",
+  document: "IDP",
   aml: "AML",
   liveness: "Liveness",
 };

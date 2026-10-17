@@ -1,0 +1,183 @@
+{
+  "video": "v02-how-sentinel-decides",
+  "title": "How Sentinel decides",
+  "chapter": "b1",
+  "course": "Analyst training",
+  "order": 2,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Every check in Sentinel ends with one of three verdicts: pass, review or reject. In this video, you'll see how Sentinel chooses between them, and when a person on your team has to step in.",
+      "show": [
+        {
+          "card": "How Sentinel decides",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "verdicts",
+      "say": "Click Identity (KYC) in the menu on the left. The cards at the top count each verdict. A pass shows as Approved, a review as Needs Review, and a reject as Declined.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Identity (KYC)"
+        },
+        {
+          "highlight": "text:Needs Review"
+        }
+      ]
+    },
+    {
+      "id": "pass",
+      "say": "Sentinel is built to fail closed. A check only passes when every step comes back clearly clean. Here is Wanjiku Mwangi. Every step in the Verification Report met its threshold, so she was approved.",
+      "show": [
+        {
+          "click": "case:Wanjiku Mwangi"
+        },
+        {
+          "scroll": "card:Verification Report"
+        },
+        {
+          "highlight": "card:Verification Report"
+        }
+      ]
+    },
+    {
+      "id": "order",
+      "say": "The steps run in order. Document, selfie and liveness come first, then IPRS, Kenya's population register, then AML screening. Sentinel stops at the first step that needs a person.",
+      "show": [
+        {
+          "highlight": "card:Document Authenticity"
+        },
+        {
+          "highlight": "card:Identity Registry"
+        },
+        {
+          "highlight": "card:AML / Sanctions Screening"
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "say": "Now open Brenda Atieno. Her selfie doesn't match her ID photo, and the same face was seen under another identity. Face match can never reject on its own, so the check is held for review.",
+      "show": [
+        {
+          "goto": "/kyc"
+        },
+        {
+          "click": "case:Brenda Atieno"
+        },
+        {
+          "highlight": "text:Face match"
+        },
+        {
+          "zoom": "text:Face match"
+        }
+      ]
+    },
+    {
+      "id": "case-link",
+      "say": "When a check is held, follow the link to its case. On a KYC check, that's View review status. Your team then decides the case on the Reviews page.",
+      "show": [
+        {
+          "scroll": "case:View review status"
+        },
+        {
+          "highlight": "case:View review status"
+        }
+      ]
+    },
+    {
+      "id": "reject",
+      "say": "A reject means a clear, serious finding. James Mutua's selfie was flagged by DeepTrack Live as a fake face, with high confidence. That is one of only two AI findings that reject without a person. The other is a critical document flag, such as an AI-generated ID.",
+      "show": [
+        {
+          "goto": "/kyc"
+        },
+        {
+          "click": "case:James Mutua"
+        },
+        {
+          "highlight": "text:Deepfake shield · DeepTrack Live"
+        },
+        {
+          "zoom": "text:Deepfake shield · DeepTrack Live"
+        }
+      ]
+    },
+    {
+      "id": "sanctions",
+      "say": "On AML Screening, a sanctions hit rejects. Viktor Petrovich Orlov shows Match, do not proceed. For documents, AML and business checks, a rejection still opens a high-priority case, so a person confirms it.",
+      "show": [
+        {
+          "goto": "/aml-check"
+        },
+        {
+          "click": "case:Match · View report"
+        },
+        {
+          "scroll": "card:Review"
+        },
+        {
+          "highlight": "card:Review"
+        }
+      ]
+    },
+    {
+      "id": "doubt",
+      "say": "Any doubt goes to a person. If a service is down, the check is held, never rejected. And Sentinel never turns a review into a pass by itself.",
+      "show": [
+        {
+          "card": "Any doubt goes to a person",
+          "subtitle": "A service outage holds the check for review. It never rejects."
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "say": "The AI helps, but it only recommends. On an AML case, the AI hit review suggests clearing the hits, confirming the match, or getting more information. Every final approve or reject is made by your team, under your four-eyes rules.",
+      "show": [
+        {
+          "click": "sidebar:Reviews"
+        },
+        {
+          "highlight": "views"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's how Sentinel decides. To learn more, open chapter B1 in Help, How Sentinel decides.",
+      "show": [
+        {
+          "card": "Help → B1 How Sentinel decides",
+          "subtitle": "sentinel.deeptrack.io/help/b1"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "case:Match · View report assumes Viktor Petrovich Orlov is the only AML screening with the Match verdict in Demo Bank Ltd (the list has no clickable name; only the outcome link opens the report).",
+    "text:Face match matches the first text containing 'Face match' on Brenda's report; it should be the Face match box in the Verification Report, but confirm on the first take.",
+    "The KYC list rows aren't links: case:<name> clicks the name text and the row's onClick opens the report.",
+    "card:Identity Registry is used instead of the full heading because the card target builds a regex and the brackets in 'Identity Registry (IPRS)' would break the match."
+  ]
+}

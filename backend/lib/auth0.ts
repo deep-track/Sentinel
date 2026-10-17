@@ -64,9 +64,20 @@ function getPreservedCustomClaims(): string[] {
 			getRoleClaimName(),
 			DEFAULT_ROLES_CLAIM,
 			getCompanyIdClaimName(),
+			// Whether sign-in used MFA (a client's Settings → Security can
+			// require it; see sessionUsedMfa in backend/lib/auth.ts).
+			"amr",
+			MFA_CLAIM,
+			// The connection signed in with (a client's single sign-on).
+			CONNECTION_CLAIM,
 		]),
 	];
 }
+
+// Set by auth0/sentinel-role-claims-action.js when the login used MFA.
+export const MFA_CLAIM = "https://deeptrack.io/mfa";
+// Set by the same Action: the Auth0 connection the user signed in with.
+export const CONNECTION_CLAIM = "https://deeptrack.io/connection";
 
 async function beforeSessionSaved(session: SessionData): Promise<SessionData> {
 	const rawUser = session.user as Record<string, unknown>;
@@ -111,7 +122,9 @@ export function getAuth0(): {
 				clientId: auth0ClientId as string,
 				clientSecret: auth0ClientSecret as string,
 				authorizationParameters: {
-					scope: "openid profile email",
+					// offline_access gets a refresh token so /api/auth/token can renew the
+					// ID token Convex uses without sending the browser back to Auth0.
+					scope: "openid profile email offline_access",
 				},
 				beforeSessionSaved,
 			});

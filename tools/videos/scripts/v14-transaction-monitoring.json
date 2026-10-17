@@ -1,0 +1,168 @@
+{
+  "video": "v14-transaction-monitoring",
+  "title": "Transaction monitoring",
+  "chapter": "b13",
+  "course": "Analyst training",
+  "order": 14,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "Transaction monitoring checks your customers' transactions for patterns that can point to money laundering. In this video, you'll upload transactions, read an alert, and close or escalate it.",
+      "show": [
+        {
+          "card": "Transaction monitoring",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "upload",
+      "say": "Click Transactions in the menu on the left. Under Upload transactions, click Template to get the CSV template. Fill in one row per transaction, then click Choose CSV. Large files are sent in batches for you, and monitoring doesn't use credits.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Transactions"
+        },
+        {
+          "highlight": "case:Upload transactions"
+        },
+        {
+          "highlight": "button:Template"
+        },
+        {
+          "highlight": "case:Choose CSV"
+        }
+      ]
+    },
+    {
+      "id": "summary",
+      "say": "Read the summary under the buttons: rows added, already uploaded, and rejected, with the reason for each. Tip: use the Sentinel reference of the customer's KYC or AML check as the customer reference. Sentinel then watches high-risk customers more closely.",
+      "show": [
+        {
+          "card": "Upload summary",
+          "subtitle": "added · already uploaded · rejected (with the row number and reason)"
+        }
+      ]
+    },
+    {
+      "id": "rules",
+      "say": "Seven rules raise alerts: large cash, possible structuring, unusual activity, high-risk country, money in and straight out, dormant account reactivated, and a counterparty on a sanctions or watch list.",
+      "show": [
+        {
+          "card": "The seven rules",
+          "subtitle": "Large cash · Structuring · Unusual activity · High-risk country · Money in and straight out · Dormant account · Sanctioned counterparty"
+        }
+      ]
+    },
+    {
+      "id": "alerts",
+      "say": "New alerts appear within a minute, in the Alerts list. Each row shows the rule, the customer reference, a summary, the severity, and the number of transactions. Demo Bank has several open alerts: unusual activity and money in and straight out on CUST-2077, and large cash and a payment to Iran on CUST-3310.",
+      "show": [
+        {
+          "highlight": "case:Money in and straight out"
+        },
+        {
+          "highlight": "case:High-risk country"
+        }
+      ]
+    },
+    {
+      "id": "open-alert",
+      "say": "Open the sanctions alert. A payment of 1.47 million shillings went to Orlov Trading FZE, which is linked to a sanctioned person.",
+      "show": [
+        {
+          "click": "case:Counterparty on a sanctions or watch list"
+        },
+        {
+          "highlight": "case:Orlov Trading FZE"
+        }
+      ]
+    },
+    {
+      "id": "transactions",
+      "say": "The table lists the transactions behind the alert: date, reference, in or out, channel, amount and counterparty, with totals underneath. Here, it went out by bank transfer to the UAE, as a goods payment.",
+      "show": [
+        {
+          "zoom": "case:Goods payment"
+        }
+      ]
+    },
+    {
+      "id": "decide",
+      "say": "Look into the activity: the customer's check, their business, and any source of funds documents. Then, in the Decision box, write what you checked and why. Click Close: not suspicious if it's explained, or Escalate as suspicious if it isn't. A decision can't be undone, so write your notes with care.",
+      "show": [
+        {
+          "highlight": "button:Close: not suspicious"
+        },
+        {
+          "highlight": "button:Escalate as suspicious"
+        }
+      ]
+    },
+    {
+      "id": "escalated",
+      "say": "Escalated alerts move to the Escalated list. Here is the structuring alert on Wanjiku Mwangi: three cash deposits of 1.85 million shillings in five days, each just under the threshold.",
+      "show": [
+        {
+          "goto": "/transactions"
+        },
+        {
+          "click": "button:Escalated"
+        },
+        {
+          "click": "case:Possible structuring"
+        },
+        {
+          "highlight": "case:Escalated as suspicious"
+        }
+      ]
+    },
+    {
+      "id": "check-and-str",
+      "say": "Because the customer reference is her KYC check, you can click Open the customer's check. And Admins and Reviewers can prepare an STR at the bottom of the page.",
+      "show": [
+        {
+          "highlight": "case:Open the customer's check"
+        },
+        {
+          "scroll": "card:Suspicious transaction report"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's transaction monitoring. To learn more, open chapter B13 in Help. Filing the STR is covered in B14.",
+      "show": [
+        {
+          "card": "Help → B13 Transaction monitoring",
+          "subtitle": "sentinel.deeptrack.io/help/b13"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "The alert's Decision textarea has no label (placeholder only), so field: can't target it and no notes are typed. Adding aria-label=\"Decision notes\" in alert-detail.tsx would allow a type step.",
+    "'Upload transactions' and 'Decision' are <p>, not headings, and the transactions table has no heading, so they are targeted with case:<text> (page.getByText fallback) or not at all.",
+    "'button:Escalated' relies on Playwright substring matching; no other button on /transactions contains 'Escalated'. Avoided clicking 'button:Open' because the substring could match other buttons.",
+    "Template and Choose CSV are highlighted only (download / file upload).",
+    "The Suspicious transaction report panel renders only for Admins and Reviewers; record as one of those.",
+    "Assumed the large-cash and Iran alerts on CUST-3310 and the unusual-activity and money in and straight out alerts on CUST-2077 are raised by the seed's rule evaluation as described in the brief; the seed creates them via evaluateAndRaise, not explicitly."
+  ]
+}

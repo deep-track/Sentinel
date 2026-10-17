@@ -36,7 +36,7 @@ export const topics =  {
     "reg.action": "Regulator action",
     "reg.warn": "Regulator warning",
     "role.pep": "Politician",
-    "role.pol": "Non-PEP",
+    "role.pol": "Political figure",
     "role.rca": "Close Associate",
     "role.judge": "Judge",
     "role.civil": "Civil servant",

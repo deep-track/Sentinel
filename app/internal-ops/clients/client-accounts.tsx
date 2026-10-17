@@ -30,6 +30,8 @@ import {
   formatNumber,
 } from "@/components/sentinel/format";
 import type { ClientSummary } from "../overview/ops-overview";
+import { PLAN_BONUS, PLAN_PREPAY, planCredits, type BillingCurrency } from "@/backend/convex/lib/pricing";
+import { inviteTeamMember } from "@/app/(platform)/settings/team/actions";
 
 type ClientDetail = ClientSummary & {
   ledger: Array<{ _id: string; type: string; amount: number; reason: string; createdAt: number }>;
@@ -274,6 +276,7 @@ function ClientDetailPanel({
       {canWrite ? (
         <>
           <EditClientForm client={client} />
+          <InviteMemberForm client={client} />
           <AdjustCreditsForm client={client} />
         </>
       ) : (
@@ -318,6 +321,8 @@ function EditClientForm({ client }: { client: ClientDetail }) {
     creditLimit: String(client.creditLimit),
     rpmCap: String(client.rpmCap),
     creditThresholdPct: String(client.creditThresholdPct),
+    billingCurrency: client.billingCurrency,
+    seatLimit: client.seatLimit === null ? "" : String(client.seatLimit),
     reason: "",
   });
   const [pending, setPending] = useState(false);
@@ -336,9 +341,11 @@ function EditClientForm({ client }: { client: ClientDetail }) {
             creditLimit: String(client.creditLimit),
             rpmCap: String(client.rpmCap),
             creditThresholdPct: String(client.creditThresholdPct),
+            billingCurrency: client.billingCurrency,
+            seatLimit: client.seatLimit === null ? "" : String(client.seatLimit),
           },
     );
-  }, [client.name, client.plan, client.status, client.creditLimit, client.rpmCap, client.creditThresholdPct]);
+  }, [client.name, client.plan, client.status, client.creditLimit, client.rpmCap, client.creditThresholdPct, client.billingCurrency, client.seatLimit]);
 
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((current) => ({ ...current, [key]: event.target.value }));
@@ -356,6 +363,8 @@ function EditClientForm({ client }: { client: ClientDetail }) {
         creditLimit: Number(form.creditLimit),
         rpmCap: Number(form.rpmCap),
         creditThresholdPct: Number(form.creditThresholdPct),
+        billingCurrency: form.billingCurrency,
+        seatLimit: form.seatLimit.trim() === "" ? null : Number(form.seatLimit),
         reason: form.reason,
       })) as { changed: string[] };
       setMessage(
@@ -398,6 +407,12 @@ function EditClientForm({ client }: { client: ClientDetail }) {
             ))}
           </select>
         </Field>
+        <Field label="Billing currency" htmlFor="client-currency" hint="Can only change while the balance is 0.">
+          <select id="client-currency" className={inputClass} value={form.billingCurrency} onChange={set("billingCurrency")}>
+            <option value="USD">USD — international price list</option>
+            <option value="KES">KES — Kenyan price list</option>
+          </select>
+        </Field>
         <Field label="Monthly credit limit" htmlFor="client-limit" hint="Used for usage % and alerts. Doesn't add credits.">
           <input id="client-limit" type="number" min={0} step={1} className={inputClass} value={form.creditLimit} onChange={set("creditLimit")} required />
         </Field>
@@ -407,12 +422,67 @@ function EditClientForm({ client }: { client: ClientDetail }) {
         <Field label="Requests per minute" htmlFor="client-rpm">
           <input id="client-rpm" type="number" min={1} step={1} className={inputClass} value={form.rpmCap} onChange={set("rpmCap")} required />
         </Field>
+        <Field label="Team seats" htmlFor="client-seats" hint="Active members + pending invites. Empty = no limit.">
+          <input id="client-seats" type="number" min={1} step={1} className={inputClass} value={form.seatLimit} onChange={set("seatLimit")} placeholder="No limit" />
+        </Field>
         <Field label="Reason (audit log)" htmlFor="client-reason">
           <input id="client-reason" className={inputClass} value={form.reason} onChange={set("reason")} placeholder="e.g. Upgraded to Growth per contract" minLength={3} maxLength={500} required />
         </Field>
         <div className="flex items-center gap-3 sm:col-span-2">
           <button type="submit" className={buttonClass} disabled={pending}>
             {pending ? "Saving…" : "Save changes"}
+          </button>
+          <Notice message={message} />
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+// DeepTrack invites a client's first Admin here; after that the client's
+// Admin manages their own team (portal Settings → Team).
+function InviteMemberForm({ client }: { client: ClientDetail }) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"client_admin" | "reviewer" | "compliance_analyst" | "developer" | "viewer">("client_admin");
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<Message>(null);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    setMessage(null);
+    const result = await inviteTeamMember(client._id, email, role);
+    setPending(false);
+    if (!result.ok) {
+      setMessage({ tone: "error", text: result.error });
+      return;
+    }
+    setEmail("");
+    setMessage({
+      tone: "ok",
+      text: result.emailSent ? `Invitation emailed to ${result.email}.` : `Invitation saved for ${result.email}. ${result.note ?? ""}`,
+    });
+  }
+
+  return (
+    <Panel>
+      <PanelHeader title="Invite a team member" hint="usually the client's first Admin" />
+      <form onSubmit={submit} className="grid grid-cols-1 gap-3 px-3.5 py-3 sm:grid-cols-2">
+        <Field label="Email" htmlFor="invite-email">
+          <input id="invite-email" type="email" className={inputClass} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="cro@client.co.ke" required />
+        </Field>
+        <Field label="Role" htmlFor="invite-role" hint="They join the first time they sign in with this email.">
+          <select id="invite-role" className={inputClass} value={role} onChange={(event) => setRole(event.target.value as typeof role)}>
+            <option value="client_admin">Admin</option>
+            <option value="reviewer">Reviewer</option>
+            <option value="compliance_analyst">Analyst</option>
+            <option value="developer">Developer</option>
+            <option value="viewer">Viewer / Auditor</option>
+          </select>
+        </Field>
+        <div className="flex items-center gap-3 sm:col-span-2">
+          <button type="submit" className={buttonClass} disabled={pending}>
+            {pending ? "Inviting…" : "Send invitation"}
           </button>
           <Notice message={message} />
         </div>
@@ -502,7 +572,11 @@ function AdjustCreditsForm({ client }: { client: ClientDetail }) {
 
 function CreateClientPanel({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const createClient = useMutation(anyApi.apiKeys.createClient);
-  const [form, setForm] = useState({ name: "", plan: "trial" as Plan, creditLimit: "100", rpmCap: "60" });
+  const [form, setForm] = useState({ name: "", plan: "trial" as Plan, billingCurrency: "KES" as BillingCurrency, creditLimit: "100", rpmCap: "60" });
+  // Pre-fill the credits a paid plan's annual prepayment loads.
+  useEffect(() => {
+    if (form.plan !== "trial") setForm((current) => ({ ...current, creditLimit: String(planCredits(current.plan, current.billingCurrency)) }));
+  }, [form.plan, form.billingCurrency]);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<Message>(null);
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -516,6 +590,7 @@ function CreateClientPanel({ onClose, onCreated }: { onClose: () => void; onCrea
       const id = (await createClient({
         name: form.name,
         plan: form.plan,
+        billingCurrency: form.billingCurrency,
         creditLimit: Number(form.creditLimit),
         rpmCap: Number(form.rpmCap),
       })) as string;
@@ -552,7 +627,21 @@ function CreateClientPanel({ onClose, onCreated }: { onClose: () => void; onCrea
             ))}
           </select>
         </Field>
-        <Field label="Starting credits / limit" htmlFor="new-client-limit" hint="Allocated now and used as the monthly limit.">
+        <Field label="Billing currency" htmlFor="new-client-currency" hint="Kenyan entities: KES. Everyone else: USD.">
+          <select id="new-client-currency" className={inputClass} value={form.billingCurrency} onChange={set("billingCurrency")}>
+            <option value="USD">USD — international price list</option>
+            <option value="KES">KES — Kenyan price list</option>
+          </select>
+        </Field>
+        <Field
+          label="Starting credits / limit"
+          htmlFor="new-client-limit"
+          hint={
+            form.plan === "trial"
+              ? "Trial credits, allocated now."
+              : `${PLAN_PREPAY[form.billingCurrency][form.plan].toLocaleString()} ${form.billingCurrency} prepay${PLAN_BONUS[form.billingCurrency][form.plan] ? ` + ${Math.round(PLAN_BONUS[form.billingCurrency][form.plan] * 100)}% bonus` : ""}.`
+          }
+        >
           <input id="new-client-limit" type="number" min={0} step={1} className={inputClass} value={form.creditLimit} onChange={set("creditLimit")} required />
         </Field>
         <Field label="Requests per minute" htmlFor="new-client-rpm">

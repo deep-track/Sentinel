@@ -18,12 +18,17 @@ import { TypographyP, TypographySmall } from "@/components/ui/typography";
 import { TeamSwitcher } from "@/components/team-switcher";
 import {
 	type AppRole,
-	isInternalAdminRole,
 	isInternalOpsRole,
 } from "@/backend/lib/roles";
 import {
 	Building2,
+	ClipboardCheck,
+	Flag,
+	Gauge,
+	HelpCircle,
+	ArrowLeftRight,
 	CreditCard,
+	FileBarChart,
 	Fingerprint,
 	Home,
 	Key,
@@ -32,29 +37,27 @@ import {
 	Settings,
 	Shield,
 	ShieldCheck,
-	TrendingUp,
-	User2,
+	FileScan,
 	Webhook,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRouter } from "next/navigation";
 import React from "react";
 import { Toaster } from "react-hot-toast";
-
-// Member management is only available to Sentinel internal administrators
-// (memberships.listForClient requires requireInternalAdmin).
-const ADMIN_ROUTES = ["/members"];
 
 const getMainItems = () => [
 	{ title: "Overview", url: "/dashboard", icon: Home },
 	{ title: "Client Portal", url: "/portal", icon: LayoutGrid },
 	{ title: "Identity (KYC)", url: "/kyc", icon: ShieldCheck },
 	{ title: "Business (KYB)", url: "/kyb", icon: Building2 },
-	{ title: "KYI", url: "/kyi", icon: TrendingUp },
+	{ title: "Documents (IDP)", url: "/idp", icon: FileScan },
 	{ title: "AML Screening", url: "/aml-check", icon: Shield },
 	{ title: "Liveness", url: "/liveness", icon: Fingerprint },
+	{ title: "Reviews", url: "/reviews", icon: ClipboardCheck },
+	{ title: "Disputes", url: "/disputes", icon: Flag },
+	{ title: "Customer risk", url: "/customers", icon: Gauge },
+	{ title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
 ];
 
 const developerItems = [
@@ -63,8 +66,10 @@ const developerItems = [
 ];
 
 const accountItems = [
+	{ title: "Reports", url: "/reports", icon: FileBarChart },
 	{ title: "Billing & Credits", url: "/billing", icon: CreditCard },
 	{ title: "Settings", url: "/settings", icon: Settings },
+	{ title: "Help", url: "/help", icon: HelpCircle },
 ];
 
 type Props = {
@@ -96,7 +101,7 @@ function NavSection({
 							<Link
 								href={item.url}
 								className={`flex items-center gap-2 px-4 py-2 rounded-xl hover:text-white transition-colors ${
-									pathname === item.url ? "bg-black text-white" : ""
+									pathname === item.url || pathname.startsWith(`${item.url}/`) ? "bg-black text-white" : ""
 								}`}
 							>
 								<div className="p-2 rounded-xl bg-primary text-primary-foreground">
@@ -114,29 +119,19 @@ function NavSection({
 
 export function AppSidebar({ role }: Props) {
 	const pathname = usePathname();
-	const router = useRouter();
 
-	const canManageMembers = isInternalAdminRole(role);
 	const mainItems = getMainItems();
-	// Overview, Client Portal, then Sentinel Ops (internal roles only) and
-	// Members (internal admins only) ahead of the verification products.
+	// Overview, Client Portal, then Sentinel Back Office (internal roles only)
+	// ahead of the verification products. Team members are managed in
+	// Settings → Team.
 	const extraItems: typeof mainItems = [];
-	// Sentinel Ops is restricted to internal (DeepTrack staff) roles and must
+	// Sentinel Back Office is restricted to internal (DeepTrack staff) roles and must
 	// never be visible to client users. Backend enforcement lives in
 	// app/internal-ops/layout.tsx; this only hides the link.
 	if (isInternalOpsRole(role)) {
-		extraItems.push({ title: "Sentinel Ops", url: "/internal-ops", icon: Radar });
-	}
-	if (canManageMembers) {
-		extraItems.push({ title: "Members", url: "/members", icon: User2 });
+		extraItems.push({ title: "Sentinel Back Office", url: "/internal-ops", icon: Radar });
 	}
 	mainItems.splice(2, 0, ...extraItems);
-
-	React.useEffect(() => {
-		if (!canManageMembers && ADMIN_ROUTES.some((route) => pathname.startsWith(route))) {
-			router.push("/dashboard");
-		}
-	}, [canManageMembers, pathname, router]);
 
 	return (
 		<>

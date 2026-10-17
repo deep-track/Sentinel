@@ -1,0 +1,184 @@
+{
+  "video": "v05-business-checks",
+  "title": "Business checks (KYB)",
+  "chapter": "b8",
+  "course": "Analyst training",
+  "order": 5,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "KYB, or know your business, checks a company before you take it on. In this video, you'll submit a business, then read a real result with layered ownership.",
+      "show": [
+        {
+          "card": "Business checks (KYB)",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "say": "Click Business (KYB) in the menu. Every business you've checked is listed here, with its status. Search by business name or reference, or filter by status.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Business (KYB)"
+        },
+        {
+          "highlight": "case:Savannah Agri Holdings Ltd"
+        }
+      ]
+    },
+    {
+      "id": "info",
+      "say": "To check a new business, click New Verification. Enter the business name, the registration number and the country.",
+      "show": [
+        {
+          "click": "case:New Verification"
+        },
+        {
+          "type": "field:Business Name",
+          "text": "Savannah Agri Holdings Ltd"
+        },
+        {
+          "type": "field:Registration Number",
+          "text": "PVT-SAV2019A"
+        }
+      ]
+    },
+    {
+      "id": "documents",
+      "say": "Next, upload the incorporation certificate and a utility bill. For a Kenyan company, use a recent CR12 where you can, because it lists the shareholders. Then list every director, and everyone who owns 10% or more. Check the summary, tick the confirmation, and submit.",
+      "show": [
+        {
+          "card": "Business Documents → UBO & Directors",
+          "subtitle": "CR12 or certificate · utility bill · every director and owner of 10% or more"
+        }
+      ]
+    },
+    {
+      "id": "result",
+      "say": "Now open Savannah Agri Holdings Ltd. It needs review. The one-line reason at the top of Automated checks names everything a person must look at.",
+      "show": [
+        {
+          "goto": "/kyb"
+        },
+        {
+          "click": "case:Savannah Agri Holdings Ltd"
+        },
+        {
+          "scroll": "card:Automated checks"
+        },
+        {
+          "highlight": "card:Automated checks"
+        }
+      ]
+    },
+    {
+      "id": "cr12",
+      "say": "Start with the registration certificate. This CR12 is more than 90 days old, so ask for a new one. And its shareholders don't match the BRS register, which means it may be out of date.",
+      "show": [
+        {
+          "highlight": "case:CR12 issued in the last 90 days"
+        },
+        {
+          "highlight": "case:CR12 shareholders match the BRS register"
+        }
+      ]
+    },
+    {
+      "id": "registry",
+      "say": "Next, the company registry. Sentinel looked the company up with the Business Registration Service. It is active, and KRA confirmed that its PIN belongs to the business.",
+      "show": [
+        {
+          "scroll": "case:Company registry (Kenya BRS)"
+        },
+        {
+          "highlight": "case:Company registry (Kenya BRS)"
+        }
+      ]
+    },
+    {
+      "id": "ownership",
+      "say": "The ownership tree shows who really owns the business. Peter Njoroge holds 60%. The other 40% is held by Highland Capital Limited. Sentinel looked Highland up too: Ahmed Hassan Farah owns 70% of it, and Lucy Wairimu 30%. That gives them 28% and 12% of Savannah, so both are beneficial owners.",
+      "show": [
+        {
+          "scroll": "case:Ownership · beneficial owners hold"
+        },
+        {
+          "zoom": "case:Ownership · beneficial owners hold"
+        },
+        {
+          "highlight": "case:AHMED HASSAN FARAH"
+        }
+      ]
+    },
+    {
+      "id": "undeclared",
+      "say": "Neither was declared, so Shareholders on the register were declared fails, and the business goes to review. Ask the customer about every owner they left out.",
+      "show": [
+        {
+          "highlight": "case:Shareholders on the register were declared"
+        }
+      ]
+    },
+    {
+      "id": "aml",
+      "say": "Sentinel also screens the business, every person you listed and every owner it found, for sanctions, PEPs and adverse media. Directors and UBOs at the bottom lists the people you entered, with ID numbers masked.",
+      "show": [
+        {
+          "scroll": "card:Directors & UBOs"
+        },
+        {
+          "highlight": "card:Directors & UBOs"
+        }
+      ]
+    },
+    {
+      "id": "decide",
+      "say": "When you've read every section, decide the case in Reviews. Download the PDF to keep a record of what you saw.",
+      "show": [
+        {
+          "scroll": "button:Download report (PDF)"
+        },
+        {
+          "highlight": "button:Download report (PDF)"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's a business check. To learn more, open chapter B8 in Help, Business checks.",
+      "show": [
+        {
+          "card": "Help → B8 Business checks (KYB)",
+          "subtitle": "sentinel.deeptrack.io/help/b8"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "case:Savannah Agri Holdings Ltd matches the row's eye-icon link (aria-label 'View Savannah Agri Holdings Ltd'), so the highlight ring is on the small icon, not the name.",
+    "New Verification on /kyb is a link styled as a button, so it is targeted with case:.",
+    "field:Business Name and field:Registration Number rely on getByLabel matching labels that end with a red '*'.",
+    "The country picker, document uploads and people step can't be driven with the available actions, so they are a title card. Continue is not clicked.",
+    "The ownership tree, check names and registry line are plain text inside the Automated checks card, so they are targeted with case:<text> (getByText).",
+    "case:AHMED HASSAN FARAH highlights the first text containing that name, which may be in the reason line or the AML parties list rather than the ownership tree."
+  ]
+}

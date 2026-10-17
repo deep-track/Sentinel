@@ -1,7 +1,10 @@
 import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 
-export type ClientRole = "client_admin" | "compliance_analyst" | "developer" | "viewer";
+// reviewer: everything an analyst can do, plus the final decision on review
+// cases the client's workflow rules reserve for senior staff
+// (lib/clientSettings.ts).
+export type ClientRole = "client_admin" | "compliance_analyst" | "reviewer" | "developer" | "viewer";
 
 // Must stay in sync with the roles emitted by auth0/sentinel-role-claims-action.js.
 export const INTERNAL_ROLES = [

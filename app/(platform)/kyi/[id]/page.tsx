@@ -6,6 +6,7 @@ import { ChevronLeft } from "lucide-react";
 import { getAuthenticatedConvexClient } from "@/backend/lib/convex-server";
 import type { KYIStatus } from "@/backend/lib/kyi-types";
 import { KYIStatusBadge } from "@/modules/kyi/kyi-status-badge";
+import { DisputeButton } from "@/components/disputes/dispute-button";
 import { ClientDate } from "@/components/client-date";
 
 interface KYIDetailPageProps {
@@ -104,7 +105,10 @@ export default async function KYIDetailPage({ params }: KYIDetailPageProps) {
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{profile.email}</p>
                 ) : null}
               </div>
-              <KYIStatusBadge status={normalizeStatus(verification)} />
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <KYIStatusBadge status={normalizeStatus(verification)} />
+                <DisputeButton verificationId={id} />
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">

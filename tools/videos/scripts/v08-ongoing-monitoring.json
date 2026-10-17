@@ -1,0 +1,185 @@
+{
+  "video": "v08-ongoing-monitoring",
+  "title": "Ongoing monitoring",
+  "chapter": "b7",
+  "course": "Analyst training",
+  "order": 8,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "A customer who was clear at onboarding may be sanctioned, appointed to office, or named in the news later. Ongoing monitoring screens your customers again, so you hear about it.",
+      "show": [
+        {
+          "card": "Ongoing monitoring",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "enrol",
+      "say": "Click AML Screening in the menu. Fill in the customer's details as for any screening, then tick Keep monitoring. Type your own customer number in Customer reference. It's optional, but recommended.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:AML Screening"
+        },
+        {
+          "type": "field:Subject name",
+          "text": "Grace Achieng"
+        },
+        {
+          "click": "field:Keep monitoring (re-screen daily, alert on new hits)"
+        },
+        {
+          "type": "field:Customer reference",
+          "text": "CUST-1001"
+        }
+      ]
+    },
+    {
+      "id": "run",
+      "say": "Then click Run AML screening. The hits from this first screening become the baseline. If you screen the same customer reference again, Sentinel updates the existing subject.",
+      "show": [
+        {
+          "highlight": "button:Run AML screening"
+        }
+      ]
+    },
+    {
+      "id": "alerts-rule",
+      "say": "Each re-screening is compared with the baseline. You get an alert only when something gets worse: a new hit, or a known hit that is now more severe. A hit that disappears never raises an alert.",
+      "show": [
+        {
+          "card": "Alerts only when it gets worse",
+          "subtitle": "A new hit, or a known hit now more severe"
+        }
+      ]
+    },
+    {
+      "id": "subjects",
+      "say": "Monitored subjects lists everyone you're watching. Daniel Kipruto Langat, customer reference CUST-PEP-01, is monitored, with one current hit and no alerts. Each row shows when he was last screened.",
+      "show": [
+        {
+          "scroll": "text:Monitored subjects"
+        },
+        {
+          "highlight": "text:Monitored subjects"
+        },
+        {
+          "highlight": "case:Daniel Kipruto Langat"
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "say": "Open his enrolment screening. The Ongoing monitoring section shows the status, Active, re-screened daily, the monitored subject reference, the next screening and the alerts raised.",
+      "show": [
+        {
+          "click": "case:Needs review · View report"
+        },
+        {
+          "scroll": "card:Ongoing monitoring"
+        },
+        {
+          "zoom": "card:Ongoing monitoring"
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "say": "When an alert comes in, you get a notification called Monitoring alert, with the customer's name. Click Reviews, and choose AML in the Queue list. The alert is an open case.",
+      "show": [
+        {
+          "click": "sidebar:Reviews"
+        },
+        {
+          "select": "queue-filter:AML"
+        }
+      ]
+    },
+    {
+      "id": "read",
+      "say": "On the alert's report, read the Ongoing monitoring alert section first. New hits, and Hits now more severe, name exactly what changed. Then decide the case. If you clear it, those hits aren't raised again unless they get worse.",
+      "show": [
+        {
+          "card": "Ongoing monitoring alert",
+          "subtitle": "New hits · Hits now more severe · Monitored subject · Customer reference"
+        }
+      ]
+    },
+    {
+      "id": "risk",
+      "say": "Monitored customers also get periodic reviews. On Customer risk, Daniel is rated high risk, and his periodic review is due.",
+      "show": [
+        {
+          "click": "sidebar:Customer risk"
+        },
+        {
+          "highlight": "text:due for periodic review"
+        },
+        {
+          "highlight": "case:Daniel Kipruto Langat"
+        }
+      ]
+    },
+    {
+      "id": "stop",
+      "say": "When the relationship ends, find the customer under Monitored subjects and click Stop monitoring. It takes effect straight away, with no confirmation, so be sure. Their past screenings and alerts stay in Sentinel.",
+      "show": [
+        {
+          "click": "sidebar:AML Screening"
+        },
+        {
+          "scroll": "button:Stop monitoring"
+        },
+        {
+          "highlight": "button:Stop monitoring"
+        }
+      ]
+    },
+    {
+      "id": "cost",
+      "say": "Monitoring is included in the price of the first screening. Re-screenings and alerts aren't charged. An Admin can change how often customers are re-screened, in Settings, Screening rules.",
+      "show": [
+        {
+          "card": "Monitoring is included",
+          "subtitle": "Re-screen frequency: Daily, Weekly or Monthly (Settings → Screening rules)"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's ongoing monitoring. To learn more, open chapter B7 in Help, Ongoing monitoring.",
+      "show": [
+        {
+          "card": "Help → B7 Ongoing monitoring",
+          "subtitle": "sentinel.deeptrack.io/help/b7"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Ticking Keep monitoring is a click on a checkbox (local form state only) so that the Customer reference field appears; the form is never submitted.",
+    "case:Needs review · View report assumes Daniel Kipruto Langat's enrolment screening is the only AML screening with Needs review (monitoring only adds screenings when it raises an alert, and Daniel has none).",
+    "Demo Bank Ltd has no monitoring alert, so the alert section is a title card.",
+    "case:Daniel Kipruto Langat on /customers matches his name link; it is only highlighted, not clicked. 'due for periodic review' is the list header text ('1 due for periodic review').",
+    "Stop monitoring is highlighted only, never clicked: it takes effect immediately with no confirmation."
+  ]
+}

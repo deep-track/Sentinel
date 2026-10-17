@@ -1,0 +1,172 @@
+{
+  "video": "b11-review-case",
+  "title": "Decide a review case",
+  "chapter": "b11",
+  "course": "Analyst training",
+  "order": 10,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "prepare": [
+    {
+      "goto": "/reviews"
+    },
+    {
+      "click": "case:Daniel Kipruto Langat"
+    },
+    {
+      "click": "button:Release"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "When Sentinel can't decide a check on its own, it opens a review case for your team. In this video, you'll work a real example from start to finish: a possible politically exposed person, or PEP.",
+      "show": [
+        {
+          "card": "Decide a review case",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "queue",
+      "say": "Click Reviews in the menu on the left. The queue opens on All open. Overdue cases come first, then high priority, then the nearest deadline.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Reviews"
+        },
+        {
+          "highlight": "queue-list"
+        }
+      ]
+    },
+    {
+      "id": "views",
+      "say": "Use the views along the top to find your work: Assigned to me, Unassigned, Awaiting my approval and Overdue. The Queue list narrows it to one kind of check, such as AML.",
+      "show": [
+        {
+          "highlight": "views"
+        },
+        {
+          "select": "queue-filter:AML"
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "say": "Here is Daniel Kipruto Langat, held as a possible Kenyan PEP. Open the case, then click Take it, so your team knows you're working on it.",
+      "show": [
+        {
+          "click": "case:Daniel Kipruto Langat"
+        },
+        {
+          "click": "button:Take it"
+        }
+      ]
+    },
+    {
+      "id": "evidence",
+      "say": "Start with the evidence. The Hits card shows the listed name, the source, here Sentinel's Kenyan PEP register, the PEP class, the match score and the risk level. Open the full report whenever you need the whole check.",
+      "show": [
+        {
+          "highlight": "card:Hits"
+        },
+        {
+          "zoom": "card:Hits"
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "say": "Sentinel's AI has already compared the customer with each hit, looking at the date of birth, nationality and positions held. It recommends what to do, and explains why. ID numbers are never sent to the AI, and it only recommends: the decision is yours.",
+      "show": [
+        {
+          "scroll": "card:AI hit review"
+        },
+        {
+          "zoom": "card:AI hit review"
+        }
+      ]
+    },
+    {
+      "id": "use",
+      "say": "If you agree, click Use this recommendation in my decision. It fills in the form below, but nothing is submitted yet.",
+      "show": [
+        {
+          "click": "button:Use this recommendation in my decision"
+        }
+      ]
+    },
+    {
+      "id": "decide",
+      "say": "Choose Approve to clear the flag, or Reject if the match is real. Pick a reason from your organization's list, and write in the notes what you checked and why. Your notes go into the audit log.",
+      "show": [
+        {
+          "scroll": "form:decision"
+        },
+        {
+          "select": "field:Reason",
+          "option": "PEP: risk outside appetite"
+        },
+        {
+          "type": "field:Notes",
+          "text": "Same person as the Gazette listing: date of birth and county match. PEP risk is outside our appetite for this product."
+        }
+      ]
+    },
+    {
+      "id": "four-eyes",
+      "say": "A PEP case needs a second person. So instead of a final decision, you send a recommendation, and everyone with clearance to approve it gets an alert.",
+      "show": [
+        {
+          "highlight": "button:Send recommendation"
+        }
+      ]
+    },
+    {
+      "id": "approve",
+      "say": "The second person opens Awaiting my approval, reads your recommendation, and approves or rejects the case. If something is missing, they can send it back to you with a note.",
+      "show": [
+        {
+          "card": "Second approval",
+          "subtitle": "Awaiting my approval → Approve case, or Send recommendation back"
+        }
+      ]
+    },
+    {
+      "id": "escalate",
+      "say": "Need a more senior decision? Click Escalate for a senior decision and say why. The case becomes high priority, and your Admins and Reviewers are alerted.",
+      "show": [
+        {
+          "highlight": "button:Escalate for a senior decision"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's a review case, start to finish. To learn more, open chapter B11 in Help, Deciding a review case.",
+      "show": [
+        {
+          "card": "Help → B11 Deciding a review case",
+          "subtitle": "sentinel.deeptrack.io/help/b11"
+        }
+      ]
+    }
+  ]
+}

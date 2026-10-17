@@ -7,7 +7,7 @@ import { buildVerificationReference } from "./lib/crypto";
 import { requireClientRole } from "./lib/rbac";
 import { rateLimiter } from "./lib/rateLimits";
 import { assertCredits, chargeVerification } from "./lib/credits";
-import { creditsForType } from "./lib/verificationTypes";
+import { creditsForVerification } from "./lib/verificationTypes";
 import { africasTalkingSmsBody, africasTalkingSmsUrl, parseAfricasTalkingSendResponse } from "./lib/africasTalking";
 
 // "email" stays in the validator so older clients get a clear error instead of
@@ -35,7 +35,7 @@ const DELIVERY_RANK: Record<Doc<"livenessRequests">["deliveryStatus"], number> =
 
 // Accepts common formatting ("+254 700-000 000", "00254...", "whatsapp:+...")
 // and returns strict E.164, or null.
-function normalizePhoneNumber(raw: string): string | null {
+export function normalizePhoneNumber(raw: string): string | null {
   let value = raw.trim().replace(/^whatsapp:/i, "").replace(/[\s().-]/g, "");
   if (value.startsWith("00")) value = `+${value.slice(2)}`;
   return E164_PATTERN.test(value) ? value : null;
@@ -48,7 +48,7 @@ function rateLimited(retryAfterMs: number | undefined, message: string): ConvexE
 export const submit = mutation({
   args: { clientId: v.id("clients"), contact: v.string(), method: deliveryMethod },
   handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer"]);
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer"]);
     if (args.method === "email") {
       throw new ConvexError({ code: "unsupported", message: "Email delivery is not available. Use SMS or WhatsApp." });
     }
@@ -65,7 +65,7 @@ export const submit = mutation({
     // Liveness is billed when the provider accepts the SMS (markSent), not on
     // completion, so plain assertCredits is used rather than the in-flight
     // reservation helper (which assumes queued rows are still unbilled).
-    const creditsUsed = creditsForType("liveness");
+    const creditsUsed = await creditsForVerification(ctx, args.clientId, "liveness");
     await assertCredits(ctx, args.clientId, creditsUsed);
 
     const perClient = await rateLimiter.limit(ctx, "livenessInvitePerClient", { key: args.clientId, config: PER_CLIENT_LIMIT });
@@ -81,7 +81,7 @@ export const submit = mutation({
   },
 });
 
-type SendOutcome = { ok: true; sid: string } | { ok: false; reason: string };
+export type SendOutcome = { ok: true; sid: string } | { ok: false; reason: string };
 
 async function sendTwilioMessage(sid: string, token: string, body: URLSearchParams): Promise<SendOutcome> {
   const controller = new AbortController();
@@ -142,7 +142,7 @@ async function sendAfricasTalkingSms(username: string, apiKey: string, to: strin
 // SMS goes through Africa's Talking when it is configured, otherwise Twilio.
 // WhatsApp always goes through Twilio. Delivery reports from either provider
 // update the request by provider message id. Null means no provider is set up.
-async function sendInvitation(request: Doc<"livenessRequests">, message: string): Promise<SendOutcome | null> {
+export async function sendInvitation(request: { method: "sms" | "whatsapp" | "email"; contact: string }, message: string): Promise<SendOutcome | null> {
   const atUsername = process.env.AFRICASTALKING_USERNAME?.trim();
   const atApiKey = process.env.AFRICASTALKING_API_KEY?.trim();
   if (request.method === "sms" && atUsername && atApiKey) {
@@ -306,7 +306,7 @@ export const applyCallback = internalMutation({
 export const list = query({
   args: { clientId: v.id("clients"), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    await requireClientRole(ctx, args.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     const limit = Math.min(Math.max(Math.floor(args.limit ?? 50), 1), 100);
     return await ctx.db.query("livenessRequests").withIndex("by_client", (q) => q.eq("clientId", args.clientId)).order("desc").take(limit);
   },
@@ -317,7 +317,7 @@ export const status = query({
   handler: async (ctx, args) => {
     const request = await ctx.db.get(args.requestId);
     if (!request) return null;
-    await requireClientRole(ctx, request.clientId, ["client_admin", "compliance_analyst", "developer", "viewer"]);
+    await requireClientRole(ctx, request.clientId, ["client_admin", "compliance_analyst", "reviewer", "developer", "viewer"]);
     return request;
   },
 });

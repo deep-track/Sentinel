@@ -33,6 +33,7 @@ import {
   verdictBadge,
 } from "@/components/sentinel/format";
 import { RESOLUTION_LABELS, type ReviewQueueItem, reviewStatusBadge } from "../review-queue";
+import { PEP_CLASS_LABELS, RISK_CATEGORY_LABELS, type PepClass, type RiskCategory } from "@/backend/convex/lib/amlCategories";
 
 type VerificationDetail = {
   _id: string;
@@ -61,6 +62,10 @@ type AmlMatch = {
   matchedCountry?: string;
   countryMatch?: string;
   riskLevel: string;
+  categories?: RiskCategory[];
+  pepClass?: PepClass;
+  birthDateMatch?: "match" | "mismatch" | "unknown";
+  media?: { url: string; domain: string | null; publishedAt: string | null; summary: string; severity: string };
 };
 
 type AmlResult = {
@@ -79,6 +84,13 @@ type Message = { tone: "ok" | "error"; text: string } | null;
 
 // Must match backend/convex/reviewQueue.ts (MIN_CERTAINTY_PCT).
 const MIN_CERTAINTY_PCT = 80;
+
+// A client dispute is decided on the result itself: Pass or Reject.
+const DISPUTE_ACTIONS: Record<Action, { label: string; outcome: string; needsNotes: boolean; needsCertainty: boolean }> = {
+  confirm: { label: "Final: pass", outcome: "the check passes (dispute upheld if it was rejected)", needsNotes: true, needsCertainty: true },
+  keep_verdict: { label: "Final: reject", outcome: "the check is rejected (dispute upheld if it had passed)", needsNotes: true, needsCertainty: true },
+  escalate: { label: "Escalate", outcome: "insufficient evidence — routed to an engineer, stays open", needsNotes: true, needsCertainty: false },
+};
 
 const ACTIONS: Record<Action, { label: string; outcome: string; needsNotes: boolean; needsCertainty: boolean }> = {
   confirm: { label: "Confirm", outcome: "the automated flag was wrong — final verdict pass", needsNotes: false, needsCertainty: true },
@@ -305,13 +317,42 @@ function VerificationResult({ verification }: { verification: VerificationDetail
             hint={`${aml.matches.length} match${aml.matches.length === 1 ? "" : "es"}`}
           />
           <DataTable
-            head={["Entity", "Source", "Program", "Score", "Method", "Country", "Risk"]}
+            head={["Entity", "Category", "Source", "Program", "Score", "Method", "Country", "Risk"]}
             empty={aml.matches.length === 0 ? <EmptyState>No watchlist matches.</EmptyState> : null}
           >
             {aml.matches.map((match) => (
               <Row key={`${match.source}:${match.sourceRecordId}`}>
                 <Cell className="max-w-[220px] truncate">
-                  <span title={match.entityName}>{match.entityName}</span>
+                  {match.media ? (
+                    <a href={match.media.url} target="_blank" rel="noopener noreferrer" title={match.media.summary} className="text-sentinel-blue hover:underline">
+                      {match.entityName}
+                    </a>
+                  ) : (
+                    <span title={match.entityName}>{match.entityName}</span>
+                  )}
+                  {match.media ? (
+                    <span className="block whitespace-normal text-[10px] text-sentinel-subtle">
+                      {[match.media.domain, match.media.publishedAt?.slice(0, 10), `${match.media.severity} severity`].filter(Boolean).join(" · ")}
+                      {match.media.summary ? ` — ${match.media.summary}` : ""}
+                    </span>
+                  ) : null}
+                  {match.birthDateMatch && match.birthDateMatch !== "unknown" ? (
+                    <span className="block text-[10px] text-sentinel-subtle">
+                      date of birth {match.birthDateMatch === "match" ? "matches" : "differs"}
+                    </span>
+                  ) : null}
+                </Cell>
+                <Cell>
+                  <span className="flex flex-wrap gap-1">
+                    {(match.categories ?? []).map((category) => (
+                      <span key={category} title={category === "pep" && match.pepClass ? PEP_CLASS_LABELS[match.pepClass] : undefined}>
+                        <Badge tone={category === "sanctions" ? "red" : "amber"}>
+                          {category === "pep" && match.pepClass ? `PEP Class ${match.pepClass}` : RISK_CATEGORY_LABELS[category]}
+                        </Badge>
+                      </span>
+                    ))}
+                    {(match.categories ?? []).length === 0 ? <span className="text-sentinel-subtle">—</span> : null}
+                  </span>
                 </Cell>
                 <Cell className="text-sentinel-muted">
                   {match.source}
@@ -373,6 +414,7 @@ function Resolution({ item }: { item: ReviewDetail }) {
 }
 
 function ResolveForm({ item }: { item: ReviewDetail }) {
+  const actions = item.triggerType === "client_dispute" ? DISPUTE_ACTIONS : ACTIONS;
   const resolve = useMutation(anyApi.reviewQueue.resolve);
   const [notes, setNotes] = useState("");
   const [certainty, setCertainty] = useState("");
@@ -384,9 +426,9 @@ function ResolveForm({ item }: { item: ReviewDetail }) {
 
   // Same rules as resolveReviewItem; the mutation re-checks them.
   function validate(action: Action): string | null {
-    if (ACTIONS[action].needsNotes && !notes.trim()) return `${ACTIONS[action].label} requires notes for the audit trail.`;
-    if (ACTIONS[action].needsCertainty && !certaintyOk) {
-      return `Certainty must be between ${MIN_CERTAINTY_PCT} and 100% to ${ACTIONS[action].label.toLowerCase()} — escalate instead.`;
+    if (actions[action].needsNotes && !notes.trim()) return `${actions[action].label} requires notes for the audit trail.`;
+    if (actions[action].needsCertainty && !certaintyOk) {
+      return `Certainty must be between ${MIN_CERTAINTY_PCT} and 100% to ${actions[action].label.toLowerCase()} — escalate instead.`;
     }
     return null;
   }
@@ -398,7 +440,7 @@ function ResolveForm({ item }: { item: ReviewDetail }) {
       return;
     }
     const subject = item.verification ? `${typeLabel(item.verification.type)} ${item.verification.reference}` : "this item";
-    if (!window.confirm(`${ACTIONS[action].label} ${subject}: ${ACTIONS[action].outcome}?`)) return;
+    if (!window.confirm(`${actions[action].label} ${subject}: ${actions[action].outcome}?`)) return;
 
     setPending(action);
     setMessage(null);
@@ -462,7 +504,7 @@ function ResolveForm({ item }: { item: ReviewDetail }) {
         </div>
 
         <div className="flex flex-col gap-2">
-          {(Object.keys(ACTIONS) as Action[]).map((action) => (
+          {(Object.keys(actions) as Action[]).map((action) => (
             <div key={action} className="flex items-center gap-2.5">
               <button
                 type="button"
@@ -470,9 +512,9 @@ function ResolveForm({ item }: { item: ReviewDetail }) {
                 disabled={pending !== null}
                 onClick={() => submit(action)}
               >
-                {pending === action ? "Saving…" : ACTIONS[action].label}
+                {pending === action ? "Saving…" : actions[action].label}
               </button>
-              <span className="text-[11px] text-sentinel-subtle">{ACTIONS[action].outcome}</span>
+              <span className="text-[11px] text-sentinel-subtle">{actions[action].outcome}</span>
             </div>
           ))}
         </div>

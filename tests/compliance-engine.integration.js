@@ -391,10 +391,33 @@ test("OpenSanctions decision: strong sanction rejects, weaker sanction and PEP r
   const pep = openSanctions.decideOpenSanctions(parse([osResult({ properties: { topics: ["role.pep"] } })]));
   assert.equal(pep.verdict, "review");
   assert.match(pep.reason, /PEP/);
-  assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ properties: {} })])).verdict, "review");
+  // Another risk list (topic but not sanction/PEP) still reviews.
+  assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ properties: { topics: ["debarment"] } })])).verdict, "review");
   // Below threshold / not flagged as a match: ignored.
   assert.equal(openSanctions.decideOpenSanctions(parse([osResult({ match: false })])).verdict, "pass");
   assert.equal(openSanctions.decideOpenSanctions(parse([])).verdict, "pass");
+});
+
+test("OpenSanctions noise: no-topic records never count; PEP and other lists need 0.8, sanctions 0.7", () => {
+  const parse = (results) => openSanctions.parseMatchResponse(osBody(results));
+  const decide = (results) => openSanctions.decideOpenSanctions(parse(results)).verdict;
+  // A company-registry record (no risk topic) is enrichment, not a risk list.
+  const registry = osResult({ id: "ru-egrul-1", score: 0.95, datasets: ["ext_ru_egrul"], properties: {} });
+  assert.equal(openSanctions.categorize(parse([registry])[0]), "none");
+  assert.equal(decide([registry]), "pass");
+  assert.deepEqual(openSanctions.relevantMatches(parse([registry])), []);
+  // A weak PEP look-alike ("Utkin" for "Putin") is dropped; a close one counts.
+  assert.equal(decide([osResult({ score: 0.75, properties: { topics: ["role.pep"] } })]), "pass");
+  assert.equal(decide([osResult({ score: 0.8, properties: { topics: ["role.pep"] } })]), "review");
+  assert.equal(decide([osResult({ score: 0.79, properties: { topics: ["debarment"] } })]), "pass");
+  // Sanctions stay as sensitive as before.
+  assert.equal(decide([osResult({ score: 0.7 })]), "review");
+  assert.equal(decide([osResult({ score: 0.9 })]), "reject");
+  // Noise mixed with a real hit: only the hit is kept, strongest first.
+  const kept = openSanctions.relevantMatches(
+    parse([registry, osResult({ id: "pep-weak", score: 0.74, properties: { topics: ["role.pep"] } }), osResult({ id: "sdn", score: 0.97 })]),
+  );
+  assert.deepEqual(kept.map((match) => match.id), ["sdn"]);
 });
 
 test("OpenSanctions combine: stricter verdict wins and outages never pass", () => {
@@ -425,4 +448,26 @@ test("OpenSanctions combine: stricter verdict wins and outages never pass", () =
   const partial = openSanctions.combineWithOpenSanctions({ ...clear, verdict: "review", complete: false }, screened([]));
   assert.equal(partial.verdict, "review");
   assert.equal(partial.complete, false);
+});
+
+const readSource = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+
+test("a missing watchlist URL setting is recorded on the source and shown in Ops", () => {
+  const watchlists = readSource("backend/convex/watchlists.ts");
+  assert.match(watchlists, /resolveSourceUrl\(ctx, "UN_CONSOLIDATED", "WATCHLIST_UN_CONSOLIDATED_URL"\)/);
+  assert.match(watchlists, /resolveSourceUrl\(ctx, "OFAC_SDN", "WATCHLIST_OFAC_SDN_URL", DEFAULT_OFAC_URL\)/);
+  assert.match(watchlists, /export const _recordConfigError = internalMutation/);
+  const resolver = watchlists.slice(watchlists.indexOf("async function resolveSourceUrl"));
+  assert.ok(
+    resolver.indexOf("internal.watchlists._recordConfigError") < resolver.indexOf("throw new Error("),
+    "the error is recorded before the action fails",
+  );
+  assert.match(readSource("backend/convex/amlPersistence.ts"), /if \(source\?\.lastError\) lastErrors\[sourceKey\] = source\.lastError/);
+  assert.match(readSource("backend/convex/admin.ts"), /withLastError\(.*coverage\.lastErrors\[key\]\)/);
+});
+
+test("admin.getClient treats a malformed ?client= id as not found", () => {
+  const admin = readSource("backend/convex/admin.ts");
+  assert.match(admin, /export const getClient = query\(\{[\s\S]*?clientId: v\.string\(\)/);
+  assert.match(admin, /ctx\.db\.normalizeId\("clients", args\.clientId\)/);
 });

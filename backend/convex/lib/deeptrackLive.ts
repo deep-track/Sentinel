@@ -5,7 +5,8 @@
 // returns a job id polled at GET /v1/video/jobs/{id}. No imports, so tests can
 // transpile and evaluate this file.
 
-export const DEEPTRACK_LIVE_DEFAULT_BASE_URL = "https://facedetectionsystem-staging.onrender.com";
+// There is no default service URL: DEEPTRACK_LIVE_BASE_URL must be set in
+// the Convex deployment (the old Render staging service is no longer used).
 export const DEEPTRACK_LIVE_IMAGE_PATH = "/v1/image/predict";
 export const DEEPTRACK_LIVE_VIDEO_PATH = "/v1/video/predict/video";
 export const DEEPTRACK_LIVE_VIDEO_JOB_PATH = "/v1/video/jobs/";

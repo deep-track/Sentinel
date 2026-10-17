@@ -1,0 +1,185 @@
+{
+  "video": "v12-disputes-and-strs",
+  "title": "File an STR and dispute a result",
+  "chapter": "b14,b15",
+  "course": "Analyst training",
+  "order": 12,
+  "language": "en",
+  "voices": {
+    "default": {
+      "name": "Bella - Professional, Bright, Warm",
+      "voiceId": "hpp4J3VqNfWAUOO0d1Us"
+    },
+    "kenyan": {
+      "name": "Yna Agalo - Kenyan Lady",
+      "voiceId": "ijKilL5CnjXKMWDHOJH8"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "say": "When you suspect money laundering, you must report it to the Financial Reporting Centre, the FRC. And when you think a check got it wrong, you can ask DeepTrack to look again. This video covers both: STRs and disputes.",
+      "show": [
+        {
+          "card": "File an STR and dispute a result",
+          "subtitle": "Sentinel by DeepTrack · Analyst training"
+        }
+      ]
+    },
+    {
+      "id": "str-or-sar",
+      "say": "There are two kinds of report. An STR is about a specific transaction, like a cash deposit. A SAR is about activity with no single transaction, such as a sanctioned person trying to open an account. Only Admins and Reviewers can prepare them.",
+      "show": [
+        {
+          "card": "STR or SAR",
+          "subtitle": "STR: a suspicious transaction · SAR: suspicious activity, no transaction"
+        }
+      ]
+    },
+    {
+      "id": "alert",
+      "say": "Here is a structuring alert on Wanjiku Mwangi. Click Transactions, choose Escalated, and open the alert. An analyst escalated it: three cash deposits, each just under the reporting threshold.",
+      "show": [
+        {
+          "goto": "/dashboard"
+        },
+        {
+          "click": "sidebar:Transactions"
+        },
+        {
+          "click": "button:Escalated"
+        },
+        {
+          "click": "case:Possible structuring"
+        },
+        {
+          "highlight": "case:Escalated as suspicious"
+        }
+      ]
+    },
+    {
+      "id": "panel",
+      "say": "Scroll to the Suspicious transaction report panel at the bottom. It appears because the alert's customer reference is a Sentinel check, so Sentinel knows who the customer is.",
+      "show": [
+        {
+          "scroll": "card:Suspicious transaction report"
+        },
+        {
+          "zoom": "card:Suspicious transaction report"
+        }
+      ]
+    },
+    {
+      "id": "prepare",
+      "say": "Click Prepare STR to open the window. From an alert, STR is already selected. Sentinel fills in the reason, the action taken and the largest transaction. Rewrite the reason in your own words, check the amount, then click Prepare and download.",
+      "show": [
+        {
+          "highlight": "button:Prepare STR"
+        },
+        {
+          "card": "Prepare a report for the FRC",
+          "subtitle": "Reason for suspicion · Action taken · The transaction → Prepare and download"
+        }
+      ]
+    },
+    {
+      "id": "draft",
+      "say": "Sentinel saves a draft and downloads a goAML file. Sentinel never sends anything to the FRC. You check the file and submit it in goAML yourself. Here, the draft is waiting.",
+      "show": [
+        {
+          "highlight": "case:draft, not yet submitted"
+        },
+        {
+          "highlight": "button:goAML XML"
+        }
+      ]
+    },
+    {
+      "id": "mark-submitted",
+      "say": "When goAML gives you a reference, come back and click Mark submitted, then enter it exactly. This can't be undone. And never tell the customer you're reporting them. That's tipping-off, an offence under Kenyan law.",
+      "show": [
+        {
+          "highlight": "button:Mark submitted"
+        }
+      ]
+    },
+    {
+      "id": "disputes",
+      "say": "Now disputes. Click Disputes in the menu. A dispute asks DeepTrack's review team to look at a result again, and your team can't decide it. Demo Bank has disputed James Mutua's rejection, and it's marked With DeepTrack.",
+      "show": [
+        {
+          "click": "sidebar:Disputes"
+        },
+        {
+          "highlight": "case:With DeepTrack"
+        }
+      ]
+    },
+    {
+      "id": "reason",
+      "say": "Under it is the reason the team gave: the customer was verified in person at the Westlands branch on the same day. Give facts DeepTrack can check. Click the name to open the report.",
+      "show": [
+        {
+          "highlight": "case:Westlands"
+        },
+        {
+          "click": "case:James Mutua"
+        }
+      ]
+    },
+    {
+      "id": "banner",
+      "say": "The report shows a banner: Disputed, DeepTrack is reviewing this result. The current result stays until DeepTrack decides. If the dispute is no longer needed, for example when the customer brings new documents, you can withdraw it here.",
+      "show": [
+        {
+          "highlight": "case:Disputed: DeepTrack is reviewing this result"
+        },
+        {
+          "highlight": "button:Withdraw"
+        }
+      ]
+    },
+    {
+      "id": "send",
+      "say": "To send a dispute, click Dispute this result at the top of a report. It shows only for a pass or a rejection from the last 90 days, with no open review case. Explain why the result is wrong, then click Send dispute.",
+      "show": [
+        {
+          "card": "Dispute this result",
+          "subtitle": "Why is the result wrong? → Send dispute"
+        }
+      ]
+    },
+    {
+      "id": "outcomes",
+      "say": "When DeepTrack decides, you get a notification. Upheld means the result changed. Not upheld means it stays. Either way, DeepTrack's note explains why.",
+      "show": [
+        {
+          "card": "With DeepTrack · Upheld · Not upheld · Withdrawn",
+          "subtitle": "You're notified in the app and by email when DeepTrack decides"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "say": "That's STRs and disputes. To learn more, open chapters B14 and B15 in Help.",
+      "show": [
+        {
+          "card": "Help → B14 Filing an STR or SAR · B15 Disputes",
+          "subtitle": "sentinel.deeptrack.io/help/b14 · sentinel.deeptrack.io/help/b15"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Recording must run as an Admin or Reviewer, or the Suspicious transaction report panel (and Prepare STR, goAML XML, Mark submitted) won't render on the alert page.",
+    "Prepare STR only opens a dialog, but per the rules it is highlighted, not clicked; the dialog is shown as a title card.",
+    "'case:Escalated as suspicious', 'case:draft, not yet submitted', 'case:With DeepTrack', 'case:Westlands' and 'case:Disputed: DeepTrack is reviewing this result' rely on the page.getByText fallback (first match).",
+    "The disputes list only links the customer name when verification.href is set; assumed true for James Mutua's KYC check.",
+    "Dispute this result doesn't render on James Mutua's report (already disputed, so it shows the banner and Withdraw instead), so sending a dispute is a title card. If the dispute is withdrawn or decided before recording, the banner scene breaks.",
+    "The Disputes sidebar click happens from the alert page; no goto needed, but add goto /dashboard first if the sidebar is collapsed."
+  ]
+}

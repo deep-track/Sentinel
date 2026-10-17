@@ -4,10 +4,15 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { isInternalAdmin } from "./lib/rbac";
 import { currentAccessResult, loadCurrentAccess } from "./lib/access";
-import type { SourceKey } from "./lib/amlMatching";
+import { SOURCE_DISPLAY_NAMES, type SourceKey } from "./lib/amlMatching";
 import { parseSource } from "./lib/watchlistParsers";
 
 const DEFAULT_OFAC_URL = "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML";
+// The EU's public download link for the full FSF list (XML 1.1); the token is
+// the EU's published public one.
+const DEFAULT_EU_URL = "https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw";
+// The UK Sanctions List from the FCDO (it replaced the OFSI consolidated list).
+const DEFAULT_UK_URL = "https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml";
 const BATCH_SIZE = 250;
 // Abort a source download (headers + body) after this long.
 const FETCH_TIMEOUT_MS = 120_000;
@@ -24,7 +29,7 @@ const SUPERSEDED_RETENTION_MS = 24 * 60 * 60 * 1000;
 // A "pending" version older than this belongs to a crashed ingestion run.
 const PENDING_ABANDON_MS = 6 * 60 * 60 * 1000;
 
-const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"));
+const sourceKeyValidator = v.union(v.literal("OFAC_SDN"), v.literal("UN_CONSOLIDATED"), v.literal("EU_FSF"), v.literal("UK_SANCTIONS"));
 
 const entryValidator = v.object({
   sourceRecordId: v.string(),
@@ -141,13 +146,69 @@ async function runIngestion(ctx: ActionCtx, sourceKey: SourceKey, sourceUrl: str
 export const ingestOfac = internalAction({
   args: { allowRecordDrop: v.optional(v.boolean()) },
   handler: async (ctx, args) =>
-    runIngestion(ctx, "OFAC_SDN", requireUrl("WATCHLIST_OFAC_SDN_URL", DEFAULT_OFAC_URL), args.allowRecordDrop ?? false),
+    runIngestion(
+      ctx,
+      "OFAC_SDN",
+      await resolveSourceUrl(ctx, "OFAC_SDN", "WATCHLIST_OFAC_SDN_URL", DEFAULT_OFAC_URL),
+      args.allowRecordDrop ?? false,
+    ),
 });
 
 export const ingestUn = internalAction({
   args: { allowRecordDrop: v.optional(v.boolean()) },
   handler: async (ctx, args) =>
-    runIngestion(ctx, "UN_CONSOLIDATED", requireUrl("WATCHLIST_UN_CONSOLIDATED_URL"), args.allowRecordDrop ?? false),
+    runIngestion(
+      ctx,
+      "UN_CONSOLIDATED",
+      await resolveSourceUrl(ctx, "UN_CONSOLIDATED", "WATCHLIST_UN_CONSOLIDATED_URL"),
+      args.allowRecordDrop ?? false,
+    ),
+});
+
+export const ingestEu = internalAction({
+  args: { allowRecordDrop: v.optional(v.boolean()) },
+  handler: async (ctx, args) =>
+    runIngestion(ctx, "EU_FSF", await resolveSourceUrl(ctx, "EU_FSF", "WATCHLIST_EU_FSF_URL", DEFAULT_EU_URL), args.allowRecordDrop ?? false),
+});
+
+export const ingestUk = internalAction({
+  args: { allowRecordDrop: v.optional(v.boolean()) },
+  handler: async (ctx, args) =>
+    runIngestion(ctx, "UK_SANCTIONS", await resolveSourceUrl(ctx, "UK_SANCTIONS", "WATCHLIST_UK_SANCTIONS_URL", DEFAULT_UK_URL), args.allowRecordDrop ?? false),
+});
+
+// A missing or invalid URL setting fails before any version exists, so it is
+// recorded on the source here; otherwise the nightly run fails with no trace
+// in the data and Ops only ever sees "unavailable".
+async function resolveSourceUrl(ctx: ActionCtx, sourceKey: SourceKey, envName: string, fallback?: string) {
+  try {
+    return requireUrl(envName, fallback);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `${envName} is not usable`;
+    await ctx.runMutation(internal.watchlists._recordConfigError, { sourceKey, error: message.slice(0, 500), at: Date.now() });
+    throw new Error(`${sourceKey} ingestion failed: ${message}`);
+  }
+}
+
+export const _recordConfigError = internalMutation({
+  args: { sourceKey: sourceKeyValidator, error: v.string(), at: v.number() },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("watchlistSources").withIndex("by_source_key", (q) => q.eq("sourceKey", args.sourceKey)).unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, { lastAttemptedAt: args.at, lastError: args.error, updatedAt: args.at });
+      return;
+    }
+    await ctx.db.insert("watchlistSources", {
+      sourceKey: args.sourceKey,
+      displayName: SOURCE_DISPLAY_NAMES[args.sourceKey],
+      sourceUrl: "",
+      cadence: "daily",
+      enabled: true,
+      lastAttemptedAt: args.at,
+      lastError: args.error,
+      updatedAt: args.at,
+    });
+  },
 });
 
 async function activeVersionFor(ctx: MutationCtx, sourceKey: SourceKey) {
@@ -168,7 +229,7 @@ export const _startVersion = internalMutation({
     const existing = await ctx.db.query("watchlistSources").withIndex("by_source_key", (q) => q.eq("sourceKey", args.sourceKey)).unique();
     const sourceId = existing?._id ?? await ctx.db.insert("watchlistSources", {
       sourceKey: args.sourceKey,
-      displayName: args.sourceKey === "OFAC_SDN" ? "OFAC Specially Designated Nationals" : "UN Security Council Consolidated List",
+      displayName: SOURCE_DISPLAY_NAMES[args.sourceKey],
       sourceUrl: args.sourceUrl,
       cadence: "daily",
       enabled: true,
