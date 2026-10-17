@@ -1,0 +1,314 @@
+[
+  {
+    "id": "v01-dashboard-tour",
+    "title": "Tour of the dashboard",
+    "chapters": [
+      "a3"
+    ],
+    "course": "Get started",
+    "order": 1,
+    "internal": false
+  },
+  {
+    "id": "v02-how-sentinel-decides",
+    "title": "How Sentinel decides",
+    "chapters": [
+      "b1"
+    ],
+    "course": "Analyst training",
+    "order": 2,
+    "internal": false
+  },
+  {
+    "id": "v03-kyc-check",
+    "title": "KYC identity checks",
+    "chapters": [
+      "b2"
+    ],
+    "course": "Analyst training",
+    "order": 3,
+    "internal": false
+  },
+  {
+    "id": "v04-capture-links",
+    "title": "Capture links",
+    "chapters": [
+      "b3"
+    ],
+    "course": "Analyst training",
+    "order": 4,
+    "internal": false
+  },
+  {
+    "id": "v05-business-checks",
+    "title": "Business checks (KYB)",
+    "chapters": [
+      "b8"
+    ],
+    "course": "Analyst training",
+    "order": 5,
+    "internal": false
+  },
+  {
+    "id": "v06-document-checks",
+    "title": "Document checks",
+    "chapters": [
+      "b5"
+    ],
+    "course": "Analyst training",
+    "order": 6,
+    "internal": false
+  },
+  {
+    "id": "v07-aml-screening",
+    "title": "AML screening",
+    "chapters": [
+      "b6"
+    ],
+    "course": "Analyst training",
+    "order": 7,
+    "internal": false
+  },
+  {
+    "id": "v08-ongoing-monitoring",
+    "title": "Ongoing monitoring",
+    "chapters": [
+      "b7"
+    ],
+    "course": "Analyst training",
+    "order": 8,
+    "internal": false
+  },
+  {
+    "id": "v09-remote-liveness",
+    "title": "Remote liveness",
+    "chapters": [
+      "b4"
+    ],
+    "course": "Analyst training",
+    "order": 9,
+    "internal": false
+  },
+  {
+    "id": "b11-review-case",
+    "title": "Decide a review case",
+    "chapters": [
+      "b11"
+    ],
+    "course": "Analyst training",
+    "order": 10,
+    "internal": false
+  },
+  {
+    "id": "v11-reports-and-fraud-signals",
+    "title": "Read a report and its fraud signals",
+    "chapters": [
+      "b9",
+      "b10"
+    ],
+    "course": "Analyst training",
+    "order": 11,
+    "internal": false
+  },
+  {
+    "id": "v12-disputes-and-strs",
+    "title": "File an STR and dispute a result",
+    "chapters": [
+      "b14",
+      "b15"
+    ],
+    "course": "Analyst training",
+    "order": 12,
+    "internal": false
+  },
+  {
+    "id": "v13-customer-risk",
+    "title": "Customer risk and periodic reviews",
+    "chapters": [
+      "b12"
+    ],
+    "course": "Analyst training",
+    "order": 13,
+    "internal": false
+  },
+  {
+    "id": "v14-transaction-monitoring",
+    "title": "Transaction monitoring",
+    "chapters": [
+      "b13"
+    ],
+    "course": "Analyst training",
+    "order": 14,
+    "internal": false
+  },
+  {
+    "id": "v15-api-keys-and-test-mode",
+    "title": "API keys and test mode",
+    "chapters": [
+      "c1"
+    ],
+    "course": "Developer quick start",
+    "order": 15,
+    "internal": false
+  },
+  {
+    "id": "v16-first-kyc-and-aml-calls",
+    "title": "Your first KYC and AML calls",
+    "chapters": [
+      "c2"
+    ],
+    "course": "Developer quick start",
+    "order": 16,
+    "internal": false
+  },
+  {
+    "id": "v17-documents-and-transactions-api",
+    "title": "Documents and transactions API",
+    "chapters": [
+      "c3"
+    ],
+    "course": "Developer quick start",
+    "order": 17,
+    "internal": false
+  },
+  {
+    "id": "v18-results-and-webhooks",
+    "title": "Results and webhooks",
+    "chapters": [
+      "c6"
+    ],
+    "course": "Developer quick start",
+    "order": 18,
+    "internal": false
+  },
+  {
+    "id": "v19-plans-and-billing",
+    "title": "Plans and billing",
+    "chapters": [
+      "a2"
+    ],
+    "course": "Get started",
+    "order": 19,
+    "internal": false
+  },
+  {
+    "id": "v20-organization-and-team",
+    "title": "Your organization and your team",
+    "chapters": [
+      "a4"
+    ],
+    "course": "Get started",
+    "order": 20,
+    "internal": false
+  },
+  {
+    "id": "v21-security-and-sso",
+    "title": "Security and single sign-on",
+    "chapters": [
+      "a6"
+    ],
+    "course": "Get started",
+    "order": 21,
+    "internal": false
+  },
+  {
+    "id": "v22-screening-rules",
+    "title": "Screening rules",
+    "chapters": [
+      "a7"
+    ],
+    "course": "Get started",
+    "order": 22,
+    "internal": false
+  },
+  {
+    "id": "v23-review-rules-and-notifications",
+    "title": "Review rules and notifications",
+    "chapters": [
+      "a8"
+    ],
+    "course": "Get started",
+    "order": 23,
+    "internal": false
+  },
+  {
+    "id": "v24-audit-log-and-retention",
+    "title": "The audit log and data retention",
+    "chapters": [
+      "a10"
+    ],
+    "course": "Get started",
+    "order": 24,
+    "internal": false
+  },
+  {
+    "id": "v25-sign-up-and-trial",
+    "title": "Sign up and start your free trial",
+    "chapters": [
+      "a1"
+    ],
+    "course": "Get started",
+    "order": 25,
+    "internal": false
+  },
+  {
+    "id": "v26-back-office-and-review-queue",
+    "title": "The Back Office and the review queue",
+    "chapters": [
+      "d1"
+    ],
+    "course": "Back Office",
+    "order": 26,
+    "internal": true
+  },
+  {
+    "id": "v27-clients-plans-and-billing",
+    "title": "Clients, plans and billing",
+    "chapters": [
+      "d3"
+    ],
+    "course": "Back Office",
+    "order": 27,
+    "internal": true
+  },
+  {
+    "id": "v28-the-kenyan-pep-register",
+    "title": "The Kenyan PEP register",
+    "chapters": [
+      "d4"
+    ],
+    "course": "Back Office",
+    "order": 28,
+    "internal": true
+  },
+  {
+    "id": "v29-risk-lists-and-fatf",
+    "title": "Kenyan risk lists and FATF countries",
+    "chapters": [
+      "d5"
+    ],
+    "course": "Back Office",
+    "order": 29,
+    "internal": true
+  },
+  {
+    "id": "v30-compliance-tasks",
+    "title": "Compliance tasks",
+    "chapters": [
+      "d6"
+    ],
+    "course": "Back Office",
+    "order": 30,
+    "internal": true
+  },
+  {
+    "id": "v31-health-and-quality",
+    "title": "Platform health and quality",
+    "chapters": [
+      "d7"
+    ],
+    "course": "Back Office",
+    "order": 31,
+    "internal": true
+  }
+]

@@ -19,6 +19,9 @@ function originOf(value: string | undefined, protocol?: "https:" | "wss:") {
 const convexHttp = originOf(process.env.NEXT_PUBLIC_CONVEX_URL);
 const convexWs = originOf(process.env.NEXT_PUBLIC_CONVEX_URL, "wss:");
 const auth0Origin = originOf(process.env.AUTH0_DOMAIN);
+// Training videos play from DeepTrack's private S3 bucket through short-lived
+// links (backend/convex/lib/trainingVideos.ts).
+const trainingVideos = `https://${process.env.TRAINING_VIDEOS_BUCKET?.trim() || "deeptrack-sentinel-training"}.s3.eu-west-1.amazonaws.com`;
 
 const sources = (...values: Array<string | null | false | undefined>) =>
   values.filter(Boolean).join(" ");
@@ -32,7 +35,7 @@ const contentSecurityPolicy = [
   // Uploaded documents (UploadThing CDN), Auth0/Gravatar avatars, previews.
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "media-src 'self' data: blob:",
+  `media-src 'self' data: blob: ${trainingVideos}`,
   `connect-src ${sources(
     "'self'",
     "data:",
