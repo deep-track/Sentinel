@@ -88,6 +88,7 @@ const nextConfig: NextConfig = {
     "/help/*": ["./content/help/{a,b,c}/**/*"],
     "/internal-ops/help": ["./content/help/d/**/*"],
     "/internal-ops/help/*": ["./content/help/d/**/*"],
+    "/internal-ops/help/shots/*": ["./content/help/d/shots/*"],
   },
   images: {
     remotePatterns: [

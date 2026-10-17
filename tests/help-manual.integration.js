@@ -106,7 +106,9 @@ for (const manual of WRITTEN) {
         // A placeholder ("TODO") until it's taken; then a real image in public/.
         if (title !== "TODO") {
           assert.equal(title, undefined, `${id} screenshot ${src} is a placeholder ("TODO") or has no title`);
-          assert.ok(fs.existsSync(path.join(root, "public", src)), `${id} screenshot ${src} exists in public/help/shots/`);
+          // Manual D's screenshots are private (content/help/d/shots/, served to staff only).
+          const file = manual === "d" ? path.join(root, "content", "help", "d", "shots", path.basename(src)) : path.join(root, "public", src);
+          assert.ok(fs.existsSync(file), `${id} screenshot ${src} exists`);
         }
       }
     });
@@ -134,4 +136,16 @@ test("Manual D is served only inside the Back Office", () => {
   assert.match(read("next.config.ts"), /"\/internal-ops\/help\/\*": \["\.\/content\/help\/d\/\*\*\/\*"\]/);
   // The Back Office layout is what keeps the runbook internal.
   assert.match(read("app/internal-ops/layout.tsx"), /if \(!isInternalOpsRole\(user\.role\)\) redirect\("\/dashboard"\);/);
+});
+
+test("Manual D screenshots are never public and are served to staff only", () => {
+  assert.deepEqual(fs.readdirSync(path.join(root, "public", "help", "shots")).filter((name) => /^d\d/.test(name)), [], "no runbook images in public/");
+  const route = read("app/internal-ops/help/shots/[file]/route.ts");
+  assert.match(route, /if \(!user\) return new NextResponse\("Sign in required", \{ status: 401 \}\);/);
+  assert.match(route, /if \(!isInternalOpsRole\(user\.role\)\) return new NextResponse\("Not found", \{ status: 404 \}\);/);
+  assert.match(route, /if \(!authAvailable && !devBypass\) return new NextResponse/);
+  assert.ok(route.includes(String.raw`if (!/^d\d+-[a-z0-9-]+\.png$/.test(file))`), "only runbook file names, no paths");
+  assert.match(route, /"Cache-Control": "private, max-age=3600"/);
+  assert.match(read("backend/lib/help.ts"), /href\.replace\("\/help\/shots\/", "\/internal-ops\/help\/shots\/"\)/);
+  assert.match(read("next.config.ts"), /"\/internal-ops\/help\/shots\/\*": \["\.\/content\/help\/d\/shots\/\*"\]/);
 });
