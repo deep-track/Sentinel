@@ -195,3 +195,42 @@ test("liveness SMS uses Africa's Talking when configured and WhatsApp stays on T
   assert.match(liveness, /AFRICASTALKING_SENDER_ID/);
   assert.match(liveness, /TWILIO_WHATSAPP_FROM/);
 });
+
+test("hosted capture link: 256-bit token, only its hash stored, 24 h expiry", () => {
+  const liveness = read("backend/convex/liveness.ts");
+  assert.match(liveness, /const linkToken = randomKeySegment\(32\)/);
+  assert.match(liveness, /linkTokenHash: await sha256Hex\(linkToken\)/);
+  assert.match(liveness, /const LINK_TTL_MS = 24 \* 60 \* 60 \* 1000/);
+  assert.match(liveness, /\/liveness\/\$\{args\.linkToken\}/, "the SMS link carries the token");
+  assert.doesNotMatch(liveness, /\/liveness\/\$\{request\._id\}/, "never the guessable document id");
+  assert.match(read("backend/convex/schema.ts"), /\.index\("by_link_token_hash", \["linkTokenHash"\]\)/);
+});
+
+test("hosted capture: single use, expiry and status re-checked on submit, size-limited", () => {
+  const liveness = read("backend/convex/liveness.ts");
+  const submit = liveness.slice(liveness.indexOf("export const submitPublicCapture"));
+  assert.match(submit, /linkState\(row, Date\.now\(\)\)/, "server clock, not the browser's");
+  assert.match(submit, /assertMediaSize\(\{ videoBase64: args\.videoBase64 \}\)/);
+  assert.ok(submit.indexOf("captureSubmittedAt: now") < submit.indexOf("processHostedCapture"), "marked used before scoring is scheduled");
+  const state = liveness.slice(liveness.indexOf("function linkState"));
+  assert.ok(state.indexOf('"submitted"') < state.indexOf('"expired"'), "a used link stays used");
+  assert.match(liveness, /const LINK_TOKEN_PATTERN = \/\^\[0-9a-f\]\{64\}\$\//);
+});
+
+test("hosted capture: scoring failure holds for review, never passes", () => {
+  const liveness = read("backend/convex/liveness.ts");
+  const process = liveness.slice(liveness.indexOf("export const processHostedCapture"), liveness.indexOf("export const _completeHostedCapture"));
+  const failure = process.slice(process.indexOf("} catch (err) {"));
+  assert.match(failure, /verdict: "review"/);
+  assert.doesNotMatch(failure, /verdict: "pass"/);
+  assert.match(liveness, /async function completeRequest\(/);
+});
+
+test("hosted capture page is public but not indexable and sends no referrer", () => {
+  const page = read("app/(public)/liveness/[token]/page.tsx");
+  assert.match(page, /robots: \{ index: false, follow: false \}/);
+  assert.match(page, /referrer: "no-referrer"/);
+  const capture = read("app/(public)/liveness/[token]/hosted-liveness-capture.tsx");
+  assert.match(capture, /new ConvexHttpClient\(url\)/);
+  assert.match(capture, /disabled=\{!clip \|\| !consent \|\| busy \|\| submitting\}/, "consent is required before sending");
+});
