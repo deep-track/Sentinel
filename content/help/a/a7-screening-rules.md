@@ -50,7 +50,7 @@ Below the switch is the list of cleared hits, newest first, up to 200. It shows 
 1. Click **Forget** on its row.
 2. Confirm. You see "Forgotten: it will be raised again". The next screening of that customer raises it.
 
-![Cleared hits list under False-positive memory](/help/shots/a7-cleared-hits.png "TODO")
+![Cleared hits list under False-positive memory](/help/shots/a7-cleared-hits.png)
 
 ### AI hit review
 

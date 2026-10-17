@@ -115,7 +115,7 @@ Every payment has an invoice. They are listed under **Invoices**, newest first, 
 2. Or click **PDF** (unpaid) or **Receipt** (paid) in the list to download it directly.
 3. To pay an unpaid invoice online, click **Pay**.
 
-![A paid invoice with the Paid stamp](/help/shots/a2-invoice.png "TODO")
+![A paid invoice with the Paid stamp](/help/shots/a2-invoice.png)
 
 ### Automatic top-up
 

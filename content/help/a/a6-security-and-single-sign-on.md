@@ -42,7 +42,7 @@ Setting up SSO takes two stages: start it in Sentinel, then copy details between
    - SAML: **Sign-in URL**, **Sign-out URL (optional)** and **Signing certificate (PEM)**
 6. Click **Connect**. To stop part-way, click **Cancel**.
 
-![Single sign-on section after Set up single sign-on, showing the redirect URI and the details form](/help/shots/a6-sso-setup.png "TODO")
+![Single sign-on section after Set up single sign-on, showing the redirect URI and the details form](/help/shots/a6-sso-setup.png)
 
 Sentinel doesn't store your client secret or certificate. They go straight to the sign-in service.
 
@@ -56,7 +56,7 @@ Sentinel doesn't store your client secret or certificate. They go straight to th
 
 New people can't join as Admin this way. A member you deactivated stays deactivated even if they sign in through SSO.
 
-![Single sign-on connected to Microsoft Entra ID for demo-bank.example](/help/shots/a6-sso-connected.png "TODO")
+![Single sign-on connected to Microsoft Entra ID for demo-bank.example](/help/shots/a6-sso-connected.png)
 
 To switch providers, click **Remove single sign-on** and confirm, then set it up again. People who only sign in with SSO lose access until it is connected again or they set a password.
 

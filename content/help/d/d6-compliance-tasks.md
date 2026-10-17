@@ -39,7 +39,7 @@ Every write on these screens is checked again on the server and written to the a
 7. The form has no client field. In **Notes (optional)**, write the client's name and how the request arrived, for example "Demo Bank Ltd, email from compliance officer".
 8. Click **Log request**. The button stays grey until the subject has at least 3 characters.
 
-![Data subject requests with one open erasure request and the form below](/help/shots/d6-requests.png "TODO")
+![Data subject requests with one open erasure request and the form below](/help/shots/d6-requests.png)
 
 ### Work a request to a close
 
@@ -65,7 +65,7 @@ You can't edit a request's notes after logging it, so write the full context whe
 
 To stop a request instead, click **Cancel**. You can't approve a request you made yourself.
 
-![Removal waiting for approval in a client's Audit & data settings](/help/shots/d6-removal-pending.png "TODO")
+![Removal waiting for approval in a client's Audit & data settings](/help/shots/d6-removal-pending.png)
 
 ### Sign off the weekly compliance report
 
@@ -81,7 +81,7 @@ To stop a request instead, click **Cancel**. You can't approve a request you mad
 4. Use **Hits by client**, **Hits by list**, **Hits by matched country** and **Top programmes and topics** to see where hits come from.
 5. In **Fake faces caught**, each row gives the client, **Scan ID**, whether it came from a **Selfie** or **Liveness video**, the confidence and the outcome. Demo Bank Ltd, the training organization, is left out of every Back Office total, so its checks never appear here.
 
-![Risk dashboard with hits by list and by client, and the fake faces caught](/help/shots/d6-risk.png "TODO")
+![Risk dashboard with hits by list and by client, and the fake faces caught](/help/shots/d6-risk.png)
 
 ### Recurring tasks
 

@@ -36,7 +36,7 @@ The BRS, KRA and ownership checks run only when the country is Kenya and the reg
 6. Tick the box that starts "I confirm that all information provided is accurate", then click **Submit**.
 7. Sentinel shows the reference and opens the result page after 5 seconds.
 
-![UBO & Directors step with two people entered](/help/shots/b8-wizard-people.png "TODO")
+![UBO & Directors step with two people entered](/help/shots/b8-wizard-people.png)
 
 List everyone who owns 10% or more, and every director. Sentinel compares your list with the register. Anyone it finds that you didn't list sends the business to review.
 

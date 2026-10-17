@@ -50,7 +50,7 @@ Developers usually send transactions through the API (see C5). Viewers / Auditor
 4. Click **Choose CSV** and pick your file. Large files are sent in batches of 500 for you.
 5. Read the summary under the buttons: how many were added, how many were already uploaded, and how many were rejected. Each rejected row shows its row number in the file and the reason, for example "direction must be in or out". Fix those rows and upload the file again. Rows already accepted are skipped, because Sentinel ignores an externalId it has seen before.
 
-![Upload summary with added, already uploaded and rejected counts](/help/shots/b13-upload-summary.png "TODO")
+![Upload summary with added, already uploaded and rejected counts](/help/shots/b13-upload-summary.png)
 
 New alerts appear within a minute.
 

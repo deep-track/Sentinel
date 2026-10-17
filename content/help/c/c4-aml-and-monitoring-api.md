@@ -38,7 +38,7 @@ Authentication, test mode, rate limits and the general error format are in [C1 Q
 
 A key created before scopes existed can call every endpoint. A key without the needed scope gets a 403.
 
-![API Keys page with a key that has the Run AML screenings and Manage AML monitoring scopes](/help/shots/c4-api-key-scopes.png "TODO")
+![API Keys page with a key that has the Run AML screenings and Manage AML monitoring scopes](/help/shots/c4-api-key-scopes.png)
 
 ## Step by step
 

@@ -86,7 +86,7 @@ When someone sends a recommendation, everyone who can approve it gets an "Approv
 2. The form is headed **Final decision (second approval)**. Choose the reason, add notes, and click **Approve case** or **Reject case**. You don't have to agree with the recommendation.
 3. If the work isn't finished, click **Send recommendation back** and say why. The case returns to the recommender and goes back to the open queue.
 
-![Case with a recommendation from a team member, awaiting second approval](/help/shots/b11-four-eyes.png "TODO")
+![Case with a recommendation from a team member, awaiting second approval](/help/shots/b11-four-eyes.png)
 
 ### Escalate
 

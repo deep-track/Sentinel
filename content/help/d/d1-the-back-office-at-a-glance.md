@@ -63,7 +63,7 @@ You can also go straight to `/internal-ops`. It always opens the **Overview**.
 
 "Today" starts at midnight in your browser's time zone. If you work from outside East Africa, your "today" differs from the client's.
 
-![Back Office Overview with the client accounts, alerts and the review queue](/help/shots/d1-overview.png "TODO")
+![Back Office Overview with the client accounts, alerts and the review queue](/help/shots/d1-overview.png)
 
 ### Move between clients
 

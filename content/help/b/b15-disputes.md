@@ -39,7 +39,7 @@ Your organization can have up to 50 open disputes at a time. If you reach that l
 4. In **Why is the result wrong?**, explain what you know that the check didn't. Use at least 10 characters and no more than 2,000. Give facts DeepTrack can verify, for example "The customer was verified in person at our Westlands branch on the same day."
 5. Click **Send dispute**. You see "Dispute sent to DeepTrack".
 
-![The Dispute this result window on the James Mutua KYC check](/help/shots/b15-dispute-dialog.png "TODO")
+![The Dispute this result window on the Samuel Cheruiyot KYC check](/help/shots/b15-dispute-dialog.png)
 
 The report now shows a banner: "Disputed: DeepTrack is reviewing this result." with a **See disputes** link.
 

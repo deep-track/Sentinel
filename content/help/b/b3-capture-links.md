@@ -52,7 +52,7 @@ The page is headed "Verify your identity", or "Thibitisha utambulisho wako" in K
 
 The language link at the top right switches between English and Kiswahili at any time.
 
-![The customer's page in Kiswahili, greeting Halima](/help/shots/b3-customer-intro.png "TODO")
+![The customer's page in Kiswahili, greeting Halima](/help/shots/b3-customer-intro.png)
 
 ### Track your links
 
