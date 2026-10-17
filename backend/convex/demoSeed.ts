@@ -626,13 +626,28 @@ export const reset = internalMutation({
     await drop(await ctx.db.query("transactions").withIndex("by_client_customer_time", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
     await drop(await ctx.db.query("counterpartyScreenings").withIndex("by_client_and_key", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
     await drop(await ctx.db.query("captureSessions").withIndex("by_client", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
+    // What demoScreens.ts adds for the manual's screenshots.
+    await drop(await ctx.db.query("invoices").withIndex("by_client_and_issued_at", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
+    await drop(await ctx.db.query("apiKeys").withIndex("by_client", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
+    await drop(await ctx.db.query("webhookDeliveries").withIndex("by_client", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
+    await drop(await ctx.db.query("webhookEndpoints").withIndex("by_client", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
+    await drop(await ctx.db.query("amlClearedMatches").withIndex("by_client_and_cleared_at", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
+    await drop(await ctx.db.query("retentionPurges").withIndex("by_client_and_requested_at", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
+    await drop(await ctx.db.query("livenessRequests").withIndex("by_client", (q) => q.eq("clientId", client._id)).take(PER_TABLE));
+    await drop((await ctx.db.query("dataRequests").withIndex("by_received_at").order("desc").take(2000)).filter((row) => row.clientId === client._id));
     const members = await ctx.db.query("clientMembers").withIndex("by_client", (q) => q.eq("clientId", client._id)).take(100);
     for (const member of members) {
       const rows = await ctx.db.query("notifications").withIndex("by_user_and_created_at", (q) => q.eq("userId", member.userId)).take(PER_TABLE);
       await drop(rows.filter((row) => row.clientId === client._id));
     }
     if (removed > 0) return { done: false, removed };
-    await drop(await ctx.db.query("clientSettings").withIndex("by_client", (q: any) => q.eq("clientId", client._id)).take(10));
+    const settingsRows = await ctx.db.query("clientSettings").withIndex("by_client", (q: any) => q.eq("clientId", client._id)).take(10);
+    for (const row of settingsRows) if (row.profile?.logoStorageId) await ctx.storage.delete(row.profile.logoStorageId).catch(() => undefined);
+    await drop(settingsRows);
+    // Invented team members (demo|…) have profiles only Demo Bank uses.
+    for (const member of members.filter((row) => row.userId.startsWith("demo|"))) {
+      await drop(await ctx.db.query("userProfiles").withIndex("by_user_id", (q) => q.eq("userId", member.userId)).take(5));
+    }
     await drop(members);
     await ctx.db.delete(client._id);
     return { done: true, removed: removed + 1 };

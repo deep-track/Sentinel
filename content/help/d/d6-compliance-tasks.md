@@ -79,9 +79,9 @@ To stop a request instead, click **Cancel**. You can't approve a request you mad
 2. Read the four tiles: **Watchlist hits**, **Critical hits**, **Rejected verifications** and **Fake faces caught**.
 3. Check **Watchlist hits per week** for a jump in one list.
 4. Use **Hits by client**, **Hits by list**, **Hits by matched country** and **Top programmes and topics** to see where hits come from.
-5. In **Fake faces caught**, each row gives the client, **Scan ID**, whether it came from a **Selfie** or **Liveness video**, the confidence and the outcome. In Demo Bank Ltd, James Mutua's KYC check shows a fake selfie at 94.0%.
+5. In **Fake faces caught**, each row gives the client, **Scan ID**, whether it came from a **Selfie** or **Liveness video**, the confidence and the outcome. Demo Bank Ltd, the training organization, is left out of every Back Office total, so its checks never appear here.
 
-![Risk dashboard with one fake face caught for Demo Bank Ltd](/help/shots/d6-risk.png "TODO")
+![Risk dashboard with hits by list and by client, and the fake faces caught](/help/shots/d6-risk.png "TODO")
 
 ### Recurring tasks
 
