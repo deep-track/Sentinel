@@ -5,12 +5,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "@playwright/test";
-import { APP_URL, AUTH, BROWSER_CHANNEL } from "./lib.mjs";
+import { APP_URL, AUTH, BROWSER_CHANNEL, DEMO_CLIENT_ID } from "./lib.mjs";
 
 // Maximized and sized by the window itself, so the whole sign-in page fits
 // the screen (Continue with Google sits below the password box).
 const browser = await chromium.launch({ channel: BROWSER_CHANNEL, headless: false, args: ["--start-maximized"] });
 const context = await browser.newContext({ viewport: null });
+// Open on Demo Bank Ltd, so there's nothing to switch.
+await context.addCookies([{ name: "sentinel_client_id", value: DEMO_CLIENT_ID, url: APP_URL }]);
 const page = await context.newPage();
 await page.goto(`${APP_URL}/dashboard`);
 console.log("Sign in in the browser window. When the Sentinel dashboard shows, switch to Demo Bank Ltd if needed. Waiting up to 15 minutes…");

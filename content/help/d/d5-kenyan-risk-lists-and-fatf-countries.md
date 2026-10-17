@@ -45,7 +45,7 @@ If you can't act, the FATF boxes are greyed out with no **Save** button, and the
 
 The tiles across the page show each list's count. Click a tile to show only that list; click it again to show all.
 
-![Kenyan risk lists page with the list tiles](/help/shots/d5-tiles.png "TODO")
+![Kenyan risk lists page with the list tiles](/help/shots/d5-tiles.png)
 
 ### Read a publication
 
@@ -102,7 +102,7 @@ Don't remove a debarment just because it has ended. Clients see it marked "ended
 3. Set **FATF statement date** to the statement's date, as YYYY-MM-DD.
 4. Click **Save**. You see "FATF lists saved. New ratings use them."
 
-![Country risk (FATF) panel](/help/shots/d5-fatf.png "TODO")
+![Country risk (FATF) panel](/help/shots/d5-fatf.png)
 
 Saving replaces both lists. An empty box saves an empty list, so check both before you click **Save**. Ratings already given don't change until the customer is screened again; monitored customers are re-screened daily.
 

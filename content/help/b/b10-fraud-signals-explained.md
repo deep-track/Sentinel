@@ -31,7 +31,7 @@ Below: what each signal means, how it changes the verdict, and what to do.
 3. On a KYC report, read the **Face match** row in the **Verification Report**. A duplicate face shows here.
 4. Read the **Fraud network** section.
 
-![KYC report for Brenda Atieno with a face match of No match and the same face under another identity](/help/shots/b10-duplicate-face.png "TODO")
+![KYC report for Brenda Atieno with a face match of No match and the same face under another identity](/help/shots/b10-duplicate-face.png)
 
 ### Turn on the optional signals
 
@@ -44,7 +44,7 @@ Duplicate face search and the shared Sentinel network are off by default. An Adm
 
 Before you turn on duplicate face search, check that your privacy notice and customer consent cover it. Sentinel keeps a face template (not the photo) for each KYC check, and that is biometric data under the Data Protection Act.
 
-![Screening rules with the Face match and Fraud network sections](/help/shots/b10-settings.png "TODO")
+![Screening rules with the Face match and Fraud network sections](/help/shots/b10-settings.png)
 
 ## What each result means
 
@@ -98,7 +98,7 @@ DeepTrack Live checks the face for a deepfake or synthetic face. It shows in the
 
 **What to do:** never approve a flagged face on the photo alone. Ask the customer to redo the check with a live capture, or to come to a branch. A confident fake is attempted fraud, so consider an STR.
 
-![KYC report for James Mutua, Declined, with the selfie flagged as a fake or synthetic face](/help/shots/b10-fake-selfie.png "TODO")
+![KYC report for James Mutua, Declined, with the selfie flagged as a fake or synthetic face](/help/shots/b10-fake-selfie.png)
 
 ### AI forgeries
 

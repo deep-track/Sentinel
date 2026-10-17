@@ -28,7 +28,7 @@ Fill it in once, after you sign up. When you signed up, Sentinel filled in your 
 1. Click **Settings** in the sidebar.
 2. Click the **Organization** tab. The page has two parts: **Logo** and **Organization details**.
 
-![Settings, Organization tab for Demo Bank Ltd, with the Logo and Organization details cards](/help/shots/a4-organization.png "TODO")
+![Settings, Organization tab for Demo Bank Ltd, with the Logo and Organization details cards](/help/shots/a4-organization.png)
 
 ### Fill in your organization details
 
@@ -49,7 +49,7 @@ Fill it in once, after you sign up. When you signed up, Sentinel filled in your 
 
 Each field holds up to 300 characters. Spaces at the start and end are removed, and an empty field is cleared.
 
-![Organization details filled in for Demo Bank Ltd, with Central Bank of Kenya chosen as regulator](/help/shots/a4-details.png "TODO")
+![Organization details filled in for Demo Bank Ltd, with Central Bank of Kenya chosen as regulator](/help/shots/a4-details.png)
 
 ### Add your logo
 

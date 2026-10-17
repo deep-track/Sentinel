@@ -58,7 +58,7 @@ An Admin can still pay after a trial ends, so the workspace can start again. A s
 
 If the balance is 0 or less, it turns red and says **New verifications are refused until credits are added. Top up below.**
 
-![Billing & Credits page for Demo Bank Ltd on the Business plan](/help/shots/a2-billing.png "TODO")
+![Billing & Credits page for Demo Bank Ltd on the Business plan](/help/shots/a2-billing.png)
 
 ### Before you pay: billing settings
 
@@ -80,7 +80,7 @@ The invoice also shows your organization's legal name and address from **Setting
 
 If a KES plan shows **Ask for a quote** instead, DeepTrack has not set the exchange rate yet. Click it to email sales for an invoice. If online payment is not set up, only **Pay by bank / M-Pesa** is shown.
 
-![Plans with Growth marked Popular](/help/shots/a2-plans.png "TODO")
+![Plans with Growth marked Popular](/help/shots/a2-plans.png)
 
 When the payment for a plan is received, your workspace moves to that plan straight away and the plan's credits are added.
 

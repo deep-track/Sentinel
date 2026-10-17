@@ -35,7 +35,7 @@ Neither page changes anything. To act on a check, open it from its own page, or 
 5. Under **Verification mix**, see how the 30 days split by type: **KYC / Identity**, **KYB**, **IDP / Documents**, **AML** and **Liveness**, with a count and a percentage.
 6. Under **Recent verifications**, see the 10 latest checks: **Case ID**, **Type**, **Subject**, **Verdict** and **Submitted**.
 
-![Overview page for Demo Bank Ltd with the credit balance, the four tiles and the deepfakes tile](/help/shots/a3-overview.png "TODO")
+![Overview page for Demo Bank Ltd with the credit balance, the four tiles and the deepfakes tile](/help/shots/a3-overview.png)
 
 ### Read the Client Portal page
 
@@ -47,7 +47,7 @@ Neither page changes anything. To act on a check, open it from its own page, or 
 3. To see what each check costs, open **Your prices**. It lists each check with its price in credits and in money. You pay only when a check completes.
 4. Read the four tiles: **Scans this month** (with today's count under it), **Avg. verification** (with the p95 time, which 95% of checks beat), **Flagged / review** and **Active API keys** (with the revoked count and a **manage** link).
 
-![Client Portal for Demo Bank Ltd, showing credits used this month and the four tiles](/help/shots/a3-portal.png "TODO")
+![Client Portal for Demo Bank Ltd, showing credits used this month and the four tiles](/help/shots/a3-portal.png)
 
 ### Find a recent check
 
@@ -55,7 +55,7 @@ Neither page changes anything. To act on a check, open it from its own page, or 
 2. To narrow the list, choose from the verdict filter: **All verdicts**, **Passed**, **Review**, **Flagged** or **In progress / failed**.
 3. The list holds your organization's 50 latest checks. For older checks, use the page for that kind of check, such as **Identity (KYC)** or **AML Screening**.
 
-![Recent verifications on the Client Portal, filtered to Review](/help/shots/a3-portal-recent.png "TODO")
+![Recent verifications on the Client Portal, filtered to Review](/help/shots/a3-portal-recent.png)
 
 ## What each result means
 

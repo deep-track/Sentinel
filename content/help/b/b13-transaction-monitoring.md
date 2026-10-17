@@ -62,7 +62,7 @@ Tip: use the Sentinel reference of the customer's KYC or AML check as the custom
 2. Click **Open**, **Escalated** or **Closed** to switch between alerts in each state.
 3. Each row shows the rule, the customer reference, a one-line summary, the severity, the number of transactions and the date raised. Click a row to open the alert.
 
-![Transactions page with the open alerts for Demo Bank Ltd](/help/shots/b13-alerts-list.png "TODO")
+![Transactions page with the open alerts for Demo Bank Ltd](/help/shots/b13-alerts-list.png)
 
 ### Read an alert
 
@@ -73,7 +73,7 @@ The alert page shows:
 - The customer reference and when the alert was raised. If the reference matches a Sentinel check, click **Open the customer's check** to see who the customer is and their screening results.
 - A table of the transactions behind the alert: **Date**, **Reference**, **In / out**, **Channel**, **Amount** and **Counterparty**, with totals in and out underneath.
 
-![Alert page for a counterparty on a sanctions list](/help/shots/b13-alert-page.png "TODO")
+![Alert page for a counterparty on a sanctions list](/help/shots/b13-alert-page.png)
 
 ### Close or escalate the alert
 
@@ -83,7 +83,7 @@ The alert page shows:
 
 The decision, your notes, your name and the time are saved on the alert and in the audit log. The alert moves to the **Closed** or **Escalated** list.
 
-![An escalated alert with the decision notes](/help/shots/b13-escalated.png "TODO")
+![An escalated alert with the decision notes](/help/shots/b13-escalated.png)
 
 If you escalated it, prepare the report. When the customer reference matches a Sentinel check, Admins and Reviewers see the **Suspicious transaction report** panel at the bottom of the alert page (see B14). When it does not, prepare the STR from a review case on the customer's KYC or AML check instead (see B11 and B14).
 

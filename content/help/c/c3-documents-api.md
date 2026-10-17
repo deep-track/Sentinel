@@ -147,7 +147,7 @@ For a KRA PIN certificate:
 2. Or poll `GET /v1/verify/{id}` until `status` is `completed` or `failed`. A completed document check carries a `document` object, described below. See [C6 Results and credits](/help/c6).
 3. Results usually take under a minute.
 
-![Document report for Amina Hassan Omar's Maisha card, opened from an API check](/help/shots/c3-report.png "TODO")
+![Document report for Amina Hassan Omar's Maisha card, opened from an API check](/help/shots/c3-report.png)
 
 ## What each result means
 

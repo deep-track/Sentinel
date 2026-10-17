@@ -43,7 +43,7 @@ Your organization can have up to 50 open disputes at a time. If you reach that l
 
 The report now shows a banner: "Disputed: DeepTrack is reviewing this result." with a **See disputes** link.
 
-![Disputed banner on the James Mutua report, with the Withdraw button](/help/shots/b15-disputed-banner.png "TODO")
+![Disputed banner on the James Mutua report, with the Withdraw button](/help/shots/b15-disputed-banner.png)
 
 ### Follow your disputes
 
@@ -51,7 +51,7 @@ The report now shows a banner: "Disputed: DeepTrack is reviewing this result." w
 2. The top line shows how many disputes are open and how many are closed. Open disputes are listed first.
 3. Each dispute shows the customer, the check reference, the date you disputed it, the result and the result you expected, and your reason. Click the customer's name to open the report.
 
-![Disputes page with the James Mutua dispute marked With DeepTrack](/help/shots/b15-disputes-page.png "TODO")
+![Disputes page with the James Mutua dispute marked With DeepTrack](/help/shots/b15-disputes-page.png)
 
 The dispute also shows in **Reviews** as a high-priority case. When you open it, the case says "Your team disputed this result. DeepTrack decides it, and you'll be notified."
 

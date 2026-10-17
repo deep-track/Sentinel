@@ -35,7 +35,7 @@ With view-only, the queue header says "read only", rows show **View result**, an
 3. The **Open** tab lists client disputes first, then auto-escalations, then internal flags, oldest first within each.
 4. Click **Review** on the row you want. Use the **Resolved** tab to read past decisions, most recent first.
 
-![Review queue on the Open tab with the James Mutua dispute at the top](/help/shots/d2-queue.png "TODO")
+![Review queue on the Open tab with the James Mutua dispute at the top](/help/shots/d2-queue.png)
 
 ### Read the case
 
@@ -59,7 +59,7 @@ With view-only, the queue header says "read only", rows show **View result**, an
 
 The dispute is "upheld" when the result changes and "not upheld" when it stays.
 
-![Resolve panel on the James Mutua dispute, showing Final: pass, Final: reject and Escalate](/help/shots/d2-dispute-resolve.png "TODO")
+![Resolve panel on the James Mutua dispute, showing Final: pass, Final: reject and Escalate](/help/shots/d2-dispute-resolve.png)
 
 ### Decide any other item
 
@@ -92,7 +92,7 @@ Escalating doesn't notify anyone. The item shows **escalated**, your note shows 
 
 Assignment shows who is working an item. It doesn't stop anyone else from resolving it.
 
-![Review operations with Open items, Reviewer workload and Why items are held](/help/shots/d2-review-ops.png "TODO")
+![Review operations with Open items, Reviewer workload and Why items are held](/help/shots/d2-review-ops.png)
 
 These deadlines are DeepTrack's. Each client also has its own case deadlines (by default 24 hours for high priority). When a client's deadline passes, Sentinel raises the item to high priority and sends the client's team a "Missed review deadline" alert. This includes disputes, so a dispute left for more than 24 hours alerts the client.
 

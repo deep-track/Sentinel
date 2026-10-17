@@ -38,7 +38,7 @@ Each document goes through four layers. File forensics reads the file's hidden d
 5. Add **Your reference** if you want your own customer number on the report, for example CUST-1001.
 6. Click **Verify document**. The page says "Verification queued. Results usually take under a minute."
 
-![Documents (IDP) page with the identity document form](/help/shots/b5-idp-form.png "TODO")
+![Documents (IDP) page with the identity document form](/help/shots/b5-idp-form.png)
 
 Files can be JPG, PNG, WebP or PDF. Upload the original file where you can. An image larger than about 730 KB is resized before upload, and resizing removes the hidden data that reveals AI-generated or edited files. The page tells you when this happens. A PDF larger than 730 KB can't be shrunk, so upload a photo of the page instead.
 
@@ -51,7 +51,7 @@ Files can be JPG, PNG, WebP or PDF. Upload the original file where you can. An i
 5. Work down the sections, from **Checks** and **Fraud and authenticity findings** to **How this document was checked**.
 6. Click **Download report (PDF)** to keep a copy, or **Evidence (JSON)** for the raw result.
 
-![Document report for Amina Hassan Omar's Maisha card, verified](/help/shots/b5-report-maisha.png "TODO")
+![Document report for Amina Hassan Omar's Maisha card, verified](/help/shots/b5-report-maisha.png)
 
 ### Kenyan ID cards
 
@@ -66,7 +66,7 @@ For both cards, the ID number must be 6 to 10 digits.
 
 Sentinel checks that the document is a KRA certificate and that the PIN has the right format: A for an individual or P for a company, nine digits, then a letter. It checks that the first letter matches the taxpayer type on the certificate. Where Sentinel's connection to KRA is available, it also looks the PIN up in KRA's own records. The **KRA records** row shows what KRA said.
 
-![KRA PIN certificate report for Daniel Ouma, needs review](/help/shots/b5-report-kra.png "TODO")
+![KRA PIN certificate report for Daniel Ouma, needs review](/help/shots/b5-report-kra.png)
 
 ## What each result means
 
@@ -85,7 +85,7 @@ Each finding has a severity and a source. **Critical** findings reject the docum
 
 When any finding points to AI generation, a red banner under the header says "AI-generated document suspected". In the demo, Daniel Ouma's ID shows this: the background pattern melts into the photo and the small print is garbled.
 
-![Rejected report for Daniel Ouma's ID with the AI-generated banner](/help/shots/b5-report-ai.png "TODO")
+![Rejected report for Daniel Ouma's ID with the AI-generated banner](/help/shots/b5-report-ai.png)
 
 ### Your organization's document rules
 

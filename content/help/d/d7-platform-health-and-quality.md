@@ -70,7 +70,7 @@ Both actions are checked again on the server and written to the audit log.
 
 Times on this page come from the server, so they may show UTC rather than EAT (UTC+3).
 
-![AML Screening Monitor with Demo Bank Ltd screenings](/help/shots/d7-screening-monitor.png "TODO")
+![AML Screening Monitor with Demo Bank Ltd screenings](/help/shots/d7-screening-monitor.png)
 
 ### Judge the quality of results
 
@@ -79,7 +79,7 @@ Times on this page come from the server, so they may show UTC rather than EAT (U
 3. **DeepTrack Live by month** shows six months of selfie and video checks, each with a coloured mix of **Real**, **Uncertain**, **Fake** and **Service error**, plus how many went to review and how many a reviewer overturned.
 4. **Watchlist freshness** shows each list's record count over time and its last 10 runs, with the change in records.
 
-![Model & data quality with six months of DeepTrack Live results](/help/shots/d7-quality.png "TODO")
+![Model & data quality with six months of DeepTrack Live results](/help/shots/d7-quality.png)
 
 ### Recurring tasks
 

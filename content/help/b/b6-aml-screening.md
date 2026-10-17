@@ -38,7 +38,7 @@ Every hit is sorted into one or more of six categories: **Sanctions & watchlists
 6. To keep watching this customer, tick **Keep monitoring (re-screen daily, alert on new hits)**. See [B7 Ongoing monitoring](/help/b7).
 7. Click **Run AML screening**. You see "Screening queued. Results will update automatically."
 
-![AML Screening form with a subject entered](/help/shots/b6-form.png "TODO")
+![AML Screening form with a subject entered](/help/shots/b6-form.png)
 
 A date of birth or ID number matters. Without one, matches are on name and country only, and you will see more look-alikes.
 
@@ -54,11 +54,11 @@ A date of birth or ID number matters. Without one, matches are on name and count
 
 In Demo Bank Ltd, open the screening for Daniel Kipruto Langat. It shows a hit on the Kenyan PEP register.
 
-![AML report for Daniel Kipruto Langat with a Kenyan PEP hit](/help/shots/b6-report-pep.png "TODO")
+![AML report for Daniel Kipruto Langat with a Kenyan PEP hit](/help/shots/b6-report-pep.png)
 
 The screening for Viktor Petrovich Orlov shows an exact match on a sanctions list.
 
-![AML report for Viktor Petrovich Orlov showing Match, do not proceed](/help/shots/b6-report-sanctions.png "TODO")
+![AML report for Viktor Petrovich Orlov showing Match, do not proceed](/help/shots/b6-report-sanctions.png)
 
 For an OpenSanctions match, click the **Record id** to open the listed person's profile.
 

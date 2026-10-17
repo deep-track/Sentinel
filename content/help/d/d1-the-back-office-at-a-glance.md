@@ -44,7 +44,7 @@ You can also go straight to `/internal-ops`. It always opens the **Overview**.
 3. The menu is grouped into **Back office**, **Clients**, **Reviews** and **Risk & compliance**. The page you are on is highlighted with a blue dot.
 4. At the bottom you see your name and your role. "· view only" after the role means you have the view-only modifier.
 
-![Back Office sidebar with the amber banner and the Reviews section](/help/shots/d1-sidebar.png "TODO")
+![Back Office sidebar with the amber banner and the Reviews section](/help/shots/d1-sidebar.png)
 
 ### Read the Overview
 
@@ -75,7 +75,7 @@ Internal admins see every active client in the switcher. You act as that client'
 
 Anything you do in a client's portal is recorded in that client's audit log as an internal admin, and the client can read it there.
 
-![Organization switcher listing client organizations](/help/shots/d1-switcher.png "TODO")
+![Organization switcher listing client organizations](/help/shots/d1-switcher.png)
 
 ### Recurring tasks
 

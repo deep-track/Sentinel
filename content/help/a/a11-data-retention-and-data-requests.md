@@ -32,7 +32,7 @@ Sentinel helps you do both:
 
 Under the field, Sentinel tells you how many checks and transactions are older than the cutoff date, for example "No checks or transactions are past the retention period."
 
-![Data retention section for Demo Bank Ltd, set to 84 months, with nothing past the retention period](/help/shots/a11-retention.png "TODO")
+![Data retention section for Demo Bank Ltd, set to 84 months, with nothing past the retention period](/help/shots/a11-retention.png)
 
 ### Request removal of old records
 

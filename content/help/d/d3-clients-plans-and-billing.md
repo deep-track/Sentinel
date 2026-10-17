@@ -42,7 +42,7 @@ Self-service trials create themselves (see "Trials" below). Use this for clients
 
 For a KES client, the prefilled credits use the Back Office KES list price, not the USD price at today's rate. Agree the figure with sales.
 
-![Client accounts with Demo Bank Ltd selected](/help/shots/d3-client-accounts.png "TODO")
+![Client accounts with Demo Bank Ltd selected](/help/shots/d3-client-accounts.png)
 
 ### Change a client's account
 
@@ -82,7 +82,7 @@ The credits are added at once. A plan invoice also moves the client to that plan
 
 To cancel an unpaid invoice, click **Cancel** and give a reason. The reason is printed on the invoice, and the client can read it.
 
-![Unpaid invoices with Mark paid and Cancel](/help/shots/d3-invoices.png "TODO")
+![Unpaid invoices with Mark paid and Cancel](/help/shots/d3-invoices.png)
 
 ### Reconcile Paystack payments
 
@@ -104,7 +104,7 @@ Despite the label, the rate also prices every KES plan bought online: Growth at 
 
 Under **On every invoice**, keep DeepTrack's company name, address, KRA PIN, **VAT %** and **How to pay** up to date, then click **Save**. Each invoice copies these details when it is issued.
 
-![Revenue & billing tiles and price list](/help/shots/d3-billing.png "TODO")
+![Revenue & billing tiles and price list](/help/shots/d3-billing.png)
 
 ### Trials
 
@@ -122,7 +122,7 @@ Under **Monthly statement**, pick the client and month. Click **CSV** for financ
 2. In **Usage trend**, click a client name to open it in **Client accounts**.
 3. Use **Onboarding** to find clients stuck before **Live verification** or **First charge**, and pass them to their account manager.
 
-![Client health with usage trend and onboarding](/help/shots/d3-client-health.png "TODO")
+![Client health with usage trend and onboarding](/help/shots/d3-client-health.png)
 
 ### The demo client
 

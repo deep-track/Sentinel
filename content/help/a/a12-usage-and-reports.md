@@ -34,7 +34,7 @@ Analysts and Developers who open **Reports** see **Reports are for Admins, Revie
 4. Click **Download (PDF)**. Your browser's print window opens.
 5. Choose **Save as PDF** as the printer, and save the file, for example `Demo Bank - AML KYC report - September 2026.pdf`.
 
-![Monthly AML / KYC compliance report for Demo Bank Ltd, current month selected](/help/shots/a12-monthly-report.png "TODO")
+![Monthly AML / KYC compliance report for Demo Bank Ltd, current month selected](/help/shots/a12-monthly-report.png)
 
 The header shows your organization's legal name, registration number, regulator, licence number and logo from **Settings → Organization** (see A4). Fill those in first so the PDF is ready to send. Months run from midnight on the 1st to midnight at month end, East Africa Time.
 
@@ -62,7 +62,7 @@ Below them, a table splits the checks by product, **KYC (identity)**, **AML scre
 
 **Suspicious transaction reports.** The number prepared and the number submitted to the FRC in the month. Counts only.
 
-![Reviews section with decisions per person](/help/shots/a12-reviews-section.png "TODO")
+![Reviews section with decisions per person](/help/shots/a12-reviews-section.png)
 
 ### The STR register
 
@@ -99,7 +99,7 @@ The file has these columns: **Date**, **Type**, **Credits**, **Amount (KES)** or
 | `kyb` | Business (KYB) check |
 | `liveness` | Liveness check |
 
-![Credit history with the CSV (latest 100) button](/help/shots/a12-credit-history.png "TODO")
+![Credit history with the CSV (latest 100) button](/help/shots/a12-credit-history.png)
 
 ## What each result means
 

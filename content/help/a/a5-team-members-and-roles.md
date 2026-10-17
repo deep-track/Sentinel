@@ -72,7 +72,7 @@ Who makes the *final* decision on each kind of review case is set separately, in
 4. In **Role**, choose the role. **Analyst** is selected by default.
 5. Click **Invite**.
 
-![Settings, Team tab for Demo Bank Ltd with the invite form and seat bar](/help/shots/a5-invite.png "TODO")
+![Settings, Team tab for Demo Bank Ltd with the invite form and seat bar](/help/shots/a5-invite.png)
 
 Sentinel emails the invitation. The person joins your team the first time they sign in to Sentinel with that address. Their email must be verified when they sign in, so nobody can join by typing someone else's address.
 
@@ -122,7 +122,7 @@ Some people belong to more than one organization in Sentinel, for example a grou
 2. If you belong to several, click it. Under **Organizations**, choose the one you want.
 3. Every page, including **Settings**, now shows that organization. Your role can be different in each one.
 
-![Organization switcher in the sidebar, open on the Organizations list](/help/shots/a5-switcher.png "TODO")
+![Organization switcher in the sidebar, open on the Organizations list](/help/shots/a5-switcher.png)
 
 ## What each result means
 

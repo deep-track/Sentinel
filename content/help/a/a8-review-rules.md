@@ -30,7 +30,7 @@ The defaults follow common practice for Kenyan banks and SACCOs under CBK and SA
 2. Make your changes in the sections below.
 3. Click **Save changes** in the bar at the bottom. To throw away your edits, click **Discard**.
 
-![Review workflow settings for Demo Bank Ltd, showing Who can decide what and Four-eyes approval](/help/shots/a8-review-workflow.png "TODO")
+![Review workflow settings for Demo Bank Ltd, showing Who can decide what and Four-eyes approval](/help/shots/a8-review-workflow.png)
 
 ### Who can decide what
 
@@ -101,7 +101,7 @@ Insufficient or inconsistent information
 
 The reasons appear in the audit log and the monthly report on the **Reports** page. Write them so an examiner from CBK or the FRC can understand them without asking.
 
-![Reason codes section with the approve and reject lists](/help/shots/a8-reason-codes.png "TODO")
+![Reason codes section with the approve and reject lists](/help/shots/a8-reason-codes.png)
 
 ## What each result means
 

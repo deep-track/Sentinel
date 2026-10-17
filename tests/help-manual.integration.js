@@ -103,7 +103,11 @@ for (const manual of WRITTEN) {
       }
       for (const [, src, title] of source.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g)) {
         assert.match(src, new RegExp(`^/help/shots/${id}-[a-z0-9-]+\\.png$`), `${id} screenshot path ${src}`);
-        assert.equal(title, "TODO", `${id} screenshot ${src} is a placeholder until taken`);
+        // A placeholder ("TODO") until it's taken; then a real image in public/.
+        if (title !== "TODO") {
+          assert.equal(title, undefined, `${id} screenshot ${src} is a placeholder ("TODO") or has no title`);
+          assert.ok(fs.existsSync(path.join(root, "public", src)), `${id} screenshot ${src} exists in public/help/shots/`);
+        }
       }
     });
   });

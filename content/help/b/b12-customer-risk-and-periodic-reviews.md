@@ -32,7 +32,7 @@ Only monitored customers get review dates. To put a customer on the review cycle
 
 In Demo Bank Ltd, Daniel Kipruto Langat is rated **High risk · 65**: a baseline of 10, plus 35 for a Class 2 PEP and 20 for real estate. He is reviewed every 12 months.
 
-![Customer risk rating section on Daniel Kipruto Langat's report](/help/shots/b12-rating-detail.png "TODO")
+![Customer risk rating section on Daniel Kipruto Langat's report](/help/shots/b12-rating-detail.png)
 
 ### Find customers due for review
 
@@ -43,7 +43,7 @@ In Demo Bank Ltd, Daniel Kipruto Langat is rated **High risk · 65**: a baseline
 5. Customers due for review come first, then by risk level, then by the nearest review date.
 6. Each row shows the customer's top three risk factors, the rating badge and **Review due** or **Next review** with the date. Click the name to open their enrolment screening.
 
-![Customer risk page with Daniel Kipruto Langat due for review](/help/shots/b12-customer-risk.png "TODO")
+![Customer risk page with Daniel Kipruto Langat due for review](/help/shots/b12-customer-risk.png)
 
 ### Record a periodic review
 

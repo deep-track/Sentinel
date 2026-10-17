@@ -48,7 +48,7 @@ List everyone who owns 10% or more, and every director. Sentinel compares your l
 4. Work down the sections: **Registration certificate**, **Proof of address**, **Company registry (Kenya BRS)** with the KRA PIN and the ownership tree, and **AML screening**. Each check shows a tick or a cross.
 5. **Directors & UBOs** at the bottom lists the people you entered, with ID numbers masked.
 
-![KYB result for Savannah Agri Holdings Ltd, needs review](/help/shots/b8-result.png "TODO")
+![KYB result for Savannah Agri Holdings Ltd, needs review](/help/shots/b8-result.png)
 
 ### Read the ownership tree
 
@@ -58,7 +58,7 @@ An amber note under a company means Sentinel couldn't see past it. For example, 
 
 In the demo, Savannah Agri Holdings Ltd is 60% owned by Peter Njoroge and 40% by Highland Capital Limited. Highland is owned 70% by Ahmed Hassan Farah and 30% by Lucy Wairimu. That gives them 28% and 12% of Savannah. Neither was declared, so the business needs review.
 
-![Ownership tree for Savannah Agri Holdings Ltd](/help/shots/b8-ownership.png "TODO")
+![Ownership tree for Savannah Agri Holdings Ltd](/help/shots/b8-ownership.png)
 
 ## What each result means
 
