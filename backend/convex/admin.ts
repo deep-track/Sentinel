@@ -7,6 +7,7 @@ import { loadWatchlistCoverage } from "./amlPersistence";
 import { SOURCE_LABELS } from "./lib/amlMatching";
 import { getBalance, recordLedgerEntry } from "./lib/credits";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
+import { demoClientIds, withoutDemo } from "./lib/demo";
 import { latencyStats } from "./portal";
 import { createdTime } from "./userProfiles";
 import { creditsToMoney } from "./lib/pricing";
@@ -66,6 +67,7 @@ async function clientSummary(ctx: QueryCtx, client: ClientDoc, monthStart: numbe
     billingCurrency: client.billingCurrency ?? "USD",
     balanceValue: creditsToMoney(balance, client.billingCurrency ?? "USD", client.plan),
     seatLimit: client.seatLimit ?? null,
+    isDemo: client.isDemo === true,
     createdAt: createdTime(client),
   };
 }
@@ -142,15 +144,18 @@ export const opsOverview = query({
     const recentLimit = Math.min(Math.max(Math.floor(args.recentLimit ?? 10), 1), 50);
     const yesterdayStart = args.dayStart - DAY_MS;
 
-    const clientDocs = await ctx.db.query("clients").order("desc").take(MAX_CLIENTS);
+    // Demo Bank Ltd (the demo organization) is left out of every number.
+    const demo = await demoClientIds(ctx);
+    const clientDocs = (await ctx.db.query("clients").order("desc").take(MAX_CLIENTS)).filter((client) => !demo.has(client._id));
     const clients = await Promise.all(clientDocs.map((client) => clientSummary(ctx, client, args.monthStart)));
     const clientNames = new Map(clientDocs.map((client) => [client._id, client.name]));
 
-    const sinceYesterday = await ctx.db
+    const fetchedSinceYesterday = await ctx.db
       .query("verifications")
       .withIndex("by_created_at", (q) => q.gte("createdAt", yesterdayStart))
       .order("desc")
       .take(MAX_DAY_ROWS);
+    const sinceYesterday = withoutDemo(fetchedSinceYesterday, demo);
     const today = sinceYesterday.filter((row) => row.createdAt >= args.dayStart);
     const yesterday = sinceYesterday.length - today.length;
 
@@ -158,17 +163,20 @@ export const opsOverview = query({
       await Promise.all(clientDocs.map((client) => creditsUsedSince(ctx, client._id, args.dayStart)))
     ).reduce((total, used) => total + used, 0);
 
-    const openReviews = (
-      await Promise.all(
-        (["pending", "in_review"] as const).map((status) =>
-          ctx.db
-            .query("reviewQueue")
-            .withIndex("by_status_and_created_at", (q) => q.eq("status", status))
-            .order("desc")
-            .take(MAX_QUEUE_ROWS),
-        ),
-      )
-    ).flat();
+    const openReviews = withoutDemo(
+      (
+        await Promise.all(
+          (["pending", "in_review"] as const).map((status) =>
+            ctx.db
+              .query("reviewQueue")
+              .withIndex("by_status_and_created_at", (q) => q.eq("status", status))
+              .order("desc")
+              .take(MAX_QUEUE_ROWS),
+          ),
+        )
+      ).flat(),
+      demo,
+    );
     const priorityRank = { high: 0, normal: 1, low: 2 } as const;
     const queue = await Promise.all(
       [...openReviews]
@@ -193,7 +201,7 @@ export const opsOverview = query({
     const recent = (
       today.length >= recentLimit
         ? today
-        : await ctx.db.query("verifications").withIndex("by_created_at").order("desc").take(recentLimit)
+        : withoutDemo(await ctx.db.query("verifications").withIndex("by_created_at").order("desc").take(recentLimit + 50), demo)
     )
       .slice(0, recentLimit)
       .map((row) => ({
@@ -241,7 +249,7 @@ export const opsOverview = query({
       alerts,
       recent,
       queue,
-      truncated: sinceYesterday.length === MAX_DAY_ROWS || openReviews.length >= MAX_QUEUE_ROWS,
+      truncated: fetchedSinceYesterday.length === MAX_DAY_ROWS || openReviews.length >= MAX_QUEUE_ROWS,
     };
   },
 });

@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { recordAudit } from "./auditLog";
 import { displayName } from "./reviewQueue";
 import { requireInternalAdmin, requireInternalUser } from "./lib/rbac";
+import { demoClientIds, withoutDemo } from "./lib/demo";
 import { profileNames } from "./userProfiles";
 
 // Sentinel Back Office: risk and compliance. Sanctions/PEP hits and fake-face
@@ -46,12 +47,18 @@ export const riskDashboard = query({
     await requireInternalUser(ctx);
     const since = args.now - RISK_WEEKS * WEEK_MS;
 
-    const flagged = (await ctx.db.query("flaggedEntities").order("desc").take(MAX_FLAGGED)).filter((row) => row.createdAt >= since);
-    const verifications = await ctx.db
+    // Demo Bank Ltd (the demo organization) is left out of the risk numbers.
+    const demo = await demoClientIds(ctx);
+    const flagged = withoutDemo(
+      (await ctx.db.query("flaggedEntities").order("desc").take(MAX_FLAGGED)).filter((row) => row.createdAt >= since),
+      demo,
+    );
+    const fetched = await ctx.db
       .query("verifications")
       .withIndex("by_created_at", (q) => q.gte("createdAt", since))
       .order("desc")
       .take(MAX_VERIFICATIONS);
+    const verifications = withoutDemo(fetched, demo);
 
     const clientIds = [...new Set([...flagged.map((row) => row.clientId), ...verifications.map((row) => row.clientId)])];
     const clientNames = new Map(
@@ -103,7 +110,7 @@ export const riskDashboard = query({
 
     return {
       weeks: RISK_WEEKS,
-      truncated: verifications.length === MAX_VERIFICATIONS,
+      truncated: fetched.length === MAX_VERIFICATIONS,
       sources,
       weekly,
       totals: {

@@ -51,6 +51,8 @@ export type ClientSummary = {
   billingCurrency: "USD" | "KES";
   balanceValue: number;
   seatLimit: number | null;
+  // The demo organization (Demo Bank Ltd), left out of every Back Office total.
+  isDemo: boolean;
   createdAt: number;
 };
 

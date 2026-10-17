@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireInternalUser } from "./lib/rbac";
+import { demoClientIds, withoutDemo } from "./lib/demo";
 
 // Per-source read cap for the monitoring window. Counts are computed over
 // everything read (before the display slice); `truncated` flags a hit cap.
@@ -14,11 +15,15 @@ export const overview = query({
     const limit = Math.min(Math.max(args.limit ?? 25, 5), 100);
     const since = Date.now() - windowMs;
 
-    const scopedReviews = await ctx.db
-      .query("reviewQueue")
-      .withIndex("by_created_at", (q) => q.gte("createdAt", since))
-      .order("desc")
-      .take(MAX_WINDOW_ROWS);
+    // Without Demo Bank Ltd (the demo organization).
+    const scopedReviews = withoutDemo(
+      await ctx.db
+        .query("reviewQueue")
+        .withIndex("by_created_at", (q) => q.gte("createdAt", since))
+        .order("desc")
+        .take(MAX_WINDOW_ROWS),
+      await demoClientIds(ctx),
+    );
     const reviewCounts = {
       pending: scopedReviews.filter((review) => review.status === "pending").length,
       inReview: scopedReviews.filter((review) => review.status === "in_review").length,

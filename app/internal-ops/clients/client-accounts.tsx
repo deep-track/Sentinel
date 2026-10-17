@@ -174,7 +174,10 @@ export function ClientAccounts({ canWrite, initialClientId }: { canWrite: boolea
                     </Cell>
                     <Cell className="text-sentinel-muted">{formatNumber(client.creditLimit)}</Cell>
                     <Cell>
-                      <Badge tone={status.tone}>{status.label}</Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge tone={status.tone}>{status.label}</Badge>
+                        {client.isDemo ? <Badge tone="blue">Demo — not in totals</Badge> : null}
+                      </div>
                     </Cell>
                   </Row>
                 );
