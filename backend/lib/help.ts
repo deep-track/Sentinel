@@ -79,6 +79,19 @@ export function listChapters(manuals: ManualId[]): ChapterMeta[] {
     .sort((a, b) => a.manual.localeCompare(b.manual) || chapterOrder(a.id) - chapterOrder(b.id));
 }
 
+// Heading text for the "On this page" list, which React escapes itself: the
+// HTML entities marked adds (an apostrophe becomes &#39;) are turned back.
+export function decodeEntities(text: string): string {
+  const named: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: String.fromCharCode(160) };
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, entity: string) => {
+    if (entity[0] === "#") {
+      const code = entity[1].toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+    }
+    return named[entity.toLowerCase()] ?? match;
+  });
+}
+
 function slugify(text: string) {
   return text
     .toLowerCase()
@@ -106,7 +119,7 @@ function render(body: string) {
       heading(this: { parser: { parseInline: (tokens: Tokens.Heading["tokens"]) => string } }, { tokens, depth }: Tokens.Heading) {
         const html = this.parser.parseInline(tokens);
         const id = slugify(html);
-        if (depth === 2) headings.push({ id, text: html.replace(/<[^>]+>/g, "") });
+        if (depth === 2) headings.push({ id, text: decodeEntities(html.replace(/<[^>]+>/g, "")) });
         return `<h${depth} id="${id}">${html}</h${depth}>\n`;
       },
       // Screenshots still to be taken are written with the title "TODO"; show

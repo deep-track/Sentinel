@@ -149,3 +149,16 @@ test("Manual D screenshots are never public and are served to staff only", () =>
   assert.match(read("backend/lib/help.ts"), /href\.replace\("\/help\/shots\/", "\/internal-ops\/help\/shots\/"\)/);
   assert.match(read("next.config.ts"), /"\/internal-ops\/help\/shots\/\*": \["\.\/content\/help\/d\/shots\/\*"\]/);
 });
+
+test("the On this page list shows apostrophes, not HTML codes", () => {
+  const help = read("backend/lib/help.ts");
+  assert.ok(help.includes('headings.push({ id, text: decodeEntities(html.replace(/<[^>]+>/g, "")) })'));
+  // Run the function itself (types stripped) on the codes marked produces.
+  const source = help.slice(help.indexOf("export function decodeEntities"));
+  const end = source.search(/\r?\n\}\r?\n/);
+  const js = source.slice(0, end + 3).replace("export ", "").replace(/: Record<string, string>/, "").replace(/: string/g, "");
+  const decode = new Function(js + "\nreturn decodeEntities;")();
+  assert.equal(decode("What it&#39;s for"), "What it's for");
+  assert.equal(decode("Fees &amp; credits &#x2014; &quot;KES&quot;"), 'Fees & credits — "KES"');
+  assert.equal(decode("&bogus; stays"), "&bogus; stays");
+});
