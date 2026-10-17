@@ -178,6 +178,10 @@ const kycSteps = (overrides: Record<string, unknown>) => ({
   ...overrides,
 });
 
+// The fraud network example (B10): James Mutua's ID number (kycFake) with
+// another person's name and date of birth.
+const NETWORK_EXAMPLE = { firstName: "Kevin", lastName: "Otieno", idNumber: "27650431", dateOfBirth: "1991-02-08", gender: "male" };
+
 // ── The seed ──────────────────────────────────────────────────────────────
 
 export const seed = internalAction({
@@ -220,6 +224,11 @@ export const seed = internalAction({
     // B9, B10, B15: DeepTrack Live flags the selfie as a synthetic face; the client disputes it.
     await kyc("kycFake", { firstName: "James", lastName: "Mutua", idNumber: "27650431", dateOfBirth: "1989-06-15", gender: "male" });
     await ctx.runMutation(internalApi.verifications._complete, { id: ids.kycFake, verdict: "reject", confidence: 0, result: kycSteps({ faceCheck: { provider: "deeptrack_live", prediction: "fake", confidencePct: 94, fakeProbability: 0.94, warning: null }, faceMatch: { status: "completed", probe: "selfie", outcome: "uncertain", similarity: 81.5, message: FACE_MATCH_MESSAGES.uncertain, duplicateSearch: true, duplicates: [] } }) });
+
+    // B10: the fraud network. A new customer brings James Mutua's ID number
+    // with another name and date of birth; the network sends the pass to review.
+    await kyc("kycNetwork", NETWORK_EXAMPLE);
+    await ctx.runMutation(internalApi.verifications._complete, { id: ids.kycNetwork, verdict: "pass", confidence: 1, result: kycSteps({ faceCheck: realFace(96) }) });
 
     // B5: a genuine second-generation Kenyan ID (no expiry; the MRZ carries the serial number).
     await create("docKenyanId", "document", { documentKind: "identity", pages: 2, expectedName: "Peter Njoroge Kamau", expectedAddress: null, expectedDateOfBirth: null, maxDocumentAgeDays: null, externalRef: "CUST-1001", resized: false });
@@ -543,6 +552,43 @@ export const _extras = internalMutation({
       links[key] = captureLink(appUrl, token);
     }
     return { links, alerts };
+  },
+});
+
+// ── Adding to an existing Demo Bank ───────────────────────────────────────
+
+export const _networkExampleState = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const client = (await ctx.db.query("clients").take(1000)).find((row) => row.isDemo);
+    if (!client) return null;
+    const rows = await ctx.db.query("verifications").withIndex("by_client", (q) => q.eq("clientId", client._id)).take(1000);
+    const idNumber = (row: Doc<"verifications">) => (row.input as { idNumber?: string; firstName?: string } | null) ?? {};
+    return {
+      clientId: client._id,
+      exists: rows.some((row) => row.type === "idp" && idNumber(row).idNumber === NETWORK_EXAMPLE.idNumber && idNumber(row).firstName === NETWORK_EXAMPLE.firstName),
+      hasEarlier: rows.some((row) => row.type === "idp" && idNumber(row).idNumber === NETWORK_EXAMPLE.idNumber && row.status === "completed"),
+    };
+  },
+});
+
+// Adds the fraud network example to a Demo Bank seeded before it existed,
+// without a reset. Runs once; a second run changes nothing.
+//   npx convex run demoSeed:addFraudNetworkExample '{"confirm":"Demo Bank Ltd"}'
+export const addFraudNetworkExample = internalAction({
+  args: { confirm },
+  handler: async (ctx): Promise<{ added: boolean; reference?: string; reason?: string }> => {
+    const state: { clientId: Id<"clients">; exists: boolean; hasEarlier: boolean } | null = await ctx.runQuery(internalApi.demoSeed._networkExampleState, {});
+    if (!state) return { added: false, reason: `${DEMO_NAME} doesn't exist. Run demoSeed:seed.` };
+    if (state.exists) return { added: false, reason: "Already added." };
+    if (!state.hasEarlier) return { added: false, reason: "James Mutua's check is missing, so there is nothing to match." };
+    const created: { id: Id<"verifications">; reference: string } = await ctx.runMutation(internalApi.demoSeed._insertVerification, {
+      clientId: state.clientId,
+      type: "idp",
+      input: { ...NETWORK_EXAMPLE, documentType: "id_card", livenessCollected: true, livenessMediaType: "mp4", faceCheckRequested: true },
+    });
+    await ctx.runMutation(internalApi.verifications._complete, { id: created.id, verdict: "pass", confidence: 1, result: kycSteps({ faceCheck: realFace(96) }) });
+    return { added: true, reference: created.reference };
   },
 });
 

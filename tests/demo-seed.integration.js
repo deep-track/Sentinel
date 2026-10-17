@@ -31,10 +31,28 @@ test("nothing is charged and no provider is called", () => {
 });
 
 test("every manual scenario is seeded", () => {
-  for (const key of ["kycPass", "kycMismatch", "kycFake", "docKenyanId", "docMaisha", "docAiId", "docKraOk", "docKraUnknown", "amlPep", "amlSanctions", "kyb"]) {
+  for (const key of ["kycPass", "kycMismatch", "kycFake", "docKenyanId", "docMaisha", "docAiId", "docKraOk", "docKraUnknown", "amlPep", "amlSanctions", "kyb", "kycNetwork"]) {
     assert.match(seed, new RegExp(`"${key}"`), key);
   }
   for (const marker of ["amlMonitoredSubjects", "strReports", "client_dispute", "captureSessions", "sanctioned_counterparty", "CUST-2077"]) {
     assert.ok(seed.includes(marker), marker);
   }
+});
+
+test("the fraud network example reuses James Mutua's ID with another person", () => {
+  const example = seed.match(/const NETWORK_EXAMPLE = \{([^}]*)\}/);
+  assert.ok(example, "NETWORK_EXAMPLE");
+  assert.match(example[1], /idNumber: "27650431"/);
+  assert.match(seed, /kyc\("kycFake", \{[^}]*idNumber: "27650431"/);
+  assert.doesNotMatch(example[1], /Mutua|1989-06-15/);
+  // Completed as a pass through the real completion code, so the network decides.
+  assert.match(seed, /id: ids\.kycNetwork, verdict: "pass"/);
+});
+
+test("the example can be added to an existing Demo Bank once, without a reset", () => {
+  const add = seed.slice(seed.indexOf("export const addFraudNetworkExample"), seed.indexOf("// ── Reset"));
+  assert.match(add, /args: \{ confirm \}/);
+  assert.match(add, /if \(state\.exists\) return \{ added: false/);
+  assert.match(add, /verifications\._complete/);
+  assert.doesNotMatch(add, /chargeReason|fetch\(/);
 });
