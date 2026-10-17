@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import Anthropic from "@anthropic-ai/sdk";
 import { internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { fileForensics, MEDIA_TYPES, type FraudFlag } from "./lib/documentChecks";
@@ -49,22 +50,37 @@ const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const REGISTRY_WAIT_MS = 90_000;
 const REGISTRY_POLL_MS = 3_000;
 
-async function fetchDocument(url: string): Promise<{ bytes: Uint8Array; image: DocumentImage } | string> {
+type LoadedDocument = { bytes: Uint8Array; image: DocumentImage } | string;
+
+function readDocument(buffer: Uint8Array): LoadedDocument {
+  if (buffer.byteLength > MAX_DOCUMENT_BYTES) return "The document is larger than 10 MB.";
+  const kind = fileForensics(buffer).kind;
+  if (kind === "unknown") return "The document isn't a JPEG, PNG, WebP or PDF.";
+  return {
+    bytes: buffer,
+    image: { mediaType: MEDIA_TYPES[kind] as DocumentImage["mediaType"], base64: Buffer.from(buffer).toString("base64"), side: "front" },
+  };
+}
+
+async function fetchDocument(url: string): Promise<LoadedDocument> {
   if (!isAllowedDocumentUrl(url)) return "The document isn't stored on Sentinel's upload service.";
   try {
     const response = await fetch(url, { redirect: "follow" });
     if (!response.ok) return `The document couldn't be downloaded (HTTP ${response.status}).`;
-    const buffer = new Uint8Array(await response.arrayBuffer());
-    if (buffer.byteLength > MAX_DOCUMENT_BYTES) return "The document is larger than 10 MB.";
-    const kind = fileForensics(buffer).kind;
-    if (kind === "unknown") return "The document isn't a JPEG, PNG, WebP or PDF.";
-    return {
-      bytes: buffer,
-      image: { mediaType: MEDIA_TYPES[kind] as DocumentImage["mediaType"], base64: Buffer.from(buffer).toString("base64"), side: "front" },
-    };
+    return readDocument(new Uint8Array(await response.arrayBuffer()));
   } catch (error) {
     return `The document couldn't be downloaded (${error instanceof Error ? error.message.slice(0, 100) : "network error"}).`;
   }
+}
+
+// A document uploaded in the dashboard (UploadThing URL) or sent through
+// the API (Convex storage).
+async function loadDocument(ctx: ActionCtx, url: string | undefined, storageId: Id<"_storage"> | undefined): Promise<LoadedDocument> {
+  if (storageId) {
+    const blob = await ctx.storage.get(storageId);
+    return blob ? readDocument(new Uint8Array(await blob.arrayBuffer())) : "The document sent through the API is no longer stored.";
+  }
+  return fetchDocument(url ?? "");
 }
 
 function partyHits(outcome: ScreeningOutcome) {
@@ -125,8 +141,10 @@ export const processKyb = internalAction({
       businessName: string;
       registrationNumber: string;
       incorporationCountry: string;
-      registrationDocUrl: string;
-      proofOfAddressUrl: string;
+      registrationDocUrl?: string;
+      proofOfAddressUrl?: string;
+      registrationDocStorageId?: Id<"_storage">;
+      proofOfAddressStorageId?: Id<"_storage">;
     };
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
     if (!apiKey) {
@@ -141,7 +159,7 @@ export const processKyb = internalAction({
       // 1. Registration certificate.
       let certificate: ComponentOutcome;
       let certificateDetail: Record<string, unknown> | null = null;
-      const certificateFile = await fetchDocument(input.registrationDocUrl);
+      const certificateFile = await loadDocument(ctx, input.registrationDocUrl, input.registrationDocStorageId);
       if (typeof certificateFile === "string") {
         certificate = { verdict: "unavailable", reason: certificateFile };
       } else {
@@ -161,7 +179,7 @@ export const processKyb = internalAction({
       // 2. Proof of address, in the business's name.
       let proofOfAddress: ComponentOutcome;
       let proofOfAddressDetail: Record<string, unknown> | null = null;
-      const poaFile = await fetchDocument(input.proofOfAddressUrl);
+      const poaFile = await loadDocument(ctx, input.proofOfAddressUrl, input.proofOfAddressStorageId);
       if (typeof poaFile === "string") {
         proofOfAddress = { verdict: "unavailable", reason: poaFile };
       } else {

@@ -333,8 +333,11 @@ export default defineSchema({
     openedAt: v.optional(v.number()),
     submittedAt: v.optional(v.number()),
     verificationId: v.optional(v.id("verifications")),
+    // The link's public id (cap_…), for the capture links API.
+    reference: v.optional(v.string()),
   })
     .index("by_client", ["clientId"])
+    .index("by_client_and_reference", ["clientId", "reference"])
     .index("by_token_hash", ["tokenHash"])
     .index("by_status_and_expires", ["status", "expiresAt"]),
 

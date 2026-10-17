@@ -27,7 +27,8 @@ import { holdReason, purgedResult, PURGED_INPUT, retentionCutoff, type HoldReaso
 //      minimal record: rule, severity, decision, dates), and counterparty
 //      screenings last run before the cutoff are deleted.
 // The audit log and the credit ledger are kept (they hold no customer
-// documents). Files uploaded to UploadThing aren't deleted from there.
+// documents). Files uploaded to UploadThing aren't deleted from there; KYB
+// files sent through the API (Convex storage) are.
 
 const internalApi: any = internal;
 const BATCH = 50;
@@ -239,6 +240,15 @@ export async function purgeVerification(ctx: MutationCtx, verification: Doc<"ver
     }
   }
   removed += await purgeFaces(ctx, verification._id);
+  // KYB documents sent through the API live in Convex storage.
+  const input = (verification.input ?? {}) as Record<string, unknown>;
+  for (const key of ["registrationDocStorageId", "proofOfAddressStorageId"]) {
+    const id = typeof input[key] === "string" ? ctx.db.system.normalizeId("_storage", input[key] as string) : null;
+    if (id) {
+      await ctx.storage.delete(id).catch(() => undefined);
+      removed += 1;
+    }
+  }
   // Review cases stay for the statistics, without their free text.
   for (const row of await ctx.db.query("reviewQueue").withIndex("by_verification", (q) => q.eq("verificationId", verification._id)).take(50)) {
     await ctx.db.patch(row._id, {
