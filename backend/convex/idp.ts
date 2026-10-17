@@ -20,7 +20,7 @@ const processArgs = {
   verificationId: v.id("verifications"),
   clientId: v.id("clients"),
   livenessFramesBase64: v.optional(v.string()),
-  livenessMediaType: v.optional(v.union(v.literal("jpeg_frames"), v.literal("mp4"))),
+  livenessMediaType: v.optional(v.union(v.literal("jpeg_frames"), v.literal("mp4"), v.literal("webm"))),
   selfieBase64: v.optional(v.string()),
   documentFrontBase64: v.string(),
   documentBackBase64: v.optional(v.string()),
@@ -35,7 +35,7 @@ type ProcessArgs = {
   verificationId: Id<"verifications">;
   clientId: Id<"clients">;
   livenessFramesBase64?: string;
-  livenessMediaType?: "jpeg_frames" | "mp4";
+  livenessMediaType?: "jpeg_frames" | "mp4" | "webm";
   selfieBase64?: string;
   documentFrontBase64: string;
   documentBackBase64?: string;

@@ -1,11 +1,21 @@
 // DeepTrack Live: Deeptrack's rPPG-based face authenticity model
 // (deep-track/FaceDetectionSystem, client SDK in deep-track/deeptrack).
 // Selfie photos go to POST /v1/image/predict as multipart "file" with an
-// X-API-Key header. No imports, so tests can transpile and evaluate this file.
+// X-API-Key header. Liveness videos go to POST /v1/video/predict/video, which
+// returns a job id polled at GET /v1/video/jobs/{id}. No imports, so tests can
+// transpile and evaluate this file.
 
 // There is no default service URL: DEEPTRACK_LIVE_BASE_URL must be set in
 // the Convex deployment (the old Render staging service is no longer used).
 export const DEEPTRACK_LIVE_IMAGE_PATH = "/v1/image/predict";
+export const DEEPTRACK_LIVE_VIDEO_PATH = "/v1/video/predict/video";
+export const DEEPTRACK_LIVE_VIDEO_JOB_PATH = "/v1/video/jobs/";
+
+// A liveness video only counts as clean when a face is visible in most frames
+// and at least one rPPG segment (a stretch long enough to read a pulse) ran.
+export const MIN_FACE_PCT_FOR_CLEAR = 80;
+// A "fake" video verdict only rejects when there was enough face to judge.
+export const MIN_FACE_PCT_FOR_REJECT = 50;
 
 // A "fake" prediction at or above this confidence rejects outright. Below
 // it, or for any uncertain/low-quality result, a human reviews the selfie.
@@ -68,4 +78,88 @@ export function decodeSelfieImage(input: string): { bytes: Uint8Array; mimeType:
     return { bytes, mimeType: "image/webp", extension: "webp" };
   }
   return null;
+}
+
+export type VideoLivenessResult = {
+  provider: "deeptrack_live";
+  prediction: "real" | "fake" | "uncertain";
+  confidencePct: number;
+  fakeProbability: number | null;
+  facePct: number;
+  totalFrames: number | null;
+  segments: number;
+};
+
+export type VideoJobStatus =
+  | { state: "pending" }
+  | { state: "done"; result: VideoLivenessResult }
+  | { state: "error" }
+  | { state: "invalid" };
+
+function finiteInRange(value: unknown, min: number, max: number): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
+
+// The video job's `result` (label, confidence, fake_prob, face_pct,
+// total_frames, n_segments, as read by the deeptrack SDK). Null when the
+// shape is not recognised.
+export function parseDeeptrackLiveVideoResult(raw: unknown): VideoLivenessResult | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const body = raw as Record<string, unknown>;
+  const label = typeof body.label === "string" ? body.label.trim().toLowerCase() : "";
+  const prediction = label === "real" || label === "fake" || label === "uncertain" ? label : null;
+  const confidencePct = finiteInRange(body.confidence, 0, 100);
+  const facePct = finiteInRange(body.face_pct, 0, 100);
+  const segments = finiteInRange(body.n_segments, 0, Number.MAX_SAFE_INTEGER);
+  if (!prediction || confidencePct === null || facePct === null || segments === null) return null;
+  return {
+    provider: "deeptrack_live",
+    prediction,
+    confidencePct,
+    fakeProbability: finiteInRange(body.fake_prob, 0, 1),
+    facePct,
+    totalFrames: finiteInRange(body.total_frames, 0, Number.MAX_SAFE_INTEGER),
+    segments: Math.floor(segments),
+  };
+}
+
+// GET /v1/video/jobs/{id}: { status: "done", result } | { status: "error" } |
+// any other status while the job runs.
+export function parseDeeptrackLiveVideoJob(raw: unknown): VideoJobStatus {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { state: "invalid" };
+  const body = raw as Record<string, unknown>;
+  const status = typeof body.status === "string" ? body.status.trim().toLowerCase() : "";
+  if (!status) return { state: "invalid" };
+  if (status === "error" || status === "failed") return { state: "error" };
+  if (status !== "done") return { state: "pending" };
+  const result = parseDeeptrackLiveVideoResult(body.result);
+  return result ? { state: "done", result } : { state: "invalid" };
+}
+
+export function videoLivenessDecision(result: VideoLivenessResult): FaceCheckDecision {
+  if (
+    result.prediction === "fake" &&
+    result.confidencePct >= FAKE_REJECT_CONFIDENCE_PCT &&
+    result.facePct >= MIN_FACE_PCT_FOR_REJECT
+  ) {
+    return "reject";
+  }
+  if (
+    result.prediction === "real" &&
+    result.confidencePct >= REAL_PASS_CONFIDENCE_PCT &&
+    result.facePct >= MIN_FACE_PCT_FOR_CLEAR &&
+    result.segments >= 1
+  ) {
+    return "clear";
+  }
+  return "review";
+}
+
+// MediaRecorder gives MP4 (Safari, recent Chrome) or WebM (Firefox, older
+// Chrome). DeepTrack Live accepts .mp4/.mov/.avi/.mkv; WebM is a subset of
+// Matroska, so a WebM recording is uploaded as .mkv.
+export function videoUploadName(mediaType: "mp4" | "webm"): { fileName: string; mimeType: string } {
+  return mediaType === "mp4"
+    ? { fileName: "liveness.mp4", mimeType: "video/mp4" }
+    : { fileName: "liveness.mkv", mimeType: "video/x-matroska" };
 }

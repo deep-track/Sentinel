@@ -316,10 +316,29 @@ export default async function KYCDetailPage({ params }: KYCDetailPageProps) {
 
                   <ReportStep
                     title="Liveness Check"
-                    skippedMessage="Not collected — this verification used the selfie-upload flow, which doesn't include a liveness check. The person's physical presence was not confirmed."
+                    skippedMessage="Not collected — no liveness video was recorded for this verification. The person's physical presence was not confirmed."
                     step={record.result.liveness}
                   >
                     {(d) => {
+                      const video = d.deeptrackLive as
+                        | { prediction: string; confidencePct: number; facePct: number; segments: number }
+                        | undefined;
+                      if (video) {
+                        const decision = d.decision as "clear" | "review" | "reject" | undefined;
+                        return (
+                          <div className="flex items-start gap-3">
+                            <ResultIcon ok={decision === "clear" ? true : decision === "reject" ? false : null} />
+                            <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                              <p>
+                                DeepTrack Live video verdict:{" "}
+                                <span className="font-medium capitalize">{video.prediction}</span> (
+                                {video.confidencePct.toFixed(1)}% confidence)
+                              </p>
+                              <p>Face visible in <span className="font-medium">{video.facePct.toFixed(0)}%</span> of frames · {video.segments} pulse segment{video.segments === 1 ? "" : "s"} analysed</p>
+                            </div>
+                          </div>
+                        );
+                      }
                       const livenessScore = d.livenessScore as number;
                       const deepfakeFlag = d.deepfakeFlag as boolean;
                       const stillImage = isStillImageLiveness(record.input);

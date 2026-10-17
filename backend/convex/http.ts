@@ -185,7 +185,7 @@ async function createdResponse(type: string, create: () => Promise<Created>): Pr
 const IDP_TEXT_FIELDS = ["idNumber", "firstName", "lastName", "dateOfBirth", "gender"] as const;
 const IDP_REQUIRED_MEDIA = ["documentFrontBase64", "livenessFramesBase64"] as const;
 const MAX_TEXT_LENGTH = 200;
-const LIVENESS_MEDIA_TYPES = ["jpeg_frames", "mp4"] as const;
+const LIVENESS_MEDIA_TYPES = ["jpeg_frames", "mp4", "webm"] as const;
 
 // Narrows the untrusted JSON body field by field; anything that doesn't
 // match the contract is a 400 (413 for oversized media) before any row is

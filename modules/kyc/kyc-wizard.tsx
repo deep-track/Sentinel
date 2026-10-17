@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation } from "convex/react";
 import { anyApi } from "convex/server";
-import { Camera, CheckCircle, ClipboardCheck, FileText, XCircle } from "lucide-react";
+import { Camera, CheckCircle, ClipboardCheck, FileText, Video, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { KYCStatus } from "@/backend/lib/kyc-types";
@@ -12,11 +12,13 @@ import { cn } from "@/backend/lib/utils";
 import { useAuthedQuery } from "@/hooks/use-authed-query";
 import { KYCStatusBadge } from "@/modules/kyc/kyc-status-badge";
 import { DocumentCaptureStep } from "@/modules/kyc/steps/document-capture-step";
+import { LivenessVideoStep } from "@/modules/kyc/steps/liveness-video-step";
 import { SelfieCaptureStep } from "@/modules/kyc/steps/selfie-capture-step";
 import { SubmitStep } from "@/modules/kyc/steps/submit-step";
 import type {
 	KYCDocumentData,
 	KYCIdentityData,
+	KYCLivenessData,
 	KYCSelfieData,
 	KYCWizardData,
 } from "@/modules/kyc/types";
@@ -35,7 +37,8 @@ type VerificationRow = {
 const STEPS = [
 	{ id: 0, title: "Document Capture", icon: FileText, shortTitle: "Document" },
 	{ id: 1, title: "Selfie Capture", icon: Camera, shortTitle: "Selfie" },
-	{ id: 2, title: "Review & Submit", icon: ClipboardCheck, shortTitle: "Submit" },
+	{ id: 2, title: "Liveness Video", icon: Video, shortTitle: "Liveness" },
+	{ id: 3, title: "Review & Submit", icon: ClipboardCheck, shortTitle: "Submit" },
 ];
 
 function toKycStatus(row: VerificationRow | null | undefined): KYCStatus {
@@ -85,6 +88,16 @@ export function KYCWizard({ clientId }: KYCWizardProps) {
 		goTo(2);
 	}
 
+	// null = skipped: clear any earlier clip so it isn't submitted.
+	function handleLiveness(values: KYCLivenessData | null) {
+		setData((d) => ({
+			...d,
+			livenessVideoBase64: values?.livenessVideoBase64,
+			livenessMediaType: values?.livenessMediaType,
+		}));
+		goTo(3);
+	}
+
 	async function handleSubmit(identity: KYCIdentityData) {
 		if (
 			!data.documentType || !data.documentFrontUrl || !data.documentFrontBase64 ||
@@ -115,7 +128,9 @@ export function KYCWizard({ clientId }: KYCWizardProps) {
 				documentBackBase64: twoSided ? data.documentBackBase64 : undefined,
 				selfieUrl: data.selfieUrl,
 				selfieBase64: data.selfieBase64,
-				// No livenessFramesBase64: a still selfie is not liveness evidence.
+				// Only the recorded clip is liveness evidence, never the still selfie.
+				livenessFramesBase64: data.livenessVideoBase64 && data.livenessMediaType ? data.livenessVideoBase64 : undefined,
+				livenessMediaType: data.livenessVideoBase64 && data.livenessMediaType ? data.livenessMediaType : undefined,
 			});
 			setSubmitted(result);
 			window.scrollTo({ top: 0, behavior: "smooth" });
@@ -252,11 +267,14 @@ export function KYCWizard({ clientId }: KYCWizardProps) {
 					<SelfieCaptureStep defaultValues={data} onNext={handleSelfie} onBack={() => goTo(0)} />
 				)}
 				{currentStep === 2 && (
+					<LivenessVideoStep defaultValues={data} onNext={handleLiveness} onBack={() => goTo(1)} />
+				)}
+				{currentStep === 3 && (
 					<SubmitStep
 						data={data}
 						onIdentityChange={(values) => setData((d) => ({ ...d, ...values }))}
 						onSubmit={handleSubmit}
-						onBack={() => goTo(1)}
+						onBack={() => goTo(2)}
 						onEdit={(step: number) => goTo(step)}
 					/>
 				)}
