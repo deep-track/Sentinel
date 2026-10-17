@@ -126,7 +126,7 @@ Under **Monthly statement**, pick the client and month. Click **CSV** for financ
 
 ### The demo client
 
-Demo Bank Ltd is DeepTrack's invented client for the manual and training videos. It is on Business, billed in KES, with a 300-requests-a-minute cap, a balance of 5,000,000 credits and no monthly credit limit, so its usage shows as a dash. Its checks are never charged, so it adds no revenue. Do not edit it, add credits or invoice it. Engineering builds and resets it.
+Demo Bank Ltd is DeepTrack's invented client for the manual and training videos. It is on Business, billed in KES, with a 300-requests-a-minute cap, a balance of 5,000,000 credits and no monthly credit limit, so its usage shows as a dash. Its checks are never charged, so it adds no revenue, and it is left out of every Back Office total. Its one invoice, DEMO-2026-0001, is invented for the manual and is outside the invoice number sequence. Do not edit it, add credits or invoice it. Engineering builds and resets it.
 
 ### Recurring tasks
 
